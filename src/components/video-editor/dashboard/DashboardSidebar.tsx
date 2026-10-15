@@ -1,3 +1,4 @@
+import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 import { RecordNewButton } from "./RecordNewButton";
 import { SidebarCards } from "./SidebarCards";
@@ -63,7 +64,7 @@ export function DashboardSidebar({
 						<House weight="fill" className="size-[18px]" />
 						Home
 					</Button>
-					<Button
+{ACCOUNTS_ENABLED && 					<Button
 						variant="ghost"
 						className={navClass(section === "shared")}
 						aria-current={section === "shared" ? "page" : undefined}
@@ -74,7 +75,7 @@ export function DashboardSidebar({
 							className="size-[18px]"
 						/>
 						Shared
-					</Button>
+					</Button>}
 					<Button
 						variant="ghost"
 						className={navClass(section === "raw")}
@@ -150,10 +151,10 @@ export function DashboardSidebar({
 						/>
 						Settings
 					</Button>
-					<Button variant="ghost" className={navClass(false)} onClick={onSignIn}>
+					{ACCOUNTS_ENABLED && <Button variant="ghost" className={navClass(false)} onClick={onSignIn}>
 						<UserCircle weight="fill" className="size-[18px] shrink-0" />
 						<span className="truncate">{accountLabel || "Sign in"}</span>
-					</Button>
+					</Button>}
 				</div>
 			</aside>
 		</>

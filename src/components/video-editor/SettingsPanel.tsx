@@ -1,3 +1,4 @@
+import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
 import type { User } from "@supabase/supabase-js";
 import { AccountSettings } from "@/components/auth/AccountSettings";
 import { RecordingPermissionsSettings } from "@/components/auth/RecordingPermissionsSettings";
@@ -2257,12 +2258,12 @@ export function SettingsPanel({
 			<SettingsSections
 				categories={
 					advanced
-						? ["general", "account", "permissions", "motion", "advanced"]
-						: ["general", "account", "permissions", "motion"]
+						? ["general", ...(ACCOUNTS_ENABLED ? ["account" as const] : []), "permissions", "motion", "advanced"]
+						: ["general", ...(ACCOUNTS_ENABLED ? ["account" as const] : []), "permissions", "motion"]
 				}
 			>
 				<SettingsCategory category="account">
-					<AccountSettings key={accountUser?.id ?? "signed-out"} user={accountUser} />
+					{ACCOUNTS_ENABLED && <AccountSettings key={accountUser?.id ?? "signed-out"} user={accountUser} />}
 				</SettingsCategory>
 				<SettingsCategory category="permissions">
 					<RecordingPermissionsSettings onReview={onShowOnboarding} />

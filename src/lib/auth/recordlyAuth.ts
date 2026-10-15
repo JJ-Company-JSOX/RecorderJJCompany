@@ -1,3 +1,4 @@
+import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
 import { createClient, type Provider, type User } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -6,7 +7,7 @@ const callbackUrl = import.meta.env.DEV
 	? "http://127.0.0.1:43821/auth/callback"
 	: "recordly://auth/callback";
 
-export const recordlyAuthConfigured = Boolean(supabaseUrl && supabasePublishableKey);
+export const recordlyAuthConfigured = ACCOUNTS_ENABLED && Boolean(supabaseUrl && supabasePublishableKey);
 
 export type RecordlyOAuthProvider = "google" | "azure" | "github";
 

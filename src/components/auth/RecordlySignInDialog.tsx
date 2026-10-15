@@ -1,3 +1,5 @@
+import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ArrowRight, GithubLogo } from "@phosphor-icons/react";
 import { OnboardingPermissions } from "./OnboardingPermissions";
 import {
@@ -65,7 +67,12 @@ function friendlyAuthError(
 	return message;
 }
 
-export function RecordlySignInDialog({
+export function RecordlySignInDialog(props: Props) {
+	if (!ACCOUNTS_ENABLED) return <Dialog open={props.open} onOpenChange={props.onOpenChange}><DialogContent><DialogTitle>Local desktop preview</DialogTitle><DialogDescription>Account and cloud sharing features are deferred. You can record, edit and export videos on your computer without an email.</DialogDescription></DialogContent></Dialog>;
+	return <AccountSignInDialog {...props} />;
+}
+
+function AccountSignInDialog({
 	variant = "compact",
 	onboarding = false,
 	startWithPermissions = false,

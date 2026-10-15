@@ -194,7 +194,7 @@ export function OnboardingPermissions({
 				)}
 			</OnboardingBody>
 			<OnboardingFooter>
-				<Button variant="ghost" aria-label="Back to account" onPress={onBack}>
+				<Button variant="ghost" aria-label="Back" onPress={onBack}>
 					<ArrowLeft size={16} />
 					Back
 				</Button>

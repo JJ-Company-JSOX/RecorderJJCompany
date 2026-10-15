@@ -29,3 +29,39 @@ test("recording permissions remain available to signed-out users", async ({ page
  await expect(page.locator('html')).toHaveAttribute('data-hud-opened','true');
  await expect(permissions).toHaveCount(0);
 });
+
+for (const platform of ['win32', 'linux', 'darwin'] as const) {
+ test(`signed-out ${platform} HUD opens the real source-picker path without an account redirect`, async ({page}) => {
+  await installDesktopBridge(page, 'filmstrip.mp4', {signedIn:false});
+  await installDesktopBridgeOverrides(page, () => {
+   window.electronAPI.pickCaptureTarget = async () => {
+    document.documentElement.dataset.pickerOpened = 'true';
+    return {success:true,canceled:true};
+   };
+  });
+  await page.addInitScript(value => { window.electronAPI.getPlatform = async () => value; }, platform);
+  await page.goto('/?windowType=hud-overlay');
+  const source = page.getByRole('button',{name:'Choose recording source',exact:true});
+  await expect(source).toBeVisible();
+  await source.click();
+  await expect(page.locator('html')).toHaveAttribute('data-picker-opened','true');
+  await expect(page.locator('html')).not.toHaveAttribute('data-permissions-opened','true');
+  await expect(page.locator('input[type="email"]')).toHaveCount(0);
+ });
+}
+
+test('macOS still blocks capture selection when system permission is missing', async ({page}) => {
+ await installDesktopBridge(page,'filmstrip.mp4',{signedIn:false});
+ await installDesktopBridgeOverrides(page, () => {
+  window.electronAPI.getPlatform = async () => 'darwin';
+  window.electronAPI.getScreenRecordingPermissionStatus = async () => ({success:true,status:'denied'});
+  window.electronAPI.pickCaptureTarget = async () => {
+   document.documentElement.dataset.pickerOpened = 'true';
+   return {success:true,canceled:true};
+  };
+ });
+ await page.goto('/?windowType=hud-overlay');
+ await page.getByRole('button',{name:'Choose recording source',exact:true}).click();
+ await expect(page.locator('html')).toHaveAttribute('data-permissions-opened','true');
+ await expect(page.locator('html')).not.toHaveAttribute('data-picker-opened','true');
+});

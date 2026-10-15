@@ -62,6 +62,11 @@ export function DashboardSidebar({
 				</Button>
 				<p className="mb-5 px-2 text-[10px] text-muted-foreground">From your computer · no upload</p>
 				<nav className="space-y-1">
+					<Button variant="ghost" className={navClass(section === "ai-studio")}
+						aria-current={section === "ai-studio" ? "page" : undefined}
+						onClick={() => setSection("ai-studio")}>
+						<Cloud className="size-[18px]" />AI Studio
+					</Button>
 					<Button
 						variant="ghost"
 						className={navClass(section === "projects")}

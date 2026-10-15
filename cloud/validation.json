@@ -1,8 +1,22 @@
 {
 	"schemaVersion": 1,
 	"date": "2026-10-15",
-	"status": "backend-development-preview",
+	"status": "backend-and-local-preflight-development-preview",
 	"passed": [
+		{
+			"check": "M2a local sensitive-text preflight",
+			"tests": 10,
+			"evidence": "Synthetic SG/MY/CN formats, candidate caps, overlap redaction and review gates; not real-user error-rate measurement"
+		},
+		{
+			"check": "M2a Chromium UI and existing local import regressions",
+			"tests": 5,
+			"evidence": "Real local MP4 preview; mocked Electron bridge; preparation sends no external requests"
+		},
+		{
+			"check": "M2a desktop Vite renderer, Electron main and preload production build",
+			"evidence": "No Windows installer built; existing PostCSS/chunk warnings remain"
+		},
 		{
 			"check": "Functions TypeScript build and domain tests",
 			"tests": 5,
@@ -38,8 +52,9 @@
 		"Real SG/MY language accuracy and cost measurements"
 	],
 	"notImplementedThisIncrement": [
-		"Cloud Studio frontend and desktop cloud opt-in",
-		"Local sensitive-data preflight",
+		"Live Cloud Studio upload, Firebase sign-in/App Check and job frontend",
+		"Automatic video/audio privacy OCR/ASR and video redaction (local text preflight implemented only)",
+		"Cloud Mix to desktop timeline bridge",
 		"Large timeline storage externalization",
 		"Provider-policy cache retention",
 		"Real billing reconciliation"

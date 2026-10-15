@@ -1,4 +1,4 @@
-> **Jsox Recorder fork 开发预览**：本地录屏/编辑继续独立于账号。可选的 Firebase AI Studio 后端为分阶段开发增量：[Master Prompt](docs/recordly-ai-studio-master-prompt.md)、[架构与 API](docs/firebase-ai-studio-architecture.md)、[实施计划](docs/ai-assisted-mix-plan.md)、[测试状态](cloud/README.md)。未部署云服务或迁移数据。Windows 可运行 `TEST-FIREBASE-BACKEND.cmd` 检查本地后端；云端 UI 和真实服务验证仍在后续阶段。
+> **Jsox Recorder fork 开发预览**：本地录屏/编辑继续独立于账号。Home → AI Studio 已提供[本地视频预览和敏感文字上传准备](docs/ai-studio-preflight-test.md)，可切换中/英/马来文，真实云端上传仍关闭。可选 Firebase 后端为分阶段增量：[Master Prompt](docs/recordly-ai-studio-master-prompt.md)、[架构与 API](docs/firebase-ai-studio-architecture.md)、[实施计划](docs/ai-assisted-mix-plan.md)、[测试状态](cloud/README.md)、[用户准备清单](docs/jsox-cloud-preparation.md)。未部署云服务或迁移数据。Windows 可运行 `TEST-FIREBASE-BACKEND.cmd` 检查本地后端；真实云端接入仍在后续阶段。
 
 语言: [EN](README.md) | 简中
 

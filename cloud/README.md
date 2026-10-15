@@ -1,6 +1,6 @@
 # Jsox Firebase AI Studio — 后端开发预览
 
-这不是已经接入桌面 UI 的云端成品，也没有部署到线上。现有录屏、编辑、本地 AI 和官网保持原状；声音克隆不在范围内。主规范：[Master Prompt](../docs/recordly-ai-studio-master-prompt.md)，十项设计：[Firebase 架构](../docs/firebase-ai-studio-architecture.md)，后续阶段：[实施计划](../docs/ai-assisted-mix-plan.md)。
+这不是已上线的云端成品。桌面现有 [AI Studio 本地上传准备 UI](../docs/ai-studio-preflight-test.md)，可预览和检查粘贴文字，但尚未接通真实云端上传/任务。现有录屏、编辑、本地 AI 和官网保留；声音克隆不在范围内。主规范：[Master Prompt](../docs/recordly-ai-studio-master-prompt.md)，十项设计：[Firebase 架构](../docs/firebase-ai-studio-architecture.md)，后续阶段：[实施计划](../docs/ai-assisted-mix-plan.md)，[用户准备清单](../docs/jsox-cloud-preparation.md)。
 
 Firebase 项目本地绑定 `d-recorder-ef064`；尚未核实线上 Auth/Firestore/Storage/Functions 是否启用、位置及已有数据。模拟测试只使用 **demo-jsox**，不使用该线上项目。
 

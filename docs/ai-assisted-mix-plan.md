@@ -1,6 +1,6 @@
 # AI Assisted Mix — Firebase 分阶段实施计划
 
-规范入口：[Master Prompt](recordly-ai-studio-master-prompt.md)。架构、schema、Rules、Storage、Functions、Worker、API、搜索、Mix 与费用的十项交付物集中在 [Firebase 架构](firebase-ai-studio-architecture.md)。本轮是 **M1 后端基础增量**，不把尚未接入 UI 或真实服务验证的代码标为可商用成品。
+规范入口：[Master Prompt](recordly-ai-studio-master-prompt.md)。架构、schema、Rules、Storage、Functions、Worker、API、搜索、Mix 与费用的十项交付物集中在 [Firebase 架构](firebase-ai-studio-architecture.md)。目前完成 **M1 后端基础 + M2a 本地上传准备 UI**；未验证的真实云端流程不标为可商用成品。
 
 ## 保留的用户流程
 
@@ -32,6 +32,10 @@ Upload → Analyze → Search B-roll → Customer Approval → Editable Timeline
 7. 预先核验并 provision faster-whisper 模型工件，记录 SHA256、体积和条款；不在 Worker 启动时下载。
 
 ## M2 — 云端前端、敏感信息检查及时间线适配
+
+**M2a 已实现**：[桌面本地上传准备](ai-studio-preflight-test.md)。Home 左侧 AI Studio 提供本地视频预览、可选粘贴文字的格式检查、逐项审阅、文字移除、计划供应商披露、确认失效与退出清理；中/英/马来文界面，不新增依赖，不调用云端。没有自动 OCR/ASR/视频打码，不把这一步当成生产上传授权。真实 Rules、Auth/App Check 等门槛未过，所以上传保持关闭。
+
+**其余 M2 尚未完成**，包括正式账号/attestation、真实上传/任务结果和现有时间线桥接。用户前置项见 [准备清单](jsox-cloud-preparation.md)。
 
 - 先实现并验证本地敏感信息 preflight：手机号、邮箱、SG NRIC/FIN、MY 身份证号、疑似密钥；有检测结果、误报/漏报说明及逐项确认。
 - Cloud Studio 上传/披露：列出原视频到 Google 私有 Storage，抽样图像、转录及 query 到 Gemini，搜索词/预览到素材方；确认字段持久化。服务端 boolean 只记录声明，不能当成已扫描证据。

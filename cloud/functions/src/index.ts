@@ -8,7 +8,16 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineSecret, defineString, defineBoolean } from "firebase-functions/params";
 import { CloudTasksClient } from "@google-cloud/tasks";
 import { StudioService } from "./service.js";
-import { DomainError, check, id, stableId, text } from "./domain.js";
+import {
+	DomainError,
+	check,
+	id,
+	stableId,
+	text,
+	timeline,
+	assertStudioJob,
+	dispatchPayload,
+} from "./domain.js";
 import { embedQuery, searchStock } from "./providers.js";
 initializeApp();
 const db = getFirestore(),
@@ -24,7 +33,7 @@ const region = defineString("STUDIO_REGION"),
 	workerIdentity = defineString("STUDIO_TASK_SERVICE_ACCOUNT"),
 	bucketName = defineString("STUDIO_BUCKET");
 function callable(
-	fn: (data: Record<string, any>, uid: string) => Promise<unknown>,
+	fn: (data: Record<string, unknown>, uid: string) => Promise<unknown>,
 	secrets: ReturnType<typeof defineSecret>[] = [],
 ) {
 	return onCall(
@@ -41,8 +50,7 @@ function callable(
 				);
 				return await fn(request.data, request.auth.uid);
 			} catch (error) {
-				if (error instanceof DomainError)
-					throw new HttpsError(error.code as any, error.message);
+				if (error instanceof DomainError) throw new HttpsError(error.code, error.message);
 				throw new HttpsError(
 					"internal",
 					"Operation failed; no private provider details are returned",
@@ -107,7 +115,7 @@ export const renderMix = callable(async (data, uid) => {
 		await service.workspace(ws).collection("timelineVersions").doc(id(data.versionId)).get()
 	).data();
 	check(version, "Timeline missing");
-	if (version.clips.some((clip: { assetType: string }) => clip.assetType === "broll"))
+	if (timeline(version, true).clips.some((clip) => clip.assetType === "broll"))
 		check(
 			stockTermsReviewed.value(),
 			"Stock policy review is required before rendering B-roll",
@@ -243,6 +251,7 @@ export const getExportDownload = callable(async (data, uid) => {
 	const job = (
 		await service.workspace(ws).collection("exportJobs").doc(id(data.jobId)).get()
 	).data();
+	assertStudioJob(job, ws);
 	check(
 		job?.kind === "render" &&
 			job.status === "succeeded" &&
@@ -252,17 +261,24 @@ export const getExportDownload = callable(async (data, uid) => {
 	);
 	// Recheck every B-roll decision, even when the file was rendered earlier.
 	const version = (
-		await service.workspace(ws).collection("timelineVersions").doc(job.targetId).get()
+		await service.workspace(ws).collection("timelineVersions").doc(id(job.targetId)).get()
 	).data();
-	check(version, "Timeline missing");
-	for (const clip of version.clips ?? []) {
+	check(version && version.workspaceId === ws, "Timeline missing");
+	for (const clip of timeline(version, true).clips) {
 		if (clip.assetType === "broll") {
+			const revisions = job.approvalRevisions;
+			check(
+				revisions && typeof revisions === "object" && !Array.isArray(revisions),
+				"Missing approval revisions",
+			);
 			const approval = (
 				await service.workspace(ws).collection("assetApprovals").doc(clip.assetId).get()
 			).data();
 			check(
 				approval?.approved === true &&
-					approval.revision === job.approvalRevisions?.[clip.assetId],
+					approval.licenseReviewed === true &&
+					approval.usageRightsConfirmed === true &&
+					approval.revision === (revisions as Record<string, unknown>)[clip.assetId],
 				"Asset permission changed; render again",
 			);
 		}
@@ -279,7 +295,13 @@ export const enqueueStudioJob = onDocumentCreated(
 	{ document: "workspaces/{workspaceId}/exportJobs/{jobId}", region, retry: true },
 	async (event) => {
 		const snapshot = event.data;
-		if (!snapshot || snapshot.data().status !== "queued") return;
+		if (!snapshot) return;
+		const payload = dispatchPayload(
+			event.params.workspaceId,
+			event.params.jobId,
+			snapshot.data(),
+		);
+		if (!payload) return;
 		const client = new CloudTasksClient(),
 			project = process.env.GCLOUD_PROJECT;
 		check(project, "Project ID unavailable");
@@ -299,12 +321,7 @@ export const enqueueStudioJob = onDocumentCreated(
 						httpMethod: "POST",
 						url: `${url.origin}/jobs`,
 						headers: { "Content-Type": "application/json" },
-						body: Buffer.from(
-							JSON.stringify({
-								workspaceId: event.params.workspaceId,
-								jobId: event.params.jobId,
-							}),
-						).toString("base64"),
+						body: Buffer.from(JSON.stringify(payload)).toString("base64"),
 						oidcToken: {
 							serviceAccountEmail: workerIdentity.value(),
 							audience: url.origin,

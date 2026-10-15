@@ -1,6 +1,8 @@
 import { FieldValue, Timestamp, type Firestore, type Transaction } from "firebase-admin/firestore";
 import {
 	check,
+	assetDecision,
+	assertStudioJob,
 	consent,
 	DomainError,
 	EMBEDDING_DIMENSIONS,
@@ -11,6 +13,8 @@ import {
 	stableId,
 	text,
 	timeline,
+	STUDIO_PIPELINE,
+	providerPage,
 } from "./domain.js";
 const roles = ["viewer", "editor", "owner"];
 export class StudioService {
@@ -21,6 +25,10 @@ export class StudioService {
 	async member(ws: string, uid: string, edit = false) {
 		const snapshot = await this.workspace(ws).collection("members").doc(uid).get();
 		const data = snapshot.data();
+		this.authorizeMember(data, edit);
+		return data;
+	}
+	private authorizeMember(data: FirebaseFirestore.DocumentData | undefined, edit: boolean) {
 		if (
 			!data ||
 			data.active !== true ||
@@ -28,7 +36,13 @@ export class StudioService {
 			(edit && data.role === "viewer")
 		)
 			throw new DomainError("permission-denied", "Workspace access denied");
-		return data;
+	}
+	private async transactionMember(tx: Transaction, ws: string, uid: string, edit = true) {
+		// The transaction retries if membership is revoked before a write commits.
+		this.authorizeMember(
+			(await tx.get(this.workspace(ws).collection("members").doc(uid))).data(),
+			edit,
+		);
 	}
 	async rate(ws: string, uid: string) {
 		const minute = Math.floor(Date.now() / 60000),
@@ -112,6 +126,7 @@ export class StudioService {
 			.doc(stableId(uid, new Date().toISOString().slice(0, 10)));
 		const fingerprint = stableId(name, String(sizeBytes), String(input.contentType));
 		await this.db.runTransaction(async (tx) => {
+			await this.transactionMember(tx, ws, uid);
 			const [old, budget] = await Promise.all([tx.get(ref), tx.get(uploadQuota)]);
 			if (old.exists) {
 				check(
@@ -152,6 +167,7 @@ export class StudioService {
 		await this.rate(ws, uid);
 		const ref = this.workspace(ws).collection("aiMixProjects").doc();
 		await this.db.runTransaction(async (tx) => {
+			await this.transactionMember(tx, ws, uid);
 			tx.create(ref, {
 				name: text(name, 100),
 				createdBy: uid,
@@ -167,40 +183,43 @@ export class StudioService {
 		await this.member(ws, uid, true);
 		await this.rate(ws, uid);
 		const suggestionId = id(input.suggestionId);
-		check(
-			input.approved === true || input.approved === false,
-			"An explicit decision is required",
-		);
-		check(
-			input.licenseReviewed === true && input.usageRightsConfirmed === true,
-			"Review the license and confirm usage rights",
-		);
+		const decision = assetDecision(input);
 		const root = this.workspace(ws),
 			suggestion = root.collection("brollSuggestions").doc(suggestionId),
 			ref = root.collection("assetApprovals").doc(suggestionId);
 		await this.db.runTransaction(async (tx) => {
+			await this.transactionMember(tx, ws, uid);
 			const [candidate, previous] = await Promise.all([tx.get(suggestion), tx.get(ref)]);
 			const asset = candidate.data();
 			check(asset && asset.workspaceId === ws, "Suggestion not found");
-			check(
-				typeof asset.licenseUrl === "string" &&
-					typeof asset.sourceUrl === "string" &&
-					typeof asset.provider === "string",
-				"Missing asset provenance",
+			if (decision.approved) {
+				check(
+					asset.provider === "pexels" || asset.provider === "pixabay",
+					"Unsupported stock provider",
+				);
+				check(
+					typeof asset.licenseUrl === "string" &&
+						typeof asset.sourceUrl === "string" &&
+						providerPage(asset.provider, asset.licenseUrl) &&
+						providerPage(asset.provider, asset.sourceUrl),
+					"Missing or invalid asset provenance",
+				);
+				text(asset.providerAssetId, 100);
+				text(asset.termsVersion, 100);
+			}
+			// An incomplete/unlicensed suggestion can always be rejected. Never invent a positive rights attestation.
+			const provenance = Object.fromEntries(
+				["licenseUrl", "sourceUrl", "provider", "providerAssetId", "termsVersion"].map(
+					(key) => [key, typeof asset[key] === "string" ? asset[key] : null],
+				),
 			);
 			const revision = (previous.data()?.revision ?? 0) + 1;
 			tx.set(ref, {
 				workspaceId: ws,
 				suggestionId,
-				approved: input.approved,
+				...decision,
 				approvedBy: uid,
-				licenseReviewed: true,
-				usageRightsConfirmed: true,
-				licenseUrl: asset.licenseUrl,
-				sourceUrl: asset.sourceUrl,
-				provider: asset.provider,
-				providerAssetId: asset.providerAssetId,
-				termsVersion: asset.termsVersion,
+				...provenance,
 				revision,
 				decidedAt: FieldValue.serverTimestamp(),
 			});
@@ -224,12 +243,14 @@ export class StudioService {
 			input.expectedVersion === null || typeof input.expectedVersion === "string",
 			"Expected version is required",
 		);
+		if (input.expectedVersion !== null) id(input.expectedVersion);
 		const versionId = stableId(projectId, uid, requestId),
 			root = this.workspace(ws),
 			project = root.collection("aiMixProjects").doc(projectId),
 			version = root.collection("timelineVersions").doc(versionId);
 		const fingerprint = stableId(JSON.stringify(value));
 		await this.db.runTransaction(async (tx) => {
+			await this.transactionMember(tx, ws, uid);
 			const [p, v] = await Promise.all([tx.get(project), tx.get(version)]);
 			check(p.exists, "Mix project missing");
 			if (v.exists) {
@@ -296,6 +317,7 @@ export class StudioService {
 				.doc(stableId(uid, new Date().toISOString().slice(0, 10))),
 			units = kind === "analyze" ? 10 : 5;
 		await this.db.runTransaction(async (tx) => {
+			await this.transactionMember(tx, ws, uid);
 			const [existing, budget, target] = await Promise.all([
 				tx.get(ref),
 				tx.get(daily),
@@ -306,6 +328,7 @@ export class StudioService {
 				),
 			]);
 			if (existing.exists) {
+				assertStudioJob(existing.data(), ws);
 				check(
 					existing.data()?.targetId === targetId && existing.data()?.kind === kind,
 					"Idempotency key reused",
@@ -315,14 +338,16 @@ export class StudioService {
 			check(target.exists && target.data()?.workspaceId === ws, "Job target missing");
 			if (kind === "analyze")
 				check(
-					target.data()?.consent?.gemini === true &&
+					target.data()?.consent?.cloudProcessing === true &&
+						target.data()?.consent?.sensitivityReviewed === true &&
+						target.data()?.consent?.gemini === true &&
 						["uploading", "ready", "failed"].includes(target.data()?.status),
 					"Cloud consent missing",
 				);
 			if ((budget.data()?.reserved ?? 0) + units > 100)
 				throw new DomainError("resource-exhausted", "Daily processing quota exceeded");
 			if (kind === "render") {
-				const value = timeline(target.data());
+				const value = timeline(target.data(), true);
 				const approvals = await Promise.all(
 					value.clips
 						.filter((c) => c.assetType === "broll")
@@ -347,7 +372,7 @@ export class StudioService {
 				workspaceId: ws,
 				createdBy: uid,
 				kind,
-				pipeline: "cpu-mix-v1",
+				pipeline: STUDIO_PIPELINE,
 				targetId,
 				status: "queued",
 				attempts: 0,
@@ -356,6 +381,7 @@ export class StudioService {
 				quotaPath: daily.path,
 				createdAt: FieldValue.serverTimestamp(),
 			});
+			if (kind === "analyze") tx.update(target.ref, { analysisJobId: jobId });
 			tx.create(root.collection("aiUsageRecords").doc(jobId), {
 				uid,
 				jobId,
@@ -378,8 +404,9 @@ export class StudioService {
 		const root = this.workspace(ws),
 			ref = root.collection("exportJobs").doc(id(jobId));
 		await this.db.runTransaction(async (tx) => {
+			await this.transactionMember(tx, ws, uid);
 			const job = await tx.get(ref);
-			check(job.exists, "Job missing");
+			assertStudioJob(job.data(), ws);
 			if (["succeeded", "failed", "canceled"].includes(job.data()?.status)) return;
 			if (job.data()?.status === "queued") {
 				const data = job.data()!,
@@ -458,6 +485,7 @@ export class StudioService {
 				.collection("_quotas")
 				.doc(stableId(uid, new Date().toISOString().slice(0, 10)));
 		const cached = await this.db.runTransaction(async (tx) => {
+			await this.transactionMember(tx, ws, uid, false);
 			const [old, budget] = await Promise.all([tx.get(usage), tx.get(quota)]);
 			if (old.exists) {
 				check(old.data()?.fingerprint === fingerprint, "Provider request ID reused");

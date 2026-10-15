@@ -2,9 +2,15 @@ import { createHash } from "node:crypto";
 export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 export const EMBEDDING_MODEL = "gemini-embedding-001";
 export const EMBEDDING_DIMENSIONS = 768;
+export const STUDIO_PIPELINE = "cpu-mix-v1";
 export class DomainError extends Error {
 	constructor(
-		public code: string,
+		public code:
+			| "invalid-argument"
+			| "permission-denied"
+			| "resource-exhausted"
+			| "aborted"
+			| "already-exists",
 		message: string,
 	) {
 		super(message);
@@ -51,8 +57,19 @@ export interface MixTimeline {
 	fps: 30;
 	clips: Clip[];
 }
-export function timeline(input: unknown): MixTimeline {
-	check(!!input && typeof input === "object", "Missing timeline");
+export function timeline(input: unknown, stored = false): MixTimeline {
+	check(!!input && typeof input === "object" && !Array.isArray(input), "Missing timeline");
+	const fields = [
+		"width",
+		"height",
+		"fps",
+		"clips",
+		...(stored ? ["workspaceId", "projectId", "createdBy", "createdAt", "fingerprint"] : []),
+	];
+	check(
+		Object.keys(input).every((key) => fields.includes(key)),
+		"Unsupported timeline fields; desktop effects must not be silently removed",
+	);
 	const value = input as MixTimeline;
 	check(
 		value.width === 1280 && value.height === 720 && value.fps === 30,
@@ -64,6 +81,13 @@ export function timeline(input: unknown): MixTimeline {
 	);
 	let duration = 0;
 	const clips = value.clips.map((clip) => {
+		check(!!clip && typeof clip === "object" && !Array.isArray(clip), "Invalid clip");
+		check(
+			Object.keys(clip).every((key) =>
+				["assetType", "assetId", "startMs", "endMs"].includes(key),
+			),
+			"Unsupported clip fields; desktop effects must not be silently removed",
+		);
 		check(clip.assetType === "original" || clip.assetType === "broll", "Invalid asset kind");
 		id(clip.assetId);
 		check(
@@ -85,6 +109,41 @@ export function timeline(input: unknown): MixTimeline {
 	check(duration <= 600000, "Preview exports are limited to 10 minutes");
 	check(Buffer.byteLength(JSON.stringify(clips)) <= 200000, "Timeline document too large");
 	return { width: 1280, height: 720, fps: 30, clips };
+}
+
+export function assetDecision(input: Record<string, unknown>) {
+	check(input.approved === true || input.approved === false, "An explicit decision is required");
+	if (input.approved)
+		check(
+			input.licenseReviewed === true && input.usageRightsConfirmed === true,
+			"Review the license and confirm usage rights before approval",
+		);
+	return {
+		approved: input.approved,
+		licenseReviewed: input.licenseReviewed === true,
+		usageRightsConfirmed: input.usageRightsConfirmed === true,
+	};
+}
+
+export function assertStudioJob(
+	job: unknown,
+	workspaceId: string,
+): asserts job is Record<string, unknown> {
+	check(!!job && typeof job === "object" && !Array.isArray(job), "Job missing");
+	const value = job as Record<string, unknown>;
+	check(
+		value.pipeline === STUDIO_PIPELINE && value.workspaceId === workspaceId,
+		"Job outside CPU Mix pipeline or workspace",
+	);
+	check(value.kind === "analyze" || value.kind === "render", "Unsupported job kind");
+}
+
+/** Ignore unrelated documents in an existing shared collection without dispatching them. */
+export function dispatchPayload(workspaceId: string, jobId: string, job: Record<string, unknown>) {
+	if (job.pipeline !== STUDIO_PIPELINE || job.status !== "queued") return null;
+	assertStudioJob(job, workspaceId);
+	id(job.targetId);
+	return { workspaceId: id(workspaceId), jobId: id(jobId) };
 }
 export const STOCK_HOSTS = {
 	pexels: ["www.pexels.com", "pexels.com"],

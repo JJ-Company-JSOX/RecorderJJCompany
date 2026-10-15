@@ -24,7 +24,7 @@ MIT/Apache-2.0/BSD 源码通常可在保留许可/归属等条件下用于 AGPL-
 
 ## 本地 Node 测试
 
-需要 Node.js 22（Functions 运行时目标）；本环境用 Node 24 编译，并另用 Node 22.23.3 运行领域单测；真实 Functions 运行时仍需 staging 确认。Rules Emulator 需要 Java 21+，首次从 Google 下载官方 JAR。
+需要 Node.js 22（Functions 运行时目标）；本环境用 Node 24 编译，并另用缓存中的 Node 22 运行全部 17 项领域/服务契约测试；真实 Functions 运行时仍需 staging 确认。Rules Emulator 需要 Java 21+，首次从 Google 下载官方 JAR。
 
 ```sh
 cd cloud/functions
@@ -33,7 +33,7 @@ npm test
 npm run test:emulators
 ```
 
-Windows 可在仓库根目录双击 `TEST-FIREBASE-BACKEND.cmd`。没有 firebase login 要求；该脚本不部署，使用 demo project。模拟器下载不能访问时要保留失败，不能改成生产项目、绕过 TLS/校验或假装 Rules 测试通过。
+Windows 可在仓库根目录双击 `TEST-FIREBASE-BACKEND.cmd`。没有 firebase login 要求；该脚本不部署，使用 demo project。`npm test` 的服务契约使用内存 transport，并非真实事务验证；单独的 Emulator suite 必须通过。模拟器下载不能访问时要保留失败，不能改成生产项目、绕过 TLS/校验或假装 Rules 测试通过。
 
 ## Python CPU Worker 测试
 
@@ -62,9 +62,10 @@ Windows PowerShell 设置环境用 `$env:PYTHONPATH="cloud/worker"`；FFmpeg 不
 
 ## 本轮测试结果（代码提交前再次核对）
 
-- TypeScript Functions build 与 5 项领域单元测试通过。
-- Python 9 项测试通过：含实际 FFmpeg 拼接 MP4、OpenCV 抽帧、PySceneDetect 分场景；Job 取消/租约/重复退款/重试计数/授权撤销使用 fake Firestore transport。
-- Rules/真实 Firestore 事务/Storage emulator suite **未运行成功**：官方 `cloud-firestore-emulator-v1.22.0.jar` 下载被 HTTP 403 拒绝。测试源码已保留供有网络权限的电脑运行。
+- TypeScript Functions build 与 **17 项测试**通过（11 项领域测试 + 6 项服务契约），Node 24 和 Node 22 都运行。覆盖 pipeline 隔离、拒绝素材不冒充授权、来源校验、事务内权限重读、新分析任务指针、单次取消退款和严格时间线字段。
+- Python **16 项测试**通过：含实际 FFmpeg 拼接 MP4、OpenCV 抽帧、PySceneDetect 分场景；另测缓存随 Whisper revision 失效、旧任务不覆盖新分析、取消不发布半成品、严格字段校验。Job 与服务事务采用 fake/in-memory Firestore transport，不能代替真实事务重试、并发和原子性验收。
+- 现有桌面 TypeScript 检查通过，本轮未修改录屏、桌面时间线、PixiJS 导出或网站代码。此前 M2a 的页面/导入/生产构建记录仍在 validation.json，未把历史检查冒充本轮重跑。
+- Rules/真实 Firestore 事务/Storage emulator suite **未运行成功**：官方 `cloud-firestore-emulator-v1.22.0.jar` 下载被 HTTP 403 拒绝。本轮保留并扩展为 9 项，供有网络权限的电脑运行；语法检查不代表执行通过。
 - 真实 Firestore vector queries、Auth/App Check、Google IAM/Cloud Tasks、供应商 API、Whisper 推理、新马真实样本质量与费用均未验证。Docker 镜像尚未构建。
 
 机器可读的本轮检查记录：[validation.json](validation.json)。GitHub Actions 配置会在本分支 cloud 文件变更后运行；尚未读取到运行结果，不能用“已配置 CI”代替“CI 已通过”。

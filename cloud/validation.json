@@ -18,13 +18,14 @@
 			"evidence": "No Windows installer built; existing PostCSS/chunk warnings remain"
 		},
 		{
-			"check": "Functions TypeScript build and domain tests",
-			"tests": 5,
-			"runtime": "Node 24; domain tests also run on Node 22.23.3"
+			"check": "Functions TypeScript build and domain/service contract tests",
+			"tests": 17,
+			"runtime": "Node 24 and Node 22",
+			"evidence": "11 domain + 6 service tests; in-memory service transport, not real Firestore transactions"
 		},
 		{
 			"check": "CPU Worker media and job-state tests",
-			"tests": 9,
+			"tests": 16,
 			"runtime": "Python 3.12",
 			"evidence": "Real FFmpeg/OpenCV/PySceneDetect; fake Firestore transport for job-state tests"
 		},
@@ -38,6 +39,7 @@
 	"blocked": [
 		{
 			"check": "Firestore/Storage Rules and transaction emulator suite",
+			"testsAuthored": 9,
 			"reason": "Official cloud-firestore-emulator-v1.22.0.jar download returned HTTP 403; tests not reported as passed"
 		}
 	],
@@ -62,5 +64,23 @@
 	"actionsWorkflow": "firebase-backend-checks.yml",
 	"actionsStatus": "Configured for push/manual checks; outcome must be checked in GitHub",
 	"deployed": false,
-	"dataMigrated": false
+	"dataMigrated": false,
+	"latestIncrement": {
+		"name": "M1b backend protocol and analysis publication hardening",
+		"rerunChecks": [
+			"Functions build and 17 tests on Node 24/22",
+			"Python 16 tests",
+			"Desktop TypeScript",
+			"Changed Functions files lint",
+			"Emulator suite syntax"
+		],
+		"historicalChecksNotRepeated": [
+			"M2a Chromium UI/local import",
+			"M2a desktop production build",
+			"Website smoke"
+		],
+		"newDependencies": false,
+		"modelDownloads": false,
+		"liveProviderCalls": false
+	}
 }

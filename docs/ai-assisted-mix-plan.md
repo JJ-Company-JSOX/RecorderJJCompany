@@ -8,7 +8,7 @@ Upload → Analyze → Search B-roll → Customer Approval → Editable Timeline
 
 现有桌面 Import video 仍是本地导入，不等同于 Cloud Studio Upload。当前不会自动给用户上传视频，不重新强制邮箱登录，不改动 `.recordly` 和 PixiJS 导出。Firebase Authentication 只用于未来可选的云端操作。
 
-## M1 — 本轮实现
+## M1 — 已实现的后端基础
 
 - 独立 `cloud/`，复用已有 project ID，不触碰 Hosting 配置或迁移数据。
 - TypeScript Functions、Firestore/Storage Rules、复合/向量索引和 TTL/lifecycle/Tasks 配置草案。
@@ -20,6 +20,14 @@ Upload → Analyze → Search B-roll → Customer Approval → Editable Timeline
 - 已编写 Emulator suite；本环境官方 Emulator JAR 下载 HTTP 403，故未执行成功。不能宣称 Rules 已通过。
 
 **当前不做生产部署**：没有操作线上 Firebase 服务，没有生成真实供应商调用费用，没有复制 API Key 或下载模型。
+
+### M1b — 本轮协议及状态加固
+
+- 出队/取消/下载/Worker 对 pipeline 与工作区做明确校验，不触碰共享集合中的其他产品任务。
+- 在业务变更事务内重读成员权限；拒绝素材无需勾选“有使用权”，批准仍验证来源、许可页及正面授权。
+- API/Worker 严格拒绝未支持的时间线或 clip 字段，避免缩放、额外音轨和变速在云端被静默丢弃。
+- 分析缓存包含 Whisper revision；每次尝试写独立 generation。新任务指针在排队时原子设置，旧请求重放不覆盖，发布与完成结算合并到事务；取消/被替代不发布半成品。
+- 17 项 Functions 单元/服务契约测试、16 项 Python Worker 测试通过；服务层和任务事务使用内存 fake，不冒充真实 Firestore 并发验证。Emulator suite 扩展为 9 项，仍待可下载官方 JAR 的环境执行。
 
 ## M1 验证完成后才可进入的门槛
 
@@ -60,4 +68,4 @@ Upload → Analyze → Search B-roll → Customer Approval → Editable Timeline
 
 ## 可验证结果与限制
 
-本轮实际测试记录见 [cloud/README.md](../cloud/README.md)。真实 Gemini/Pexels/Pixabay、Whisper 模型推理、Auth/App Check tokens、生产向量索引、Cloud Run/Tasks/IAM 及真实新马样本都不能被本地合成测试替代。M1 完成后先提交 GitHub，等用户电脑下载再继续。
+实际测试记录见 [cloud/README.md](../cloud/README.md)。真实 Gemini/Pexels/Pixabay、Whisper 模型推理、Auth/App Check tokens、生产向量索引、Cloud Run/Tasks/IAM 及真实新马样本都不能被本地合成测试替代。每个完成的增量先提交 GitHub，用户可在自己的电脑下载测试，不自动部署收费服务。

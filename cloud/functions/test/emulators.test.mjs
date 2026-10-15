@@ -105,6 +105,25 @@ test("server authorization blocks viewers and cross-tenant writes", async () => 
 	await assert.rejects(service.createMix("a", "bob", "forged"), /access denied/);
 	await assert.rejects(service.createMix("a", "viewer", "forged"), /access denied/);
 });
+test("rejecting an incomplete suggestion does not claim license or usage rights", async () => {
+	await db.doc("workspaces/a/brollSuggestions/unlicensed").set({ workspaceId: "a" });
+	await service.approveAsset("a", "alice", { suggestionId: "unlicensed", approved: false });
+	const decision = (await db.doc("workspaces/a/assetApprovals/unlicensed").get()).data();
+	assert.equal(decision.approved, false);
+	assert.equal(decision.licenseReviewed, false);
+	assert.equal(decision.usageRightsConfirmed, false);
+});
+test("cancel cannot mutate a different pipeline in a shared exportJobs collection", async () => {
+	const original = {
+		workspaceId: "a",
+		pipeline: "another-product",
+		kind: "render",
+		status: "queued",
+	};
+	await db.doc("workspaces/a/exportJobs/foreign").set(original);
+	await assert.rejects(service.cancelJob("a", "alice", "foreign"), /CPU Mix pipeline/);
+	assert.deepEqual((await db.doc("workspaces/a/exportJobs/foreign").get()).data(), original);
+});
 test("asset approval, immutable timeline, conflict protection and render job idempotency use real transactions", async () => {
 	await db.doc("workspaces/a/brollSuggestions/stock").set({
 		workspaceId: "a",
@@ -175,7 +194,11 @@ test("asset approval, immutable timeline, conflict protection and render job ide
 		),
 	]);
 	assert.equal(jobs[0].jobId, jobs[1].jobId);
-	assert.equal((await db.collection("workspaces/a/exportJobs").get()).size, 1);
+	assert.equal(
+		(await db.collection("workspaces/a/exportJobs").where("pipeline", "==", "cpu-mix-v1").get())
+			.size,
+		1,
+	);
 	assert.equal((await db.collection("workspaces/a/aiUsageRecords").get()).size, 1);
 	await service.approveAsset("a", "alice", {
 		suggestionId: "stock",
@@ -191,6 +214,38 @@ test("asset approval, immutable timeline, conflict protection and render job ide
 			"render",
 		),
 		/revoked/,
+	);
+});
+test("new analysis pointer is transactional and old idempotency replay does not replace it", async () => {
+	await db
+		.doc("workspaces/a/videos/analysis")
+		.set({
+			workspaceId: "a",
+			status: "uploading",
+			consent: { cloudProcessing: true, gemini: true, sensitivityReviewed: true },
+		});
+	const first = await service.queueJob(
+		"a",
+		"alice",
+		{ requestId: "analyze-first", videoId: "analysis" },
+		"analyze",
+	);
+	const second = await service.queueJob(
+		"a",
+		"alice",
+		{ requestId: "analyze-second", videoId: "analysis" },
+		"analyze",
+	);
+	await service.queueJob(
+		"a",
+		"alice",
+		{ requestId: "analyze-first", videoId: "analysis" },
+		"analyze",
+	);
+	assert.notEqual(first.jobId, second.jobId);
+	assert.equal(
+		(await db.doc("workspaces/a/videos/analysis").get()).data().analysisJobId,
+		second.jobId,
 	);
 });
 test("provider operation IDs cannot reserve twice or rerun a pending paid call", async () => {

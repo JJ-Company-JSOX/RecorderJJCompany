@@ -1,6 +1,7 @@
 """CPU media primitives. No cloud credentials, shell strings or model downloads."""
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -114,11 +115,27 @@ def transcribe(file, model_dir, checkpoint=lambda: None):
     return result
 
 
+def validate_timeline(timeline, stored=False):
+    fields={'width','height','fps','clips'}
+    if stored:fields.update({'workspaceId','projectId','createdBy','createdAt','fingerprint'})
+    if not isinstance(timeline,dict) or set(timeline)-fields:raise ValueError('Unsupported timeline fields')
+    clips=timeline.get('clips')
+    if not isinstance(clips,list) or not 0<len(clips)<=100 or timeline.get("width")!=1280 or timeline.get("height")!=720 or timeline.get("fps")!=30:
+        raise ValueError("Unsupported timeline")
+    total=0
+    for clip in clips:
+        if not isinstance(clip,dict) or set(clip)!={'assetType','assetId','startMs','endMs'}:raise ValueError('Unsupported clip fields')
+        if clip['assetType'] not in ['original','broll'] or not isinstance(clip['assetId'],str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',clip['assetId']):raise ValueError('Invalid timeline asset')
+        start,end=clip['startMs'],clip['endMs']
+        if type(start) is not int or type(end) is not int or start<0 or end<=start or end>600000:raise ValueError('Invalid clip range')
+        total+=end-start
+    if total>600000:raise ValueError('Export too long')
+
+
 def render_timeline(timeline, assets, directory, output, checkpoint=lambda: None):
     """A bounded CPU cut/concatenate renderer; PixiJS desktop effects are not represented here."""
-    clips=timeline.get("clips",[])
-    if not 0<len(clips)<=100 or timeline.get("width")!=1280 or timeline.get("height")!=720 or timeline.get("fps")!=30:
-        raise ValueError("Unsupported timeline")
+    validate_timeline(timeline,stored=True)
+    clips=timeline['clips']
     parts=[]
     total=0
     for index, clip in enumerate(clips):

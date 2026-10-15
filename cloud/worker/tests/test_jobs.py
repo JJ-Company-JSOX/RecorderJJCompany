@@ -3,7 +3,7 @@ import copy
 import unittest
 from datetime import datetime,timedelta,timezone
 from unittest.mock import patch
-from app import Repository,Canceled
+from app import Repository,Canceled,PermanentError,analysis_cache_key
 
 class Snapshot:
     def __init__(self,data):self.value=copy.deepcopy(data);self.exists=data is not None
@@ -33,6 +33,7 @@ class JobTests(unittest.TestCase):
         self.db.data['workspaces/ws/members/alice']={'role':'owner','active':True}
         self.db.data['workspaces/ws/_quotas/day']={'reserved':10}
         self.db.data['workspaces/ws/exportJobs/job']={'kind':'analyze','pipeline':'cpu-mix-v1','workspaceId':'ws','createdBy':'alice','targetId':'video','status':'queued','attempts':0,'quotaPath':'workspaces/ws/_quotas/day','reservedUnits':10}
+        self.db.data['workspaces/ws/videos/video']={'workspaceId':'ws','status':'uploading','analysisJobId':'job'}
     def tearDown(self):self.mock.stop()
     def test_cancel_refunds_once_and_duplicate_delivery_is_settled(self):
         job=self.repo.claim();self.db.data[self.repo.ref.path]['cancelRequested']=True
@@ -63,5 +64,37 @@ class JobTests(unittest.TestCase):
         job=self.repo.claim();self.db.data['workspaces/ws/members/alice']['active']=False
         self.repo.finish(job,'succeeded',{},'export.mp4')
         self.assertEqual(self.db.data[self.repo.ref.path]['status'],'canceled')
+    def test_foreign_pipeline_and_workspace_are_not_claimed(self):
+        original=copy.deepcopy(self.db.data[self.repo.ref.path])
+        for field,value in [('pipeline','other'),('workspaceId','other'),('kind','unsupported')]:
+            self.db.data[self.repo.ref.path]={**original,field:value}
+            before=copy.deepcopy(self.db.data[self.repo.ref.path])
+            with self.assertRaises(PermanentError):self.repo.claim()
+            self.assertEqual(self.db.data[self.repo.ref.path],before)
+    def test_cancel_at_commit_does_not_publish_analysis(self):
+        job=self.repo.claim()
+        self.repo.analysis_publish={'status':'ready','analysisKey':'new-generation'}
+        self.db.data[self.repo.ref.path]['cancelRequested']=True
+        self.assertEqual(self.repo.finish(job,'succeeded',{}),'canceled')
+        self.assertEqual(self.db.data['workspaces/ws/videos/video']['status'],'uploading')
+        self.assertNotIn('analysisKey',self.db.data['workspaces/ws/videos/video'])
+    def test_success_commits_analysis_with_job_settlement(self):
+        job=self.repo.claim()
+        self.repo.analysis_publish={'status':'ready','analysisKey':'new-generation','analysisCacheKey':'cache-key'}
+        self.assertEqual(self.repo.finish(job,'succeeded',{}),'succeeded')
+        self.assertEqual(self.db.data['workspaces/ws/videos/video']['analysisKey'],'new-generation')
+        self.assertEqual(self.db.data[self.repo.ref.path]['status'],'succeeded')
+    def test_superseded_analysis_cannot_replace_newer_results(self):
+        job=self.repo.claim()
+        self.repo.analysis_publish={'status':'ready','analysisKey':'old-generation'}
+        self.db.data['workspaces/ws/videos/video'].update({'analysisJobId':'new-job','analysisKey':'new-generation','status':'ready'})
+        with self.assertRaises(Canceled):self.repo.checkpoint(force=True)
+        self.assertEqual(self.repo.finish(job,'succeeded',{}),'canceled')
+        self.assertEqual(self.db.data['workspaces/ws/videos/video']['analysisKey'],'new-generation')
+    def test_model_revision_and_source_generation_invalidate_analysis_cache(self):
+        original=analysis_cache_key(1,'gemini-model','whisper-revision-a')
+        self.assertEqual(original,analysis_cache_key('1','gemini-model','whisper-revision-a'))
+        for values in [(2,'gemini-model','whisper-revision-a'),(1,'new-gemini-model','whisper-revision-a'),(1,'gemini-model','whisper-revision-b')]:
+            self.assertNotEqual(original,analysis_cache_key(*values))
 
 if __name__=='__main__':unittest.main()

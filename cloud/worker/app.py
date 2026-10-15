@@ -1,5 +1,6 @@
 """Private Cloud Run CPU worker. Cloud Run IAM must reject unauthenticated ingress."""
 import hashlib
+import json
 import os
 import re
 import tempfile
@@ -12,7 +13,7 @@ from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel,ConfigDict
 from google.cloud import firestore,storage
 from google.cloud.firestore_v1.vector import Vector
-from media import probe,scene_ranges,sampled_frames,transcribe,render_timeline
+from media import probe,scene_ranges,sampled_frames,transcribe,render_timeline,validate_timeline
 from providers import describe,embed,download_approved,EMBEDDING_MODEL
 
 app=FastAPI(docs_url=None,redoc_url=None,openapi_url=None)
@@ -44,6 +45,12 @@ def tokens(text):
     return list(dict.fromkeys(result))[:100]
 
 
+def analysis_cache_key(generation, model, asr_revision):
+    # Model revision changes must not replay a transcript produced by old weights.
+    contract=[str(generation),PIPELINE_VERSION,model,EMBEDDING_MODEL,768,asr_revision,'samples-8-640x360-v1']
+    return hashlib.sha256(json.dumps(contract,ensure_ascii=True,separators=(',',':')).encode()).hexdigest()
+
+
 class Repository:
     def __init__(self,db,workspace,job_id):
         self.db=db
@@ -53,6 +60,7 @@ class Repository:
         self.last_check=0
         self.started=time.monotonic()
         self.approvals={}
+        self.analysis_publish=None
     def claim(self):
         @firestore.transactional
         def transaction(tx):
@@ -60,6 +68,8 @@ class Repository:
             if not snapshot.exists:raise PermanentError('Job not found')
             job=snapshot.to_dict()
             if job.get('pipeline')!=PIPELINE_VERSION:raise PermanentError('Foreign job pipeline')
+            if job.get('workspaceId')!=self.workspace.id or job.get('kind') not in ['analyze','render']:raise PermanentError('Foreign workspace or job kind')
+            valid_id(job.get('targetId'))
             if job['status'] in ['succeeded','failed','canceled']:return None
             if job.get('status')=='processing' and job.get('leaseUntil',datetime.min.replace(tzinfo=timezone.utc))>datetime.now(timezone.utc):raise LeaseBusy()
             tx.update(self.ref,{'status':'processing','leaseToken':self.lease,'leaseUntil':datetime.now(timezone.utc)+timedelta(seconds=1800),'attempts':job.get('attempts',0)+1})
@@ -71,22 +81,28 @@ class Repository:
         self.last_check=time.monotonic()
         data=self.ref.get().to_dict()
         if not data or data.get('leaseToken')!=self.lease:raise Canceled('Lease replaced')
+        if data.get('pipeline')!=PIPELINE_VERSION or data.get('workspaceId')!=self.workspace.id:raise Canceled('Job ownership changed')
         member=self.workspace.collection('members').document(data['createdBy']).get().to_dict()
         if not member or member.get('active') is not True or member.get('role') not in ['owner','editor']:raise Canceled('Workspace access revoked')
         if data.get('cancelRequested'):raise Canceled('Customer canceled the job')
+        if data.get('kind')=='analyze':
+            video=self.workspace.collection('videos').document(valid_id(data['targetId'])).get().to_dict()
+            if not video or video.get('analysisJobId')!=self.ref.id:raise Canceled('Analysis superseded')
     def finish(self,job,status,metrics,output=None,error_code=None):
         @firestore.transactional
         def transaction(tx):
             current=self.ref.get(transaction=tx).to_dict()
-            if not current or current.get('leaseToken')!=self.lease or current.get('status')!='processing':return False
+            if not current or current.get('pipeline')!=PIPELINE_VERSION or current.get('workspaceId')!=self.workspace.id or current.get('leaseToken')!=self.lease or current.get('status')!='processing':return False
             quota=self.db.document(job['quotaPath'])
             budget=quota.get(transaction=tx).to_dict() or {}
             usage_ref=self.workspace.collection('aiUsageRecords').document(self.ref.id)
             previous=usage_ref.get(transaction=tx).to_dict() or {}
             member=self.workspace.collection('members').document(job['createdBy']).get(transaction=tx).to_dict()
             decisions={asset:self.workspace.collection('assetApprovals').document(asset).get(transaction=tx).to_dict() for asset in self.approvals}
+            video_ref=self.workspace.collection('videos').document(valid_id(job['targetId'])) if job['kind']=='analyze' else None
+            video=video_ref.get(transaction=tx).to_dict() if video_ref else None
             final_status=status
-            if final_status=='succeeded' and (current.get('cancelRequested') or not member or not member.get('active') or member.get('role') not in ['owner','editor'] or any(not decisions[asset] or not decisions[asset].get('approved') or decisions[asset].get('revision')!=revision for asset,revision in self.approvals.items())):
+            if final_status=='succeeded' and (current.get('cancelRequested') or not member or not member.get('active') or member.get('role') not in ['owner','editor'] or (video_ref and (not video or video.get('analysisJobId')!=self.ref.id)) or any(not decisions[asset] or not decisions[asset].get('approved') or not decisions[asset].get('licenseReviewed') or not decisions[asset].get('usageRightsConfirmed') or decisions[asset].get('revision')!=revision for asset,revision in self.approvals.items())):
                 final_status='canceled'
             cumulative={**previous.get('metrics',{})}
             for key,value in metrics.items():
@@ -95,6 +111,9 @@ class Repository:
             settled=final_status in ['succeeded','failed','canceled']
             if final_status in ['failed','canceled']:
                 tx.update(quota,{'reserved':max(0,budget.get('reserved',0)-job['reservedUnits'])})
+            if final_status=='succeeded' and video_ref and self.analysis_publish:
+                # Publishing results and settling the job share the same transaction.
+                tx.update(video_ref,self.analysis_publish)
             change={'status':final_status,'approvalRevisions':self.approvals,'leaseUntil':datetime.now(timezone.utc),'updatedAt':firestore.SERVER_TIMESTAMP}
             if output and final_status=='succeeded':change['outputPath']=output
             if error_code:change['errorCode']=error_code
@@ -133,19 +152,24 @@ def analyze(repo,job,bucket,directory,metrics):
     video_id=valid_id(job['targetId'])
     video_ref=repo.workspace.collection('videos').document(video_id)
     video=video_ref.get().to_dict()
-    if not video or not video.get('consent',{}).get('gemini'):raise PermanentError('Cloud consent missing')
+    if not video or video.get('workspaceId')!=repo.workspace.id or not all(video.get('consent',{}).get(flag) is True for flag in ['cloudProcessing','gemini','sensitivityReviewed']):raise PermanentError('Cloud consent missing')
+    if video.get('analysisJobId')!=repo.ref.id:raise Canceled('Analysis superseded')
+    if video.get('storagePath')!=f'workspaces/{repo.workspace.id}/originals/{video_id}/source':raise PermanentError('Original outside expected upload slot')
     path=Path(directory)/'original'
     blob=bucket.blob(video['storagePath'])
     blob.reload()
     if blob.size!=video['sizeBytes']:raise PermanentError('Original size changed')
     model=os.environ.get('GEMINI_MODEL')
     if not model:raise PermanentError('Select and configure a Gemini analysis model before deployment')
-    cache_key=hashlib.sha256(f'{blob.generation}:{PIPELINE_VERSION}:{model}:{EMBEDDING_MODEL}'.encode()).hexdigest()
-    if video.get('status')=='ready' and video.get('analysisKey')==cache_key:
+    asr_revision=os.environ.get('WHISPER_MODEL_REVISION','')
+    cache_key=analysis_cache_key(blob.generation,model,asr_revision)
+    if video.get('status')=='ready' and video.get('analysisCacheKey')==cache_key:
         metrics['analysisCacheHit']=True
         return None
     get_blob(bucket,video['storagePath'],repo.workspace.id,path,generation=blob.generation)
     metadata=probe(path)
+    if metadata['audio'] and not asr_revision:raise PermanentError('Configure a verified Whisper model revision before audio analysis')
+    generation_key=f'{cache_key}-{repo.lease}'
     scenes=scene_ranges(path,metadata['durationMs'],repo.checkpoint)
     repo.checkpoint(force=True)
     transcript=transcribe(path,os.environ.get('WHISPER_MODEL_DIR'),repo.checkpoint) if metadata['audio'] else []
@@ -159,7 +183,7 @@ def analyze(repo,job,bucket,directory,metrics):
         metrics['outputTokens']+=usage.get('candidatesTokenCount',0)
         records.append({'kind':'visual','startMs':frame['timeMs'],'endMs':min(metadata['durationMs'],frame['timeMs']+1000),'text':description,'model':model})
         # Private, generation-keyed object; no download tokens or public ACL.
-        upload_private(bucket,f'workspaces/{repo.workspace.id}/thumbnails/{video_id}/{cache_key}-{index}.jpg',frame['file'],'image/jpeg')
+        upload_private(bucket,f'workspaces/{repo.workspace.id}/thumbnails/{video_id}/{generation_key}-{index}.jpg',frame['file'],'image/jpeg')
     records.extend({'kind':'transcript',**segment} for segment in transcript)
     if len(records)>508:raise PermanentError('Too many analysis segments')
     metrics['inputCharacters']=sum(len(record['text']) for record in records)
@@ -168,7 +192,7 @@ def analyze(repo,job,bucket,directory,metrics):
         repo.checkpoint()
         vector=embed(record['text'])
         metrics['embeddingCalls']+=1
-        documents.append((f'{video_id}-{cache_key}-{index}',{**record,'workspaceId':repo.workspace.id,'videoId':video_id,'analysisKey':cache_key,'model':EMBEDDING_MODEL,'descriptionModel':record.get('model'),'embedding':Vector(vector),'keywords':tokens(record['text'])}))
+        documents.append((f'{video_id}-{generation_key}-{index}',{**record,'workspaceId':repo.workspace.id,'videoId':video_id,'analysisKey':generation_key,'model':EMBEDDING_MODEL,'descriptionModel':record.get('model'),'embedding':Vector(vector),'keywords':tokens(record['text'])}))
     # Publish small documents in bounded batches. Each generation stays separate until marked ready.
     for start in range(0,len(documents),100):
         batch=repo.db.batch()
@@ -177,21 +201,17 @@ def analyze(repo,job,bucket,directory,metrics):
     for name,items in [('scenes',scenes),('transcripts',transcript),('events',[r for r in records if r['kind']=='visual'])]:
         for start in range(0,len(items),100):
             batch=repo.db.batch()
-            for index,item in enumerate(items[start:start+100],start):batch.set(video_ref.collection(name).document(f'{cache_key}-{index}'),{**item,'analysisKey':cache_key})
+            for index,item in enumerate(items[start:start+100],start):batch.set(video_ref.collection(name).document(f'{generation_key}-{index}'),{**item,'analysisKey':generation_key})
             batch.commit()
     repo.checkpoint(force=True)
-    @firestore.transactional
-    def publish(tx):
-        current=repo.ref.get(transaction=tx).to_dict()
-        if not current or current.get('leaseToken')!=repo.lease or current.get('cancelRequested'):raise Canceled('Analysis was canceled')
-        tx.update(video_ref,{'status':'ready','durationMs':metadata['durationMs'],'analysisKey':cache_key,'sourceGeneration':str(blob.generation),'analysisModel':model,'updatedAt':firestore.SERVER_TIMESTAMP})
-    publish(repo.db.transaction())
+    repo.analysis_publish={'status':'ready','durationMs':metadata['durationMs'],'analysisKey':generation_key,'analysisCacheKey':cache_key,'sourceGeneration':str(blob.generation),'analysisModel':model,'asrModelRevision':asr_revision or None,'updatedAt':firestore.SERVER_TIMESTAMP}
     return None
 
 
 def render(repo,job,bucket,directory,metrics):
     version=repo.workspace.collection('timelineVersions').document(valid_id(job['targetId'])).get().to_dict()
     if not version or version.get('workspaceId')!=repo.workspace.id:raise PermanentError('Timeline missing')
+    validate_timeline(version,stored=True)
     if any(clip.get('assetType')=='broll' for clip in version.get('clips',[])) and os.environ.get('STOCK_TERMS_REVIEWED')!='true':raise PermanentError('Stock policy review is required')
     assets={}
     total_bytes=0
@@ -200,7 +220,7 @@ def render(repo,job,bucket,directory,metrics):
         repo.checkpoint(force=True)
         for asset_id,revision in approvals.items():
             decision=repo.workspace.collection('assetApprovals').document(asset_id).get().to_dict()
-            if not decision or not decision.get('approved') or not decision.get('usageRightsConfirmed') or decision.get('revision')!=revision:raise Canceled('Asset approval changed')
+            if not decision or not decision.get('approved') or not decision.get('licenseReviewed') or not decision.get('usageRightsConfirmed') or decision.get('revision')!=revision:raise Canceled('Asset approval changed')
     for clip in version.get('clips',[]):
         repo.checkpoint()
         kind,asset_id=clip.get('assetType'),valid_id(clip.get('assetId'))

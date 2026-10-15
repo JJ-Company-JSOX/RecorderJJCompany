@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
-		"test": "npm run build && node --test lib/domain.test.js",
+		"test": "npm run build && node --test lib/domain.test.js lib/service.test.js",
 		"test:emulators": "npm run build && npx --yes firebase-tools@15.34.0 emulators:exec --project demo-jsox --config ../firebase.json --only firestore,storage \"node --test test/emulators.test.mjs\""
 	},
 	"dependencies": {

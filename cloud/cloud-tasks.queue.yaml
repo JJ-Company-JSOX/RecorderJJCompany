@@ -1,0 +1,12 @@
+# Configuration reference for review; not auto-applied.
+rateLimits:
+  maxConcurrentDispatches: 1
+  maxDispatchesPerSecond: 0.2
+retryConfig:
+  maxAttempts: 20
+  minBackoff: 60s
+  maxBackoff: 600s
+  maxDoublings: 3
+  maxRetryDuration: 7200s
+# Worker performs at most 3 processing attempts. Busy leases return retryable 503.
+# A scheduled Functions reconciler refunds stale jobs after 3 hours.

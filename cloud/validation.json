@@ -1,0 +1,51 @@
+{
+	"schemaVersion": 1,
+	"date": "2026-10-15",
+	"status": "backend-development-preview",
+	"passed": [
+		{
+			"check": "Functions TypeScript build and domain tests",
+			"tests": 5,
+			"runtime": "Node 24; domain tests also run on Node 22.23.3"
+		},
+		{
+			"check": "CPU Worker media and job-state tests",
+			"tests": 9,
+			"runtime": "Python 3.12",
+			"evidence": "Real FFmpeg/OpenCV/PySceneDetect; fake Firestore transport for job-state tests"
+		},
+		{
+			"check": "Existing desktop TypeScript typecheck"
+		},
+		{
+			"check": "Existing website Chromium desktop/mobile smoke checks"
+		}
+	],
+	"blocked": [
+		{
+			"check": "Firestore/Storage Rules and transaction emulator suite",
+			"reason": "Official cloud-firestore-emulator-v1.22.0.jar download returned HTTP 403; tests not reported as passed"
+		}
+	],
+	"notRun": [
+		"Production vector index/query",
+		"Real Firebase Auth/App Check tokens",
+		"Signed GCS upload/download and IAM",
+		"Cloud Run / Cloud Tasks deployment",
+		"Gemini / Pexels / Pixabay API calls",
+		"Whisper model inference",
+		"Docker image build",
+		"Real SG/MY language accuracy and cost measurements"
+	],
+	"notImplementedThisIncrement": [
+		"Cloud Studio frontend and desktop cloud opt-in",
+		"Local sensitive-data preflight",
+		"Large timeline storage externalization",
+		"Provider-policy cache retention",
+		"Real billing reconciliation"
+	],
+	"actionsWorkflow": "firebase-backend-checks.yml",
+	"actionsStatus": "Configured for push/manual checks; outcome must be checked in GitHub",
+	"deployed": false,
+	"dataMigrated": false
+}

@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+ match /b/{bucket}/o {
+  function member(ws) {return request.auth != null && firestore.exists(/databases/(default)/documents/workspaces/$(ws)/members/$(request.auth.uid)) && firestore.get(/databases/(default)/documents/workspaces/$(ws)/members/$(request.auth.uid)).data.active == true && firestore.get(/databases/(default)/documents/workspaces/$(ws)/members/$(request.auth.uid)).data.role in ['owner','editor','viewer'];}
+  match /workspaces/{ws}/originals/{video}/source {
+   allow read: if member(ws);
+   // Uploads use a short-lived, size/MIME/generation-bound GCS PUT signed by the server.
+   // Disallow Firebase SDK uploads to avoid automatic long-lived Firebase download tokens.
+   allow write: if false;
+  }
+  match /workspaces/{ws}/{category}/{path=**} {
+   allow read: if member(ws) && category in ['thumbnails','timelines'];
+   allow write: if false;
+  }
+  match /workspaces/{ws}/approvedBroll/{asset}/{path=**} {
+   allow read: if member(ws) && firestore.get(/databases/(default)/documents/workspaces/$(ws)/assetApprovals/$(asset)).data.approved == true;
+   allow write: if false;
+  }
+  // Temporary objects and unapproved stock assets are never directly client-readable.
+  match /{path=**} {allow read,write: if false;}
+ }
+}

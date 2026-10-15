@@ -1,0 +1,5 @@
+{
+	"field": "expiresAt",
+	"collectionGroups": ["_rateLimits", "_quotas", "_uploadQuotas", "_queryEmbeddings"],
+	"note": "Review and enable TTL explicitly. TTL is eventual and deletions can be billed. Expiry is checked in application logic; quota/rate correctness never relies on immediate TTL deletion."
+}

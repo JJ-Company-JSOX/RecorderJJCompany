@@ -1,0 +1,9 @@
+**/node_modules/
+**/lib/
+**/__pycache__/
+.venv/
+.firebase/
+*-debug.log*
+.env
+.env.*
+!.env.example

@@ -1,3 +1,5 @@
+> **Jsox Recorder fork — development preview.** Local recording/editing stays independent of accounts. The optional Firebase AI Studio backend is an incremental preview: [Master Prompt](docs/recordly-ai-studio-master-prompt.md), [architecture/API](docs/firebase-ai-studio-architecture.md), [implementation plan](docs/ai-assisted-mix-plan.md), and [test status](cloud/README.md). No cloud deployment or data migration has been performed. Windows local backend checks: `TEST-FIREBASE-BACKEND.cmd`. Cloud Studio UI and real-service verification remain scheduled work.
+
 Language: EN | [简中](README.zh-CN.md)
 
 <p align="center">

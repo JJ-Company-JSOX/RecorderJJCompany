@@ -1,0 +1,8 @@
+[
+	{
+		"origin": ["https://REPLACE_WITH_STUDIO_ORIGIN"],
+		"method": ["PUT", "GET", "HEAD"],
+		"responseHeader": ["Content-Type", "x-goog-if-generation-match"],
+		"maxAgeSeconds": 3600
+	}
+]

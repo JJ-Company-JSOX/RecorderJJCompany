@@ -1,0 +1,88 @@
+{
+	"indexes": [
+		{
+			"collectionGroup": "videoEmbeddings",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "workspaceId",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "model",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "embedding",
+					"vectorConfig": {
+						"dimension": 768,
+						"flat": {}
+					}
+				}
+			]
+		},
+		{
+			"collectionGroup": "videoEmbeddings",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "workspaceId",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "keywords",
+					"arrayConfig": "CONTAINS"
+				}
+			]
+		},
+		{
+			"collectionGroup": "exportJobs",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "status",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "createdAt",
+					"order": "DESCENDING"
+				}
+			]
+		},
+		{
+			"collectionGroup": "exportJobs",
+			"queryScope": "COLLECTION_GROUP",
+			"fields": [
+				{
+					"fieldPath": "pipeline",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "status",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "createdAt",
+					"order": "ASCENDING"
+				}
+			]
+		}
+	],
+	"fieldOverrides": [
+		{
+			"collectionGroup": "transcripts",
+			"fieldPath": "text",
+			"indexes": []
+		},
+		{
+			"collectionGroup": "timelineVersions",
+			"fieldPath": "clips",
+			"indexes": []
+		},
+		{
+			"collectionGroup": "auditLogs",
+			"fieldPath": "details",
+			"indexes": []
+		}
+	]
+}

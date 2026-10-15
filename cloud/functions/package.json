@@ -1,0 +1,27 @@
+{
+	"name": "jsox-firebase-backend",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"main": "lib/index.js",
+	"engines": {
+		"node": "22"
+	},
+	"scripts": {
+		"build": "tsc",
+		"test": "npm run build && node --test lib/domain.test.js",
+		"test:emulators": "npm run build && npx --yes firebase-tools@15.34.0 emulators:exec --project demo-jsox --config ../firebase.json --only firestore,storage \"node --test test/emulators.test.mjs\""
+	},
+	"dependencies": {
+		"firebase-admin": "14.5.0",
+		"firebase-functions": "7.4.0",
+		"@google-cloud/tasks": "7.3.0"
+	},
+	"devDependencies": {
+		"typescript": "5.9.3",
+		"@types/node": "22.19.0",
+		"firebase": "13.0.0",
+		"@firebase/rules-unit-testing": "6.0.0"
+	},
+	"license": "AGPL-3.0-only"
+}

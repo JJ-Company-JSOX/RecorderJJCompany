@@ -1,5 +1,7 @@
 # Jsox Recorder：开发前评估与交付方案
 
+> **架构更新**：云端第一版以 [Firebase Master Prompt](recordly-ai-studio-master-prompt.md) 和 [Firebase 架构](firebase-ai-studio-architecture.md) 为准：Auth / Firestore 原生向量搜索 / 私有 Storage / Functions / App Check，加 Cloud Tasks 与 CPU Cloud Run。不引入 SQL 或 pgvector，不要求 GPU。本文语音研究为历史评估，声音克隆继续暂缓；不把历史规划当成本轮已实现功能。
+
 产品名称确定为 **Jsox Recorder**。产品界面和对外介绍使用该名称；Recordly 与 OpenScreen 作为上游项目保留归属说明。本次交付是代码复核、官方资料研究和工程方案，没有继续编写产品功能、安装模型、发起付费调用或部署服务。此前已实现的规则剪辑方案保留，不把它重复计为本轮新增成果。
 
 证据等级：**已核查**＝当前代码或固定提交的官方文档；**上游宣称**＝官方文档给出的能力／指标但未经本项目复测；**设计／假设**＝拟采用方案；**待验证**＝缺少工件、价格或真实样本证据。项目参数量不是完整下载大小，更不是运行所需 RAM／显存。
@@ -87,9 +89,9 @@ flowchart LR
   Local --> Model[按需模型进程：CPU/CUDA/MPS/MLX]
   Router --> Consent[数据清单/敏感检查/区域/价格确认]
   Consent --> API[Jsox Backend API]
-  API --> DB[(Postgres：Jobs/授权/Credits)]
+  API --> DB[(Firestore：Jobs/授权/用量)]
   API --> Queue[持久任务队列]
-  Queue --> GPU[GPU Worker / 第三方 GPU 适配器]
+  Queue --> GPU[Cloud Run CPU Worker；GPU 仅未来按需评估]
   GPU --> Store[私有临时音频存储]
   Store --> Main
   Main --> Timeline[现有 AudioRegion / ClipRegion]
@@ -160,14 +162,14 @@ OCR 模式：本地按场景／时间抽样，保留 source timestamp、文字�
 
 发音词典按 locale／项目／团队保存；优先显式短语读法，只有支持 phoneme 的 provider 才用音素接口。不得悄悄改写人名、数额、课程术语或文件路径。
 
-## 6. 云端 GPU 配置与任务运行
+## 6. 历史语音 GPU 评估（不是第一版部署方案）
 
-初期建议第三方 GPU 上运行 **Jsox Recorder 运营方的固定镜像**，统一 API，不让顾客自行租 GPU。供应商区域、价格、可用 GPU 和 DPA 尚待核价／采购，不宣称已有新加坡节点。
+本节保留历史语音方案的评估背景，声音克隆及 GPU 部署继续暂缓。当前第一版采用 Firebase + Cloud Tasks + Cloud Run CPU，详见最新 Firebase 架构；下列 GPU 参数不属于当前初始资源要求。
 
 | 层级 | 初期容量设计假设，不是实测最低要求 |
 |---|---|
 | Backend API | 2 个无状态实例，各 2 vCPU／4GB RAM；JWT 验证、配额、同意校验、报价和任务接口；可按实际流量缩减。 |
-| 数据与队列 | Postgres 作为任务／账本权威状态；初期可用持久 Postgres job queue + transactional outbox，增长后接 Redis/托管队列；Redis 不是扣费真相来源。 |
+| 数据与队列 | 当前采用 Firestore 作为任务／账本权威状态，Firestore job-create outbox 触发 Cloud Tasks；不引入 SQL 或独立向量数据库。 |
 | GPU worker | Linux x86_64，优先比较 L4 24GB／RTX 4090 24GB 等单卡档位，主机 8 vCPU、32GB RAM、50–100GB 临时磁盘；这是实验预算档位，非模型所需最小显存。 |
 | 并发 | 初期每卡 1 个重型模型任务，实测峰值后才增并发；最大实例数、单租户并发和每日金额均硬限制。 |
 | 存储 | SG 或经用户确认的区域内私有对象存储、每租户隔离、短期签名 URL、加密和 TTL。推理供应商在别区就明确跨境说明。 |

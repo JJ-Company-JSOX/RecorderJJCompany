@@ -1,0 +1,17 @@
+{
+	"functions": [
+		{
+			"source": "functions",
+			"codebase": "jsox-ai-studio",
+			"predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+		}
+	],
+	"firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
+	"storage": { "rules": "storage.rules" },
+	"emulators": {
+		"firestore": { "port": 8080 },
+		"storage": { "port": 9199 },
+		"ui": { "enabled": false },
+		"singleProjectMode": true
+	}
+}

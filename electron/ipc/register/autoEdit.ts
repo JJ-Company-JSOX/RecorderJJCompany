@@ -1,3 +1,4 @@
+import { analyzeVideoFrames } from "../autoEdit/vision";
 import { ipcMain } from "electron";
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
 import { analyzeLocalMedia } from "../autoEdit/media";
@@ -20,6 +21,56 @@ export function registerAutoEditHandlers() {
 		}
 	});
 	const running = new Map<number, AbortController>();
+	ipcMain.handle(
+		"auto-edit-vision",
+		async (event, input: { videoPath: string; model: string; count: number }) => {
+			if (running.has(event.sender.id))
+				return { success: false, error: "Analysis already running" };
+			const controller = new AbortController();
+			running.set(event.sender.id, controller);
+			const abort = () => controller.abort();
+			event.sender.once("destroyed", abort);
+			try {
+				if (
+					!input ||
+					typeof input.videoPath !== "string" ||
+					typeof input.model !== "string" ||
+					!Number.isInteger(input.count) ||
+					input.count < 1 ||
+					input.count > 12
+				)
+					throw Error("Invalid visual analysis request");
+				const normalized = normalizeVideoSourcePath(input.videoPath);
+				const approved = normalized && (await resolveApprovedLocalMediaPath(normalized));
+				if (!approved) throw Error("Select an approved local recording first");
+				const analysis = await analyzeVideoFrames({
+					videoPath: approved,
+					model: input.model,
+					count: input.count,
+					ffmpegPath: getFfmpegBinaryPath(),
+					ffprobePath: getFfprobeBinaryPath(),
+					signal: controller.signal,
+					onProgress: (completed, total, timeMs) => {
+						if (!event.sender.isDestroyed())
+							event.sender.send("auto-edit-vision-progress", {
+								completed,
+								total,
+								timeMs,
+							});
+					},
+				});
+				return { success: true, analysis };
+			} catch (error) {
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : "Visual analysis failed",
+				};
+			} finally {
+				running.delete(event.sender.id);
+				event.sender.removeListener("destroyed", abort);
+			}
+		},
+	);
 	ipcMain.handle("auto-edit-cancel", (event) => {
 		running.get(event.sender.id)?.abort();
 	});

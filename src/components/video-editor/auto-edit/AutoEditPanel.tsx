@@ -1,3 +1,5 @@
+import { addVisualSuggestions } from "./vision";
+import { visionMessages } from "./visionMessages";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,9 +29,12 @@ export function AutoEditPanel({
 	const { locale } = useI18n();
 	const [language, setLanguage] = useState<PlanLanguage>(locale.startsWith("zh") ? "zh" : "en");
 	const m = messages[language];
+	const v = visionMessages[language];
+	const [visionConsent, setVisionConsent] = useState(false);
+	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
-	const [busy, setBusy] = useState<"analysis" | "review" | null>(null);
+	const [busy, setBusy] = useState<"analysis" | "review" | "vision" | null>(null);
 	const [error, setError] = useState("");
 	const [applied, setApplied] = useState(false);
 	const [model, setModel] = useState("");
@@ -37,9 +42,11 @@ export function AutoEditPanel({
 		name: string;
 		sizeBytes: number;
 		license: string;
+		capabilities?: string[];
 	} | null>(null);
 	const [modelConsent, setModelConsent] = useState(false);
 	const generation = useRef(0);
+	useEffect(() => window.electronAPI.onAutoEditFrameProgress?.(setProgress), []);
 	useEffect(() => {
 		if (open) return;
 		generation.current++;
@@ -72,6 +79,38 @@ export function AutoEditPanel({
 					id: crypto.randomUUID(),
 				}),
 			);
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
+	const analyzeFrames = async () => {
+		if (
+			!plan ||
+			!modelInfo?.capabilities?.includes("vision") ||
+			!modelConsent ||
+			!visionConsent ||
+			stale
+		)
+			return;
+		const run = ++generation.current;
+		setBusy("vision");
+		setError("");
+		setProgress({ completed: 0, total: 8 });
+		setApplied(false);
+		try {
+			const result = await window.electronAPI.analyzeAutoEditFrames({
+				videoPath: source,
+				model,
+				count: 8,
+			});
+			if (run !== generation.current) return;
+			if (!result.success || !result.analysis)
+				throw Error(result.error || "Visual analysis failed");
+			setPlan(addVisualSuggestions(plan, state, source, result.analysis));
+			setDecisions({});
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -130,7 +169,7 @@ export function AutoEditPanel({
 				>
 					{busy === "analysis" ? m.busy : m.analyze}
 				</Button>
-				{busy === "analysis" && (
+				{(busy === "analysis" || busy === "vision") && (
 					<Button
 						variant="ghost"
 						onClick={() => {
@@ -149,11 +188,16 @@ export function AutoEditPanel({
 					<>
 						{plan.warnings.map((warning, i) => (
 							<p key={`${warning}-${i}`} className="text-sm">
-								{m.warning}: {m[warning as keyof typeof m] ?? warning}
+								{m.warning}:{" "}
+								{warning === "vision-sampled-only"
+									? v.warning
+									: (m[warning as keyof typeof m] ?? warning)}
 							</p>
 						))}
 						<p className="text-sm">{m.decisionHint}</p>
-						{plan.reviewer === "local-ai" && <p role="status">{m.reviewed}</p>}
+						{plan.reviewer === "local-ai" && !plan.visualAnalysis && (
+							<p role="status">{m.reviewed}</p>
+						)}
 						{!plan.suggestions.length && <p>{m.empty}</p>}
 						<ol className="space-y-3">
 							{plan.suggestions.map((s) => (
@@ -163,14 +207,20 @@ export function AutoEditPanel({
 									className="rounded-lg border p-3"
 								>
 									<div className="flex justify-between gap-2">
-										<strong>{m[s.kind]}</strong>
+										<strong>
+											{s.kind === "zoom" && s.reason === "vision"
+												? v.zoom
+												: m[s.kind]}
+										</strong>
 										<span>
 											{(s.startMs / 1000).toFixed(2)}–
 											{(s.endMs / 1000).toFixed(2)} s
 											{s.speed ? ` · ${s.speed}×` : ""}
 										</span>
 									</div>
-									<p className="text-sm">{m[s.reason]}</p>
+									<p className="text-sm">
+										{s.reason === "vision" ? v.reason : m[s.reason]}
+									</p>
 									{s.text && <p className="whitespace-pre-wrap">{s.text}</p>}
 									<Button
 										variant="ghost"
@@ -225,6 +275,7 @@ export function AutoEditPanel({
 									setModel(e.target.value);
 									setModelInfo(null);
 									setModelConsent(false);
+									setVisionConsent(false);
 								}}
 								className="w-full rounded border p-2"
 							/>
@@ -293,6 +344,49 @@ export function AutoEditPanel({
 							>
 								{busy === "review" ? m.reviewing : m.review}
 							</Button>
+							<section
+								className="mt-4 space-y-3 rounded border p-3"
+								aria-label={v.title}
+							>
+								<h3>{v.title}</h3>
+								<p className="text-sm">{v.info}</p>
+								{!modelInfo?.capabilities?.includes("vision") && (
+									<p className="text-sm">{v.visionRequired}</p>
+								)}
+								<label className="flex gap-2 text-sm">
+									<input
+										type="checkbox"
+										checked={visionConsent}
+										disabled={!!busy}
+										onChange={(e) => setVisionConsent(e.target.checked)}
+									/>
+									{v.consent}
+								</label>
+								<Button
+									disabled={
+										!!busy ||
+										stale ||
+										!modelConsent ||
+										!visionConsent ||
+										!modelInfo?.capabilities?.includes("vision")
+									}
+									onClick={() => void analyzeFrames()}
+								>
+									{v.analyze}
+								</Button>
+								{busy === "vision" && (
+									<p role="status">
+										{v.busy}: {progress.completed}/{progress.total}
+									</p>
+								)}
+								{plan.visualAnalysis && (
+									<p role="status">
+										{v.result}: {plan.visualAnalysis.sampledTimesMs.length} ·{" "}
+										{plan.visualAnalysis.model} ·{" "}
+										{(plan.visualAnalysis.elapsedMs / 1000).toFixed(1)} s
+									</p>
+								)}
+							</section>
 						</details>
 						<details>
 							<summary>{m.details}</summary>

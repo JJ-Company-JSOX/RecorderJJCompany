@@ -8,6 +8,7 @@ export interface LocalModelInfo {
 	name: string;
 	sizeBytes: number;
 	license: string;
+	capabilities?: string[];
 }
 export interface PlanReviewer {
 	review(plan: EditPlan, model: string): Promise<EditPlan>;
@@ -19,15 +20,17 @@ function validateModelName(model: string) {
 }
 
 /** Direct loopback HTTP bypasses proxies. Redirects and remote endpoints are never followed. */
-function localRequest(
+export function localRequest(
 	route: "/api/chat" | "/api/show" | "/api/tags",
 	payload?: object,
+	signal?: AbortSignal,
 ): Promise<unknown> {
 	const body = payload ? JSON.stringify(payload) : "";
-	if (body.length > 200_000) throw new Error("Plan too large for local review");
+	if (Buffer.byteLength(body) > 500_000) throw new Error("Plan too large for local review");
 	return new Promise((resolve, reject) => {
 		const req = http.request(
 			{
+				signal,
 				hostname: "127.0.0.1",
 				port: 11434,
 				path: route,
@@ -70,9 +73,12 @@ function localRequest(
 }
 
 /** Inspect already installed weights. Reject Ollama cloud models before sending any plan. */
-export async function inspectLocalModel(model: string): Promise<LocalModelInfo> {
+export async function inspectLocalModel(
+	model: string,
+	signal?: AbortSignal,
+): Promise<LocalModelInfo> {
 	validateModelName(model);
-	const tags = (await localRequest("/api/tags")) as {
+	const tags = (await localRequest("/api/tags", undefined, signal)) as {
 		models?: { name: string; size: number; remote_model?: string; remote_host?: string }[];
 	};
 	const installed = tags.models?.find((m) => m.name === model || m.name === `${model}:latest`);
@@ -84,15 +90,21 @@ export async function inspectLocalModel(model: string): Promise<LocalModelInfo> 
 		installed.remote_host
 	)
 		throw new Error("Installed local weights not found");
-	const info = (await localRequest("/api/show", { model })) as {
+	const info = (await localRequest("/api/show", { model }, signal)) as {
 		license?: string;
 		remote_model?: string;
 		remote_host?: string;
 		model_info?: object;
+		capabilities?: string[];
 	};
 	if (info.remote_model || info.remote_host || !info.model_info || !info.license?.trim())
 		throw new Error("Local model or license could not be verified");
-	return { name: installed.name, sizeBytes: installed.size, license: info.license };
+	return {
+		name: installed.name,
+		sizeBytes: installed.size,
+		license: info.license,
+		capabilities: info.capabilities,
+	};
 }
 
 /** Uses only an existing user-operated model. Never downloads weights. */

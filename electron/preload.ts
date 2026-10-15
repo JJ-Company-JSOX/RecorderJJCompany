@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { EditPlan } from "../src/components/video-editor/auto-edit/plan";
 import type { RecordingSessionData } from "./ipc/types";
 
 type NativeVideoExportWriteResult = { success: boolean; error?: string };
@@ -184,6 +185,10 @@ function settleNativeVideoExportPendingRequests(
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
+	inspectAutoEditLocalModel: (model: string) => ipcRenderer.invoke("auto-edit-model-info", model),
+	analyzeAutoEdit: (videoPath: string) => ipcRenderer.invoke("auto-edit-analyze", videoPath),
+	cancelAutoEditAnalysis: () => ipcRenderer.invoke("auto-edit-cancel"),
+	reviewAutoEditLocally: (plan: EditPlan, model: string) => ipcRenderer.invoke("auto-edit-review-local", plan, model),
 	hudOverlaySetIgnoreMouse: (ignore: boolean) => {
 		ipcRenderer.send("hud-overlay-set-ignore-mouse", ignore);
 	},

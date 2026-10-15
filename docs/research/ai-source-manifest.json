@@ -1,0 +1,421 @@
+{
+  "scope": "Read-only official repository review; no AI weights downloaded, no inference or paid API calls executed.",
+  "recordly_commit": "52a913569afa0229c5a3c116f0c93b828ededb84",
+  "repositories": [
+    {
+      "name": "chatterbox",
+      "repo": "resemble-ai/chatterbox",
+      "sha": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+      "files": [
+        "README.md",
+        "LICENSE",
+        "pyproject.toml"
+      ]
+    },
+    {
+      "name": "qwen3-tts",
+      "repo": "QwenLM/Qwen3-TTS",
+      "sha": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "files": [
+        "README.md",
+        "LICENSE",
+        "pyproject.toml"
+      ]
+    },
+    {
+      "name": "cosyvoice",
+      "repo": "FunAudioLLM/CosyVoice",
+      "sha": "074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc",
+      "files": [
+        "README.md",
+        "LICENSE",
+        "requirements.txt"
+      ]
+    },
+    {
+      "name": "openvoice",
+      "repo": "myshell-ai/OpenVoice",
+      "sha": "74a1d147b17a8c3092dd5430504bd83ef6c7eb23",
+      "files": [
+        "README.md",
+        "LICENSE",
+        "requirements.txt",
+        "setup.py"
+      ]
+    },
+    {
+      "name": "piper",
+      "repo": "rhasspy/piper",
+      "sha": "73c04d81d5590ecc46e522de3601ce7fb29fc2be",
+      "files": [
+        "README.md",
+        "LICENSE.md"
+      ]
+    },
+    {
+      "name": "kokoro",
+      "repo": "hexgrad/kokoro",
+      "sha": "dfb907a02bba8152ca444717ca5d78747ccb4bec",
+      "files": [
+        "README.md",
+        "LICENSE",
+        "pyproject.toml"
+      ]
+    },
+    {
+      "name": "voicebox",
+      "repo": "jamiepine/voicebox",
+      "sha": "8af7efe62fab8d33e2a5dfbedabaa45f68a5184f",
+      "files": [
+        "README.md",
+        "LICENSE",
+        "requirements.txt",
+        "package.json"
+      ]
+    }
+  ],
+  "piper_current": {
+    "repo": "OHF-Voice/piper1-gpl",
+    "sha": "35b0f1ec67b289de553555645140e48f1f104b2d",
+    "files": [
+      "README.md",
+      "COPYING",
+      "pyproject.toml",
+      "docs/VOICES.md"
+    ]
+  },
+  "external_access": [
+    {
+      "file": "runpod-pricing.html",
+      "url": "https://www.runpod.io/pricing",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "runpod-serverless.html",
+      "url": "https://docs.runpod.io/serverless/pricing",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "modal-pricing.html",
+      "url": "https://modal.com/pricing",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "chatterbox-model.json",
+      "url": "https://huggingface.co/api/models/ResembleAI/chatterbox?blobs=true",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "chatterbox-mtl-model.json",
+      "url": "https://huggingface.co/api/models/ResembleAI/chatterbox-multilingual?blobs=true",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "qwen-model.json",
+      "url": "https://huggingface.co/api/models/Qwen/Qwen3-TTS-12Hz-0.6B-Base?blobs=true",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "cosyvoice-model.json",
+      "url": "https://huggingface.co/api/models/FunAudioLLM/Fun-CosyVoice3-0.5B-2512?blobs=true",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "kokoro-model.json",
+      "url": "https://huggingface.co/api/models/hexgrad/Kokoro-82M?blobs=true",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "piper-voices.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "file": "openai-pricing.html",
+      "url": "https://openai.com/api/pricing/",
+      "error": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    }
+  ],
+  "retrieved_files": [
+    {
+      "repo": "resemble-ai/chatterbox",
+      "commit": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/resemble-ai/chatterbox/5de7a54aa4e5e2baadb0182dde554908b48b85c2/LICENSE",
+      "bytes": 1067,
+      "sha256": "4248e910a928849fe5815a0f9236e17fa07768d95b9193212752c464b93d6caa"
+    },
+    {
+      "repo": "resemble-ai/chatterbox",
+      "commit": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/resemble-ai/chatterbox/5de7a54aa4e5e2baadb0182dde554908b48b85c2/README.md",
+      "bytes": 15301,
+      "sha256": "fd9315cc529c65d46ddd21ded05ba3372b6f6f39242bd015f770145bf5e0448f"
+    },
+    {
+      "repo": "resemble-ai/chatterbox",
+      "commit": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+      "path": "example_for_mac.py",
+      "url": "https://raw.githubusercontent.com/resemble-ai/chatterbox/5de7a54aa4e5e2baadb0182dde554908b48b85c2/example_for_mac.py",
+      "bytes": 1011,
+      "sha256": "bd41e3fa1011555af14500f2970589a993bdf8ae07bfffe6593051f3b45dd35c"
+    },
+    {
+      "repo": "resemble-ai/chatterbox",
+      "commit": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+      "path": "example_tts.py",
+      "url": "https://raw.githubusercontent.com/resemble-ai/chatterbox/5de7a54aa4e5e2baadb0182dde554908b48b85c2/example_tts.py",
+      "bytes": 1391,
+      "sha256": "d0736f855d99c173977020fd9e5130d054465ae2117deaffaffde4de1aadcb4f"
+    },
+    {
+      "repo": "resemble-ai/chatterbox",
+      "commit": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+      "path": "pyproject.toml",
+      "url": "https://raw.githubusercontent.com/resemble-ai/chatterbox/5de7a54aa4e5e2baadb0182dde554908b48b85c2/pyproject.toml",
+      "bytes": 1328,
+      "sha256": "e1aab210e1eb6023a694a05e92ae4cbb08efa9510d295401303e90eec41d594f"
+    },
+    {
+      "repo": "resemble-ai/chatterbox",
+      "commit": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+      "path": "src/chatterbox/mtl_tts.py",
+      "url": "https://raw.githubusercontent.com/resemble-ai/chatterbox/5de7a54aa4e5e2baadb0182dde554908b48b85c2/src/chatterbox/mtl_tts.py",
+      "bytes": 11721,
+      "sha256": "936759044e54cffe8c68b91b32e01da0bc032a1e084f769f0403080d86ad153c"
+    },
+    {
+      "repo": "resemble-ai/chatterbox",
+      "commit": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+      "path": "src/chatterbox/tts.py",
+      "url": "https://raw.githubusercontent.com/resemble-ai/chatterbox/5de7a54aa4e5e2baadb0182dde554908b48b85c2/src/chatterbox/tts.py",
+      "bytes": 8924,
+      "sha256": "7896787bc17e20eafcd1dce7b8a4a6ea3a6478baab771c60d63e9e81f5564195"
+    },
+    {
+      "repo": "QwenLM/Qwen3-TTS",
+      "commit": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/QwenLM/Qwen3-TTS/022e286b98fbec7e1e916cb940cdf532cd9f488e/LICENSE",
+      "bytes": 11343,
+      "sha256": "a44a6081c73ad75f0255bb2bb5cab74ef1829565a895a24e53a4f11290ab7655"
+    },
+    {
+      "repo": "QwenLM/Qwen3-TTS",
+      "commit": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/QwenLM/Qwen3-TTS/022e286b98fbec7e1e916cb940cdf532cd9f488e/README.md",
+      "bytes": 60501,
+      "sha256": "51f4497e70e9ae024b10ee4bbcb470366f10592edeab56c58d2194ba2dadb745"
+    },
+    {
+      "repo": "QwenLM/Qwen3-TTS",
+      "commit": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "path": "pyproject.toml",
+      "url": "https://raw.githubusercontent.com/QwenLM/Qwen3-TTS/022e286b98fbec7e1e916cb940cdf532cd9f488e/pyproject.toml",
+      "bytes": 1099,
+      "sha256": "3e82fcb21b9d48bba789a7c0a2c2dcb88ad60c4d297d60ae4575ee3eb4e4d5aa"
+    },
+    {
+      "repo": "QwenLM/Qwen3-TTS",
+      "commit": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "path": "qwen_tts/inference/qwen3_tts_model.py",
+      "url": "https://raw.githubusercontent.com/QwenLM/Qwen3-TTS/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py",
+      "bytes": 37121,
+      "sha256": "e1da450732857c1f5fe3e36ebab85db2f6dc6a48caaff6973f463384e30275e4"
+    },
+    {
+      "repo": "FunAudioLLM/CosyVoice",
+      "commit": "074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/FunAudioLLM/CosyVoice/074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc/LICENSE",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "repo": "FunAudioLLM/CosyVoice",
+      "commit": "074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/FunAudioLLM/CosyVoice/074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc/README.md",
+      "bytes": 13764,
+      "sha256": "66436370172c2830ed98aa643b31898c65e16eee14ade68f00828d21fae602e0"
+    },
+    {
+      "repo": "FunAudioLLM/CosyVoice",
+      "commit": "074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc",
+      "path": "requirements.txt",
+      "url": "https://raw.githubusercontent.com/FunAudioLLM/CosyVoice/074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc/requirements.txt",
+      "bytes": 1125,
+      "sha256": "6619a7f7f95e6c7c23dc82471294ee168a4fc0e901ab4e123881fff71f38d94c"
+    },
+    {
+      "repo": "myshell-ai/OpenVoice",
+      "commit": "74a1d147b17a8c3092dd5430504bd83ef6c7eb23",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/myshell-ai/OpenVoice/74a1d147b17a8c3092dd5430504bd83ef6c7eb23/LICENSE",
+      "bytes": 1057,
+      "sha256": "bb3541f421e6273d3a3e3dd5bdba2bd3b79a3c2eadca65cde9c62c2467903ac0"
+    },
+    {
+      "repo": "myshell-ai/OpenVoice",
+      "commit": "74a1d147b17a8c3092dd5430504bd83ef6c7eb23",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/myshell-ai/OpenVoice/74a1d147b17a8c3092dd5430504bd83ef6c7eb23/README.md",
+      "bytes": 3120,
+      "sha256": "3c6f5d24798763ebb9ca5fea8a1cbd21b935a140300ba531138b5518cd297dfc"
+    },
+    {
+      "repo": "myshell-ai/OpenVoice",
+      "commit": "74a1d147b17a8c3092dd5430504bd83ef6c7eb23",
+      "path": "demo_part3.ipynb",
+      "url": "https://raw.githubusercontent.com/myshell-ai/OpenVoice/74a1d147b17a8c3092dd5430504bd83ef6c7eb23/demo_part3.ipynb",
+      "bytes": 4869,
+      "sha256": "b60a930f422c0a39908142f10d769e7c7afeeea5b1010b50dda55c269cdd0843"
+    },
+    {
+      "repo": "myshell-ai/OpenVoice",
+      "commit": "74a1d147b17a8c3092dd5430504bd83ef6c7eb23",
+      "path": "docs/USAGE.md",
+      "url": "https://raw.githubusercontent.com/myshell-ai/OpenVoice/74a1d147b17a8c3092dd5430504bd83ef6c7eb23/docs/USAGE.md",
+      "bytes": 3840,
+      "sha256": "8dc88ad1a938a4fa07b5cad8d6950030444e4d1a1c4626fd3998b2cb121fc2f0"
+    },
+    {
+      "repo": "myshell-ai/OpenVoice",
+      "commit": "74a1d147b17a8c3092dd5430504bd83ef6c7eb23",
+      "path": "requirements.txt",
+      "url": "https://raw.githubusercontent.com/myshell-ai/OpenVoice/74a1d147b17a8c3092dd5430504bd83ef6c7eb23/requirements.txt",
+      "bytes": 253,
+      "sha256": "ff3a30cda9e6b66e5628677fd88632f72c8eef784832e08dadd11046dcafd59a"
+    },
+    {
+      "repo": "myshell-ai/OpenVoice",
+      "commit": "74a1d147b17a8c3092dd5430504bd83ef6c7eb23",
+      "path": "setup.py",
+      "url": "https://raw.githubusercontent.com/myshell-ai/OpenVoice/74a1d147b17a8c3092dd5430504bd83ef6c7eb23/setup.py",
+      "bytes": 1481,
+      "sha256": "bdc21e07e8636827f48eda91518467efdda93e3dd1a43d3f4331080d24de4d8c"
+    },
+    {
+      "repo": "rhasspy/piper",
+      "commit": "73c04d81d5590ecc46e522de3601ce7fb29fc2be",
+      "path": "LICENSE.md",
+      "url": "https://raw.githubusercontent.com/rhasspy/piper/73c04d81d5590ecc46e522de3601ce7fb29fc2be/LICENSE.md",
+      "bytes": 1071,
+      "sha256": "4cd71dece7037f1d6d93cce7570c57ab75ea9ac566fd4990be2f3ab08d15b47f"
+    },
+    {
+      "repo": "rhasspy/piper",
+      "commit": "73c04d81d5590ecc46e522de3601ce7fb29fc2be",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/rhasspy/piper/73c04d81d5590ecc46e522de3601ce7fb29fc2be/README.md",
+      "bytes": 63,
+      "sha256": "468eb54e31be1c02f5a5bbcd23157a30cf5eed251729f052ccacc01685ce2fa7"
+    },
+    {
+      "repo": "hexgrad/kokoro",
+      "commit": "dfb907a02bba8152ca444717ca5d78747ccb4bec",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/hexgrad/kokoro/dfb907a02bba8152ca444717ca5d78747ccb4bec/LICENSE",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "repo": "hexgrad/kokoro",
+      "commit": "dfb907a02bba8152ca444717ca5d78747ccb4bec",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/hexgrad/kokoro/dfb907a02bba8152ca444717ca5d78747ccb4bec/README.md",
+      "bytes": 8355,
+      "sha256": "b50b84220668f8247a2405b249c34c7083acc24114279ff1429fd79f46a2c04b"
+    },
+    {
+      "repo": "hexgrad/kokoro",
+      "commit": "dfb907a02bba8152ca444717ca5d78747ccb4bec",
+      "path": "kokoro/pipeline.py",
+      "url": "https://raw.githubusercontent.com/hexgrad/kokoro/dfb907a02bba8152ca444717ca5d78747ccb4bec/kokoro/pipeline.py",
+      "bytes": 18113,
+      "sha256": "499982bbc23a1019681cdb4c327c1d911e7034e240721b95686ff1a8f15c2a9a"
+    },
+    {
+      "repo": "hexgrad/kokoro",
+      "commit": "dfb907a02bba8152ca444717ca5d78747ccb4bec",
+      "path": "pyproject.toml",
+      "url": "https://raw.githubusercontent.com/hexgrad/kokoro/dfb907a02bba8152ca444717ca5d78747ccb4bec/pyproject.toml",
+      "bytes": 819,
+      "sha256": "f8c3ae1c6b3c2644ad27b6c66e309bee32ac48fe46b7e4e676a95b417acdd04c"
+    },
+    {
+      "repo": "jamiepine/voicebox",
+      "commit": "8af7efe62fab8d33e2a5dfbedabaa45f68a5184f",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/jamiepine/voicebox/8af7efe62fab8d33e2a5dfbedabaa45f68a5184f/LICENSE",
+      "bytes": 1078,
+      "sha256": "5d515f5a28ec4b8028c2b7410ad3bb338b9d3a73dd187f9c0fc720e01e387547"
+    },
+    {
+      "repo": "jamiepine/voicebox",
+      "commit": "8af7efe62fab8d33e2a5dfbedabaa45f68a5184f",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/jamiepine/voicebox/8af7efe62fab8d33e2a5dfbedabaa45f68a5184f/README.md",
+      "bytes": 26539,
+      "sha256": "da97bb488a8e02d1d6557f6e2779801e76f9d60dc513c531fe60bf3326d17116"
+    },
+    {
+      "repo": "jamiepine/voicebox",
+      "commit": "8af7efe62fab8d33e2a5dfbedabaa45f68a5184f",
+      "path": "backend/pyproject.toml",
+      "url": "https://raw.githubusercontent.com/jamiepine/voicebox/8af7efe62fab8d33e2a5dfbedabaa45f68a5184f/backend/pyproject.toml",
+      "bytes": 3068,
+      "sha256": "53b84e6eca41621663b51240e29849e5ccee77f1ba8e599577ce679d1a1b5cbd"
+    },
+    {
+      "repo": "jamiepine/voicebox",
+      "commit": "8af7efe62fab8d33e2a5dfbedabaa45f68a5184f",
+      "path": "package.json",
+      "url": "https://raw.githubusercontent.com/jamiepine/voicebox/8af7efe62fab8d33e2a5dfbedabaa45f68a5184f/package.json",
+      "bytes": 1543,
+      "sha256": "897c3ae204b776bf07464b164e3a18907ef2afb41f4568be94e1871066e3a4e1"
+    },
+    {
+      "repo": "jamiepine/voicebox",
+      "commit": "8af7efe62fab8d33e2a5dfbedabaa45f68a5184f",
+      "path": "requirements.txt",
+      "url": "https://raw.githubusercontent.com/jamiepine/voicebox/8af7efe62fab8d33e2a5dfbedabaa45f68a5184f/requirements.txt",
+      "bytes": 96,
+      "sha256": "60c206803ca07154df0ae13e28befdb8fa9269342bb3a1d6ef2310da7405e981"
+    },
+    {
+      "repo": "OHF-Voice/piper1-gpl",
+      "commit": "35b0f1ec67b289de553555645140e48f1f104b2d",
+      "path": "COPYING",
+      "url": "https://raw.githubusercontent.com/OHF-Voice/piper1-gpl/35b0f1ec67b289de553555645140e48f1f104b2d/COPYING",
+      "bytes": 35148,
+      "sha256": "0ae0485a5bd37a63e63603596417e4eb0e653334fa6c7f932ca3a0e85d4af227"
+    },
+    {
+      "repo": "OHF-Voice/piper1-gpl",
+      "commit": "35b0f1ec67b289de553555645140e48f1f104b2d",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/OHF-Voice/piper1-gpl/35b0f1ec67b289de553555645140e48f1f104b2d/README.md",
+      "bytes": 2853,
+      "sha256": "a73f576020071a1d58701a40026a451385ef4dad4c9ba0a2499544d988d06e84"
+    },
+    {
+      "repo": "OHF-Voice/piper1-gpl",
+      "commit": "35b0f1ec67b289de553555645140e48f1f104b2d",
+      "path": "docs/VOICES.md",
+      "url": "https://raw.githubusercontent.com/OHF-Voice/piper1-gpl/35b0f1ec67b289de553555645140e48f1f104b2d/docs/VOICES.md",
+      "bytes": 2870,
+      "sha256": "cc724e58206cfaa94e2894544b9a1aca89ea45c85b36df1645a1719b029fdb55"
+    },
+    {
+      "repo": "OHF-Voice/piper1-gpl",
+      "commit": "35b0f1ec67b289de553555645140e48f1f104b2d",
+      "path": "pyproject.toml",
+      "url": "https://raw.githubusercontent.com/OHF-Voice/piper1-gpl/35b0f1ec67b289de553555645140e48f1f104b2d/pyproject.toml",
+      "bytes": 171,
+      "sha256": "3d8c160ff055260d06c2606caa6e5c90cc46fb5f72c9d49e42c3b050dc24ab43"
+    }
+  ]
+}

@@ -27,6 +27,13 @@ function createSnapshot(id: string | null): EditorHistorySnapshot {
 }
 
 describe("editorHistory", () => {
+	it("restores per-clip audio settings alongside auto-edit splits", () => {
+		const stack = createEditorHistoryStack();
+		const before = { ...createSnapshot(null), sourceAudioTrackSettingsByClip: { "clip-1": { microphone: { volume: 0.5, normalize: false } } } };
+		const after = { ...before, sourceAudioTrackSettingsByClip: { ...before.sourceAudioTrackSettingsByClip, "clip-1-auto-plan-2": { microphone: { volume: 0.5, normalize: false } } } };
+		recordEditorHistorySnapshot(stack, before); recordEditorHistorySnapshot(stack, after);
+		expect(undoEditorHistoryStack(stack, after)).toEqual(before);
+	});
 	it("initializes without adding undo history", () => {
 		const stack = createEditorHistoryStack();
 		const snapshot = createSnapshot("first");

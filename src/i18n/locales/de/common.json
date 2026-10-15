@@ -1,7 +1,7 @@
 {
 	"app": {
-		"name": "Recordly",
-		"editorTitle": "Recordly Editor",
+		"name": "Jsox Recorder",
+		"editorTitle": "Jsox Recorder Editor",
 		"subtitle": "Bildschirmaufzeichnung und -bearbeitung",
 		"language": "Sprache",
 		"manageRecordings": "Aufzeichnungsordner öffnen"

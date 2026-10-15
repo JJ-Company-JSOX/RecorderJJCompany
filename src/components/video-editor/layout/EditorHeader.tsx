@@ -22,6 +22,7 @@ import { EditorPresetMenu } from "./EditorPresetMenu";
 const SHOW_PRESETS_BUTTON = false;
 
 type Props = {
+	onOpenAutoEdit: () => void;
 	clipsOpen: boolean;
 	onToggleClips: () => void;
 	t: ReturnType<typeof useI18n>["t"];
@@ -180,6 +181,9 @@ export function EditorHeader(props: Props) {
 					)}
 				</div>
 				<Separator orientation="vertical" className="mx-3 h-5 shrink-0 self-center" />
+				<Button variant="secondary" size="sm" onClick={props.onOpenAutoEdit}>
+					{t("editor.autoEdit.title", "Auto edit plan")}
+				</Button>
 				<Button
 					variant="secondary"
 					size="sm"

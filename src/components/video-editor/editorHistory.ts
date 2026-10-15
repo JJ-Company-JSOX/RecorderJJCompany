@@ -8,6 +8,7 @@ import type {
 } from "./types";
 
 export type EditorHistorySnapshot = {
+	sourceAudioTrackSettingsByClip?: Record<string, import("./audio/audioTypes").SourceAudioTrackSettings>;
 	zoomRegions: ZoomRegion[];
 	clipRegions: ClipRegion[];
 	speedRegions: SpeedRegion[];

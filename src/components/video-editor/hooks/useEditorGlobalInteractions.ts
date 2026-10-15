@@ -48,6 +48,7 @@ export function useEditorGlobalInteractions({
 			}
 			if (event.defaultPrevented || event.isComposing) return;
 			const target = event.target as HTMLElement | null;
+			if (target?.closest?.("[data-auto-edit-panel]")) return;
 			if (target?.closest?.("[data-recording-library]")) return;
 			const editable =
 				target instanceof HTMLInputElement ||

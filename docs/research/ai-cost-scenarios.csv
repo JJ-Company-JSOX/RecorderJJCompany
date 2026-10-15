@@ -1,0 +1,4 @@
+scenario,gpu_usd_per_hour_assumed,rtf_assumed,cold_seconds_per_60s_output_assumed,billed_gpu_seconds_per_audio_minute,gpu_usd_per_audio_minute,variable_non_gpu_usd_per_audio_minute_assumed,total_variable_usd_per_audio_minute,audio_minutes_per_month_assumed,fixed_backend_usd_per_month_assumed,total_usd_per_month,verified_vendor_quote
+economy_assumption,0.4,0.25,10,25.0,0.002778,0.002,0.004778,50000,250,488.89,False
+nominal_assumption,1,0.5,20,50.0,0.013889,0.005,0.018889,50000,250,1194.44,False
+stress_assumption,2,1,60,120,0.066667,0.01,0.076667,50000,250,4083.33,False

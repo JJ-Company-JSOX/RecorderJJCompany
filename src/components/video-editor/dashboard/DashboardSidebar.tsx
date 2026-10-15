@@ -45,12 +45,13 @@ export function DashboardSidebar({
 			>
 				<div className="mb-4 flex h-10 items-center gap-2.5 px-3">
 					<img
-						src={`${import.meta.env.BASE_URL}app-icons/recordly-64.png`}
+						src={`${import.meta.env.BASE_URL}app-icons/jsox-mark.svg`}
 						alt=""
 						className="size-7 rounded-lg"
 					/>
-					<span className="text-[15px] font-semibold tracking-tight">Recordly</span>
+					<span className="text-[13px] font-semibold tracking-tight">Jsox Recorder</span>
 				</div>
+				<p className="mb-4 px-3 text-[10px] text-muted-foreground">Based on Recordly / OpenScreen</p>
 				<RecordNewButton busy={busy} run={run} className="mb-5 w-full" />
 				<nav className="space-y-1">
 					<Button

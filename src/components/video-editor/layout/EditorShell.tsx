@@ -33,6 +33,7 @@ import { EditorHeader } from "./EditorHeader";
 import { EditorPreviewPanel } from "./EditorPreviewPanel";
 import { EditorSidebar } from "./EditorSidebar";
 import { EditorTimelinePanel } from "./EditorTimelinePanel";
+import { AutoEditPanel } from "../auto-edit/AutoEditPanel";
 
 type Props = {
 	t: ReturnType<typeof useI18n>["t"];
@@ -58,6 +59,7 @@ type Props = {
 };
 
 export function EditorShell(props: Props) {
+	const [autoEditOpen, setAutoEditOpen] = useState(false);
 	const [onboardingRequest, setOnboardingRequest] = useState(0);
 	const showOnboarding = useCallback(() => setOnboardingRequest((value) => value + 1), []);
 	const [signInOpen, setSignInOpen] = useState(false);
@@ -259,6 +261,7 @@ export function EditorShell(props: Props) {
 	return (
 		<div className="flex h-screen flex-col overflow-hidden bg-editor-bg text-foreground selection:bg-accent/20">
 			<EditorHeader
+				onOpenAutoEdit={() => { ui.setIsPlaying(false); setAutoEditOpen(true); }}
 				clipsOpen={library.open}
 				onToggleClips={() => library.setOpen((open) => !open)}
 				t={t}
@@ -298,6 +301,26 @@ export function EditorShell(props: Props) {
 				exportMessage={exportMessage}
 			/>
 			<EditorAnnouncementBanner />
+			<AutoEditPanel open={autoEditOpen} onClose={() => setAutoEditOpen(false)}
+				state={{ ...timeline, additionalVisualSource: appearance.webcam.enabled && appearance.webcam.sourcePath ? `${appearance.webcam.sourcePath}|${appearance.webcam.timeOffsetMs}` : null }} source={snapshot.currentSourcePath ?? ""} cursor={timeline.cursorTelemetry}
+				onSeek={playback.handleTimelineSeek}
+				onApply={next => {
+					timeline.setClipRegions(next.clipRegions);
+					timeline.setZoomRegions(next.zoomRegions);
+					timeline.setAnnotationRegions(next.annotationRegions);
+					timeline.setAudioRegions(next.audioRegions);
+					// New segments inherit per-source audio settings; originals stay available for Undo.
+					timeline.setSourceAudioTrackSettingsByClip(current => {
+						const updated = { ...current };
+						for (const clip of next.clipRegions) {
+							const owner = timeline.clipRegions.find(c => clip.id === c.id) ?? [...timeline.clipRegions].sort((a, b) => b.id.length - a.id.length).find(c => clip.id.startsWith(`${c.id}-auto-`));
+							if (owner && current[owner.id]) updated[clip.id] = current[owner.id];
+						}
+						return updated;
+					});
+					ui.setCurrentTime(0);
+					ui.videoPlaybackRef.current?.seekTimeline(0);
+				}} />
 			<div
 				className="relative flex min-h-0 flex-1 flex-col"
 				onPointerDownCapture={(event) => {

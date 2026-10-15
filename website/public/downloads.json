@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "version": null,
+  "sourceUrl": null,
+  "releases": [
+    { "id": "windows-x64", "platform": "windows", "arch": "x64", "url": null, "sha256": null, "sizeBytes": null },
+    { "id": "macos-arm64", "platform": "macos", "arch": "arm64", "url": null, "sha256": null, "sizeBytes": null },
+    { "id": "macos-x64", "platform": "macos", "arch": "x64", "url": null, "sha256": null, "sizeBytes": null },
+    { "id": "linux-x64", "platform": "linux", "arch": "x64", "url": null, "sha256": null, "sizeBytes": null }
+  ]
+}

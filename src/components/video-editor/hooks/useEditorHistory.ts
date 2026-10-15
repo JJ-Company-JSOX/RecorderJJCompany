@@ -29,6 +29,8 @@ export function useEditorHistory({
 	nextAnnotationZIndexRef,
 }: Input) {
 	const {
+		sourceAudioTrackSettingsByClip,
+		setSourceAudioTrackSettingsByClip,
 		zoomRegions,
 		clipRegions,
 		speedRegions,
@@ -64,6 +66,7 @@ export function useEditorHistory({
 	}, []);
 	const buildSnapshot = useCallback(
 		(): EditorHistorySnapshot => ({
+			sourceAudioTrackSettingsByClip,
 			zoomRegions,
 			clipRegions,
 			speedRegions,
@@ -76,6 +79,7 @@ export function useEditorHistory({
 			selectedAudioId,
 		}),
 		[
+			sourceAudioTrackSettingsByClip,
 			zoomRegions,
 			clipRegions,
 			speedRegions,
@@ -92,6 +96,7 @@ export function useEditorHistory({
 		(snapshot: EditorHistorySnapshot) => {
 			applyingRef.current = true;
 			const cloned = cloneStructured(snapshot);
+			if (cloned.sourceAudioTrackSettingsByClip) setSourceAudioTrackSettingsByClip(cloned.sourceAudioTrackSettingsByClip);
 			setZoomRegions(cloned.zoomRegions);
 			setClipRegions(cloned.clipRegions);
 			setSpeedRegions(cloned.speedRegions);
@@ -123,6 +128,7 @@ export function useEditorHistory({
 				1;
 		},
 		[
+			setSourceAudioTrackSettingsByClip,
 			setZoomRegions,
 			setClipRegions,
 			setSpeedRegions,

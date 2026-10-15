@@ -1,0 +1,13 @@
+Jsox Recorder 官网预览包
+
+1. 先完整解压 ZIP，不要直接在 ZIP 内运行。
+2. 双击 OPEN-WEBSITE-PREVIEW.cmd。
+3. 如 npx 询问是否安装 firebase-tools，输入 y。
+4. 使用你已经登录的 Firebase 账号，上传到 d-recorder-ef064 的 7 天预览频道。
+5. 将成功输出的 Hosting URL 发回聊天，我会继续检查。
+
+不会覆盖现有正式网站；预览会在 7 天后过期。需要已安装 Node.js、有项目 Hosting 权限，并可访问 Firebase 服务。
+
+此包只有官网，不是桌面软件安装包；未验证的下载仍显示即将开放，不含声音克隆。没有密码、私钥或登录令牌。
+
+若提示 Hosting 未启用，先在 Firebase 控制台打开 Build / Hosting 并启用，然后重试。中国大陆网络可达性仍需实测。

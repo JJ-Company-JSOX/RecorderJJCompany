@@ -163,7 +163,10 @@ export function DashboardGrid({
 									: "It's looking empty in here..."}
 						</p>
 						{!isRaw && !hasActiveFilters && (
-							<RecordNewButton busy={busy} run={run} first className="mt-2" />
+							<div className="mt-2 flex flex-wrap items-center justify-center gap-3">
+								<RecordNewButton busy={busy} run={run} first />
+								<Button variant="secondary" disabled={busy} onClick={() => void run(onImportFile)}>Import existing video</Button>
+							</div>
 						)}
 						{isRaw && rawError && (
 							<Button onClick={() => void refreshRaw()}>Retry</Button>

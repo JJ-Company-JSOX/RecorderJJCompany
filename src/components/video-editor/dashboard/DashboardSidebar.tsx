@@ -3,7 +3,7 @@ import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 import { RecordNewButton } from "./RecordNewButton";
 import { SidebarCards } from "./SidebarCards";
 import { FolderRow } from "./FolderRow";
-import { Cloud, File, GearSix, House, Plus, UserCircle } from "@/components/ui/icons";
+import { Cloud, File, GearSix, House, Plus, UploadSimple, UserCircle } from "@/components/ui/icons";
 
 import { Button } from "@/components/ui/button";
 
@@ -24,6 +24,7 @@ export function DashboardSidebar({
 	navClass,
 	onSignIn,
 	accountLabel,
+	onImportFile,
 }: Pick<
 	DashboardProps & DashboardModel,
 	| "busy"
@@ -37,6 +38,7 @@ export function DashboardSidebar({
 	| "navClass"
 	| "onSignIn"
 	| "accountLabel"
+	| "onImportFile"
 >) {
 	return (
 		<>
@@ -53,7 +55,12 @@ export function DashboardSidebar({
 					<span className="text-[13px] font-semibold tracking-tight">Jsox Recorder</span>
 				</div>
 				<p className="mb-4 px-3 text-[10px] text-muted-foreground">Based on Recordly / OpenScreen</p>
-				<RecordNewButton busy={busy} run={run} className="mb-5 w-full" />
+				<RecordNewButton busy={busy} run={run} className="mb-2 w-full" />
+				<Button variant="secondary" disabled={busy} onClick={() => void run(onImportFile)}
+					className="mb-1 h-10 w-full gap-2 text-[13px]" aria-label="Import video" title="Choose a local video or project. No cloud upload.">
+					<UploadSimple className="size-4" />Import video
+				</Button>
+				<p className="mb-5 px-2 text-[10px] text-muted-foreground">From your computer · no upload</p>
 				<nav className="space-y-1">
 					<Button
 						variant="ghost"

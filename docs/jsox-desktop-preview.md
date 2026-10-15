@@ -16,6 +16,8 @@
 
 取消未登录强制欢迎页，关闭账号与云端登录客户端，隐藏首页登录/Shared 入口及设置中的账号分类。原账号实现保留在代码中供未来单独开发，当前不启用。其他云端入口只显示可关闭的本地版本说明，不收集邮箱。录屏权限面板与账号独立，未登录也可检查权限和打开录制 HUD。
 
-`updates/jsox-local-mode.zip` 只包含本轮修改的 8 个源码文件，适用于此前 jsox-preview 源码；不是安装器，不更改依赖，不删除工程或视频。更新前关闭开发进程，在项目根目录解压覆盖同名文件后重新运行 `npm.cmd run dev`。如果本地自行修改过这些源码文件，先备份再更新。
+`updates/jsox-local-mode.zip` 只包含本轮修改的 9 个源码文件，适用于此前 jsox-preview 源码；不是安装器，不更改依赖，不删除工程或视频。更新前关闭开发进程，在项目根目录解压覆盖同名文件后重新运行 `npm.cmd run dev`。如果本地自行修改过这些源码文件，先备份再更新。
 
 录制入口修复：移除 useScreenRecorder.preparePermissions 中残留的账号会话检查。本地录制不依赖账号；macOS 屏幕录制和辅助功能权限检查继续执行。新增 HUD 选择源路径的 Windows/Linux/macOS 模拟平台回归，以及缺少 macOS 系统权限时不得调用选择器的回归。以上不等于 Windows 实机捕获已验证。
+
+首页导入入口：Record new 下方的 Import video 和空白页的 Import existing video 均复用 handleImportMediaOrProject。原工具栏 Import 继续保留。文件选择在本地执行；不新增上传接口或依赖，保留取消与未保存编辑确认流程。

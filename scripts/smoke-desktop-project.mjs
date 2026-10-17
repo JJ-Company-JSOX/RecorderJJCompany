@@ -13,6 +13,9 @@ const expect = playwrightExpect.configure({ timeout: 30000 });
 const require = createRequire(import.meta.url);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = path.resolve(projectRoot, process.argv[2] || "tests/ui/fixtures/filmstrip.mp4");
+const companionSource = process.env.RECORDLY_SMOKE_COMPANION_AUDIO
+	? path.resolve(projectRoot, process.env.RECORDLY_SMOKE_COMPANION_AUDIO)
+	: null;
 const allowedInputRoots = [
 	path.join(projectRoot, "tests/ui/fixtures"),
 	path.join(projectRoot, ".tmp"),
@@ -21,18 +24,38 @@ const inside = (root, file) => {
 	const relative = path.relative(root, file);
 	return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 };
+const realProjectRoot = await fs.realpath(projectRoot);
 if (!allowedInputRoots.some((root) => inside(root, source))) {
 	throw new Error(
 		"Use a synthetic MP4 in tests/ui/fixtures or .tmp; this smoke does not use personal videos.",
 	);
 }
+async function syntheticFile(filePath, label) {
+	if (!allowedInputRoots.some((root) => inside(root, filePath))) {
+		throw new Error(`${label} must be inside tests/ui/fixtures or .tmp.`);
+	}
+	const realFile = await fs.realpath(filePath);
+	const realRoots = await Promise.all(
+		allowedInputRoots.map((root) => fs.realpath(root).catch(() => null)),
+	);
+	if (
+		!realRoots.some(
+			(root) => root && inside(realProjectRoot, root) && inside(root, realFile),
+		) ||
+		!(await fs.stat(realFile)).isFile()
+	) {
+		throw new Error(`${label} must resolve to a synthetic fixture file inside the project.`);
+	}
+	return realFile;
+}
+const realSource = await syntheticFile(source, "Input video");
 const runId = new Date().toISOString().replaceAll(/[:.]/g, "-");
 const outputRoot = path.join(projectRoot, ".tmp", "project-smoke", runId);
 const profile = path.join(outputRoot, "profile");
 const input = path.join(outputRoot, "synthetic-input.mp4");
 const output = path.join(outputRoot, "application-export.mp4");
 await fs.mkdir(profile, { recursive: true });
-await fs.copyFile(source, input);
+await fs.copyFile(realSource, input);
 
 const ffprobe = require("ffprobe-static").path;
 function probe(file) {
@@ -52,6 +75,58 @@ const inputProbe = probe(input);
 const durationMs = Math.round(Number(inputProbe.format.duration) * 1000);
 if (!(durationMs > 1000 && durationMs <= 20000))
 	throw new Error("Use a synthetic clip lasting 1–20 seconds.");
+let companionFixture;
+if (companionSource) {
+	if (inputProbe.streams.some((stream) => stream.codec_type === "audio")) {
+		throw new Error(
+			"Companion-only smoke needs a video without embedded audio so a non-silent export proves the sidecar was used.",
+		);
+	}
+	const extension = path.extname(companionSource).toLowerCase();
+	if (extension !== ".wav" && extension !== ".m4a") {
+		throw new Error("RECORDLY_SMOKE_COMPANION_AUDIO must be a synthetic WAV or M4A file.");
+	}
+	const realAudio = await syntheticFile(companionSource, "Companion audio");
+	const audioProbe = probe(realAudio);
+	const audioStream = audioProbe.streams.find((stream) => stream.codec_type === "audio");
+	const audioDurations = [audioStream?.duration, audioProbe.format?.duration]
+		.map(Number)
+		.filter((value) => Number.isFinite(value) && value > 0);
+	const audioDurationSeconds = Math.max(...audioDurations);
+	if (!audioStream || !Number.isFinite(audioDurationSeconds) || audioDurationSeconds > 20) {
+		throw new Error("Use synthetic companion audio lasting at most 20 seconds.");
+	}
+	const realMetadata = await syntheticFile(
+		`${companionSource}.json`,
+		"Companion timing metadata",
+	);
+	if ((await fs.stat(realMetadata)).size > 64 * 1024) {
+		throw new Error("Companion timing metadata exceeds the 64 KiB fixture limit.");
+	}
+	const timing = JSON.parse(await fs.readFile(realMetadata, "utf8"));
+	if (
+		typeof timing?.startDelayMs !== "number" ||
+		!Number.isFinite(timing.startDelayMs) ||
+		timing.startDelayMs < 0 ||
+		timing.startDelayMs >= durationMs
+	) {
+		throw new Error(
+			"Companion metadata must contain a finite startDelayMs within the video timeline.",
+		);
+	}
+	const companionPath = `${input.slice(0, -path.extname(input).length)}.system${extension}`;
+	await fs.copyFile(realAudio, companionPath);
+	await fs.copyFile(realMetadata, `${companionPath}.json`);
+	companionFixture = {
+		path: companionPath,
+		realPath: await fs.realpath(companionPath),
+		durationSeconds: audioDurationSeconds,
+		startOffsetMs: timing.startDelayMs,
+		sourceVideoHasEmbeddedAudio: inputProbe.streams.some(
+			(stream) => stream.codec_type === "audio",
+		),
+	};
+}
 const telemetry = Array.from({ length: Math.ceil(durationMs / 50) + 1 }, (_, index) => ({
 	timeMs: Math.min(durationMs, index * 50),
 	cx: 0.25 + 0.5 * ((index * 50) / durationMs),
@@ -87,9 +162,23 @@ const report = {
 		"Native file dialogs are automated, not electronAPI handlers.",
 		"Cursor samples are synthetic.",
 		"No real screen, microphone or system-audio recording is performed.",
+		"Real microphone capture is not tested; an optional companion fixture is prerecorded synthetic system audio.",
 		"This is a functional smoke, not a performance measurement.",
 	],
 };
+if (companionFixture) {
+	report.companionFixture = {
+		audioFile: path.relative(outputRoot, companionFixture.path),
+		metadataFile: path.relative(outputRoot, `${companionFixture.path}.json`),
+		durationSeconds: companionFixture.durationSeconds,
+		startOffsetMs: companionFixture.startOffsetMs,
+		sourceVideoHasEmbeddedAudio: companionFixture.sourceVideoHasEmbeddedAudio,
+	};
+	report.checks.companionAudio = {};
+	report.limits.push(
+		"Companion mode requires a source video without embedded audio and no extra audio regions; non-silent export audio therefore comes from the supplied synthetic sidecar.",
+	);
+}
 const logs = [];
 let activeApp;
 let activePage;
@@ -174,6 +263,98 @@ async function setSwitch(locator, checked) {
 	await expect(locator).toBeChecked({ checked });
 }
 
+async function checkCompanionAudio(page, stage) {
+	if (!companionFixture) return;
+	// Check the URL before this test's discovery call can refresh approvals.
+	const mediaAccess = await page.evaluate(async (file) => {
+		const result = await window.electronAPI.getLocalMediaUrl(file);
+		if (!result.success) return { success: false };
+		const response = await fetch(result.url, {
+			cache: "no-store",
+			headers: { Range: "bytes=0-127" },
+		});
+		const bytes = (await response.arrayBuffer()).byteLength;
+		return {
+			success: response.ok && bytes > 0,
+			status: response.status,
+			bytes,
+			contentType: response.headers.get("content-type"),
+		};
+	}, companionFixture.realPath);
+	if (!mediaAccess.success) {
+		throw new Error(`${stage}: the companion URL was not readable from the editor.`);
+	}
+	const fallback = await page.evaluate(
+		(file) => window.electronAPI.getVideoAudioFallbackPaths(file),
+		input,
+	);
+	if (!fallback.success || !Array.isArray(fallback.paths)) {
+		throw new Error(`${stage}: companion discovery failed through real IPC.`);
+	}
+	const identity = (file) => {
+		const normalized = path.resolve(file);
+		return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+	};
+	const matched = fallback.paths.find(
+		(file) => identity(file) === identity(companionFixture.realPath),
+	);
+	if (!matched)
+		throw new Error(`${stage}: the system companion was absent from the fallback paths.`);
+	const offsetMs = fallback.startDelayMsByPath?.[matched];
+	if (typeof offsetMs !== "number" || Math.abs(offsetMs - companionFixture.startOffsetMs) > 1) {
+		throw new Error(`${stage}: companion start offset was not retained.`);
+	}
+	report.checks.companionAudio[stage] = {
+		via: "real getVideoAudioFallbackPaths + getLocalMediaUrl + uncached loopback fetch",
+		file: path.relative(outputRoot, companionFixture.path),
+		startOffsetMs: offsetMs,
+		urlCheckedBeforeDiscovery: true,
+		mediaAccess,
+	};
+}
+
+function decodedAudioSignal(file) {
+	const sampleRate = 8000;
+	const bytes = execFileSync(
+		require("ffmpeg-static"),
+		[
+			"-v",
+			"error",
+			"-i",
+			file,
+			"-map",
+			"0:a:0",
+			"-ac",
+			"1",
+			"-ar",
+			String(sampleRate),
+			"-f",
+			"f32le",
+			"pipe:1",
+		],
+		{ timeout: 30000, windowsHide: true, maxBuffer: 2 * 1024 * 1024 },
+	);
+	const samples = Math.floor(bytes.length / 4);
+	let squareSum = 0;
+	let peak = 0;
+	for (let index = 0; index < samples; index++) {
+		const value = bytes.readFloatLE(index * 4);
+		if (!Number.isFinite(value))
+			throw new Error("Exported audio contains invalid PCM samples.");
+		squareSum += value * value;
+		peak = Math.max(peak, Math.abs(value));
+	}
+	const rms = samples > 0 ? Math.sqrt(squareSum / samples) : 0;
+	return {
+		sampleRate,
+		decodedSamples: samples,
+		decodedDurationSeconds: samples / sampleRate,
+		rms,
+		peak,
+		nonSilent: rms > 0.00001,
+	};
+}
+
 try {
 	console.log("[desktop-smoke] Launching the built app with an isolated profile.");
 	const app = await launch({ RECORDLY_DEV_OPEN_RECORDING_INPUT: input });
@@ -189,6 +370,7 @@ try {
 	const actualProfile = await app.evaluate(({ app }) => app.getPath("userData"));
 	if (path.resolve(actualProfile) !== profile)
 		throw new Error("App did not use the isolated smoke profile.");
+	await checkCompanionAudio(page, "initialOpen");
 
 	console.log("[desktop-smoke] Importing synthetic media through the editor UI and real IPC.");
 	await importViaUi(app, page, input);
@@ -198,6 +380,15 @@ try {
 	if (Math.abs(initialEnd - durationMs) > 100)
 		throw new Error("Imported timeline duration did not match the input.");
 	report.checks.import = { via: "UI + native-dialog stub + real IPC", durationMs: initialEnd };
+	await checkCompanionAudio(page, "videoReimport");
+	// Exact source-dimension assertions require the user's Native aspect choice.
+	// A requested 16:9 layout legitimately fits a slightly different capture ratio.
+	if ((await page.getByRole("button", { name: "Native", exact: true }).count()) === 0) {
+		await page.getByRole("button", { name: "16:9", exact: true }).click();
+		await page.getByRole("menuitem", { name: "Native", exact: true }).click();
+	}
+	await expect(page.getByRole("button", { name: "Native", exact: true })).toBeVisible();
+	report.checks.aspectRatio = { via: "preview aspect-ratio UI", selected: "native" };
 
 	const block = await clips.first().locator(".timeline-block").boundingBox();
 	const row = await page.locator('[data-timeline-row="row-clip"]').boundingBox();
@@ -267,6 +458,7 @@ try {
 					if (
 						candidate?.editor?.clipRegions?.length === 2 &&
 						candidate.editor.cursorStyle === "dot" &&
+						candidate.editor.aspectRatio === "native" &&
 						candidate.editor.cursorClickEffect === "ripple" &&
 						candidate.editor.showCursor
 					) {
@@ -282,9 +474,19 @@ try {
 		.toBe(true);
 	if (path.resolve(savedProject.videoPath) !== input || !savedProject.projectId)
 		throw new Error("Saved project media path or project ID was invalid.");
+	if (
+		companionFixture &&
+		(savedProject.editor.audioRegions?.length || savedProject.editor.audioTracks?.length)
+	) {
+		throw new Error(
+			"Companion-only smoke unexpectedly contains additional audio regions/tracks.",
+		);
+	}
 	await fs.copyFile(projectPath, path.join(outputRoot, "saved-project.recordly"));
 	await importViaUi(app, page, projectPath);
 	await expect(clips).toHaveCount(2);
+	await expect(page.getByRole("button", { name: "Native", exact: true })).toBeVisible();
+	await checkCompanionAudio(page, "projectReopen");
 	await page.getByRole("radio", { name: "Cursor", exact: true }).click();
 	await expect(page.getByRole("row", { name: "Dot", exact: true })).toHaveAttribute(
 		"aria-selected",
@@ -347,11 +549,22 @@ try {
 		throw new Error("Exported MP4 did not have the expected H.264 video/duration.");
 	if (inputVideo.width !== video.width || inputVideo.height !== video.height)
 		throw new Error("Source-quality export dimensions changed with preview quality.");
-	if (inputProbe.streams.some((stream) => stream.codec_type === "audio") && audioStreams === 0)
+	if (
+		(companionFixture || inputProbe.streams.some((stream) => stream.codec_type === "audio")) &&
+		audioStreams === 0
+	)
 		throw new Error("Source audio was missing from the exported MP4.");
+	const exportAudioSignal = audioStreams > 0 ? decodedAudioSignal(output) : null;
+	if (companionFixture && !exportAudioSignal?.nonSilent) {
+		throw new Error("The application export did not retain non-silent companion audio.");
+	}
 	report.checks.export = {
 		via: "application smoke-export controller + actual renderer/encoder",
 		...exportReport,
+		audioSignal: exportAudioSignal,
+		companionContributionIsolated: companionFixture
+			? !companionFixture.sourceVideoHasEmbeddedAudio
+			: false,
 		probe: {
 			codec: video.codec_name,
 			width: video.width,

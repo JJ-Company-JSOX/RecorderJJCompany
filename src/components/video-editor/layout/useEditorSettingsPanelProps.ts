@@ -1,4 +1,4 @@
-import type { ComponentProps, Dispatch, SetStateAction } from "react";
+import { type ComponentProps, type Dispatch, type SetStateAction, useCallback } from "react";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 import { useClipAudioReset } from "../audio/useClipAudioReset";
 import type { useAutoCaptionController } from "../captions/useAutoCaptionController";
@@ -77,6 +77,28 @@ export function useEditorSettingsPanelProps(input: Input): ComponentProps<typeof
 	);
 
 	const clipAudioReset = useClipAudioReset(timeline);
+	const changeZoomDepth = useCallback(
+		(depth: Parameters<typeof zoomCommands.handleZoomDepthChange>[0]) => {
+			if (timeline.selectedZoomId) zoomCommands.handleZoomDepthChange(depth);
+		},
+		[timeline.selectedZoomId, zoomCommands.handleZoomDepthChange],
+	);
+	const changeZoomMode = useCallback(
+		(mode: Parameters<typeof zoomCommands.handleZoomModeChange>[0]) => {
+			if (timeline.selectedZoomId) zoomCommands.handleZoomModeChange(mode);
+		},
+		[timeline.selectedZoomId, zoomCommands.handleZoomModeChange],
+	);
+	const openNativeCaptureUnavailable = useCallback(
+		() => setNativeCaptureUnavailableModalOpen(true),
+		[setNativeCaptureUnavailableModalOpen],
+	);
+	// The transport and audio retain their full-rate clock. Only inspectors that
+	// actually display a source-time preview need to receive each playback tick.
+	const sourceTimeMs =
+		activeEffectSection === "webcam" || activeEffectSection === "caption"
+			? mapTimelineTimeToSourceTime(currentTime * 1000, timeline.clipRegions)
+			: 0;
 
 	return {
 		...clipAudioReset,
@@ -85,12 +107,10 @@ export function useEditorSettingsPanelProps(input: Input): ComponentProps<typeof
 		selected: appearance.wallpaper,
 		onWallpaperChange: appearance.setWallpaper,
 		selectedZoomDepth: selectedZoom?.depth ?? null,
-		onZoomDepthChange: (depth) =>
-			timeline.selectedZoomId && zoomCommands.handleZoomDepthChange(depth),
+		onZoomDepthChange: changeZoomDepth,
 		selectedZoomId: timeline.selectedZoomId,
 		selectedZoomMode: selectedZoom?.mode ?? (timeline.selectedZoomId ? "auto" : null),
-		onZoomModeChange: (mode) =>
-			timeline.selectedZoomId && zoomCommands.handleZoomModeChange(mode),
+		onZoomModeChange: changeZoomMode,
 		onZoomDelete: zoomCommands.handleZoomDelete,
 		selectedClipId: timeline.selectedClipId,
 		selectedClipSpeed: selectedClip?.speed ?? (timeline.selectedClipId ? 1 : null),
@@ -173,9 +193,8 @@ export function useEditorSettingsPanelProps(input: Input): ComponentProps<typeof
 		onBorderRadiusChange: appearance.setBorderRadius,
 		webcam: appearance.webcam,
 		webcamPreviewSrc: appearance.webcam.sourcePath ? appearance.resolvedWebcamVideoUrl : null,
-		webcamPreviewCurrentTime:
-			mapTimelineTimeToSourceTime(currentTime * 1000, timeline.clipRegions) / 1000,
-		webcamPreviewPlaying: isPlaying,
+		webcamPreviewCurrentTime: activeEffectSection === "webcam" ? sourceTimeMs / 1000 : 0,
+		webcamPreviewPlaying: activeEffectSection === "webcam" && isPlaying,
 		onWebcamChange: appearance.setWebcam,
 		onUploadWebcam: handleUploadWebcam,
 		onClearWebcam: handleClearWebcam,
@@ -199,7 +218,7 @@ export function useEditorSettingsPanelProps(input: Input): ComponentProps<typeof
 		onPickWhisperModel: autoCaptionController.handlePickWhisperModel,
 		onGenerateAutoCaptions: autoCaptionController.handleGenerateAutoCaptions,
 		onClearAutoCaptions: captionCommands.handleClearAutoCaptions,
-		captionCurrentTimeMs: mapTimelineTimeToSourceTime(currentTime * 1000, timeline.clipRegions),
+		captionCurrentTimeMs: activeEffectSection === "caption" ? sourceTimeMs : 0,
 		selectedCaptionId: timeline.selectedCaptionId,
 		onBeginCaptionEdit: captionCommands.handleBeginCaptionEdit,
 		onCaptionTextEdit: captionCommands.handleCaptionTextEdit,
@@ -210,7 +229,7 @@ export function useEditorSettingsPanelProps(input: Input): ComponentProps<typeof
 		onDownloadWhisperSmallModel: autoCaptionController.handleDownloadWhisperSmallModel,
 		onDeleteWhisperSmallModel: autoCaptionController.handleDeleteWhisperSmallModel,
 		nativeCaptureUnavailableSession: sessionNativeCaptureUnavailable,
-		onOpenNativeCaptureUnavailableModal: () => setNativeCaptureUnavailableModalOpen(true),
+		onOpenNativeCaptureUnavailableModal: openNativeCaptureUnavailable,
 		onAnnotationContentChange: annotationCommands.handleAnnotationContentChange,
 		onAnnotationTypeChange: annotationCommands.handleAnnotationTypeChange,
 		onAnnotationStyleChange: annotationCommands.handleAnnotationStyleChange,

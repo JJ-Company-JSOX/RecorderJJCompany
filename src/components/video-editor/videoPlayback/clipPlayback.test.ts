@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClipRegion } from "../types";
+import * as clipTypes from "../types";
 import { createClipPlayback, findPreviewClipAtTimelineTime } from "./clipPlayback";
 
 describe("clip timeline playback", () => {
@@ -32,6 +33,7 @@ describe("clip timeline playback", () => {
 			{ id: "left", startMs: 0, endMs: 1000, sourceStartMs: 0, speed: 3 },
 			{ id: "right", startMs: 2000, endMs: 4000, sourceStartMs: 6000, speed: 3 },
 		],
+		getClips: () => ClipRegion[] = () => clips,
 	) {
 		const video = {
 			duration: 12,
@@ -47,7 +49,7 @@ describe("clip timeline playback", () => {
 		const onSourceSeek = vi.fn();
 		const playback = createClipPlayback({
 			video,
-			getClips: () => clips,
+			getClips,
 			onTime,
 			onPlaying,
 			onError,
@@ -55,6 +57,59 @@ describe("clip timeline playback", () => {
 		});
 		return { video, playback, onTime, onPlaying, onError, onSourceSeek };
 	}
+	it("reuses a sorted timeline and duration while advancing without mutating clip order", async () => {
+		const first = { id: "first", startMs: 0, endMs: 1000, sourceStartMs: 0, speed: 1 };
+		const second = { id: "second", startMs: 1000, endMs: 2000, sourceStartMs: 4000, speed: 1 };
+		const clips = [second, first];
+		const sort = vi.spyOn(clipTypes, "sortClipRegions");
+		const duration = vi.spyOn(clipTypes, "getTimelineDurationMs");
+		const { playback, video, onSourceSeek, onTime } = setup(clips);
+		playback.seek(0);
+		await playback.play();
+		onSourceSeek.mockClear();
+		video.currentTime = 0.2;
+		advance(200);
+		video.currentTime = 0.4;
+		advance(200);
+		expect(onTime).toHaveBeenLastCalledWith(0.4, 0.4);
+		expect(sort).toHaveBeenCalledTimes(1);
+		expect(duration).toHaveBeenCalledTimes(1);
+		expect(onSourceSeek).not.toHaveBeenCalled();
+		expect(clips).toEqual([second, first]);
+		expect(clips[0]).toBe(second);
+		expect(clips[1]).toBe(first);
+		expect(findPreviewClipAtTimelineTime(250, clips)).toBe(first);
+	});
+	it("reindexes a replaced clip array before clamping a seek", () => {
+		let clips: ClipRegion[] = [
+			{ id: "before", startMs: 0, endMs: 4000, sourceStartMs: 0, speed: 1 },
+		];
+		const { playback, video, onTime } = setup(clips, () => clips);
+		playback.seek(3);
+		clips = [{ id: "after", startMs: 0, endMs: 1000, sourceStartMs: 6000, speed: 1 }];
+		playback.seek(2);
+		expect(onTime).toHaveBeenLastCalledWith(1, 7);
+		expect(video.currentTime).toBeLessThan(7);
+		expect(video.currentTime).toBeGreaterThan(6.999);
+	});
+	it("refresh invalidates ordering and duration after in-place edits", () => {
+		const first = { id: "first", startMs: 0, endMs: 1000, sourceStartMs: 0, speed: 1 };
+		const second = { id: "second", startMs: 1000, endMs: 2000, sourceStartMs: 4000, speed: 1 };
+		const clips = [first, second];
+		const { playback, video, onTime } = setup(clips);
+		playback.seek(0.5);
+		Object.assign(first, { startMs: 2000, endMs: 3000, sourceStartMs: 6000 });
+		Object.assign(second, { startMs: 0, endMs: 1000 });
+		playback.refresh();
+		expect(onTime).toHaveBeenLastCalledWith(0.5, 4.5);
+		expect(video.currentTime).toBe(4.5);
+		playback.seek(10);
+		expect(onTime).toHaveBeenLastCalledWith(3, 7);
+		expect(video.currentTime).toBeLessThan(7);
+		expect(video.currentTime).toBeGreaterThan(6.999);
+		expect(clips[0]).toBe(first);
+		expect(clips[1]).toBe(second);
+	});
 	it("crosses a source cut at the same 2.8s timeline timestamp without playing the removed footage", async () => {
 		const { video, playback, onTime, onSourceSeek } = setup([
 			{ id: "a", startMs: 0, endMs: 2800, sourceStartMs: 0, speed: 1 },

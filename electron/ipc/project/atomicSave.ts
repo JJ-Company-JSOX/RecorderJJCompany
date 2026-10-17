@@ -2,8 +2,32 @@ import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 const pendingWrites = new Map<string, Promise<void>>();
+const windowsRenameRetryDelaysMs = [25, 50, 100, 200, 400, 800];
+const transientWindowsRenameErrors = new Set(["EPERM", "EACCES", "EBUSY"]);
+
+async function renameWithTransientLockRetry(source: string, target: string): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			await fs.rename(source, target);
+			return;
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code;
+			if (
+				process.platform !== "win32" ||
+				!code ||
+				!transientWindowsRenameErrors.has(code) ||
+				attempt >= windowsRenameRetryDelaysMs.length
+			)
+				throw error;
+			// Windows readers/scanners can briefly prevent replacement. Keep both
+			// complete generations intact; never unlink the destination to retry.
+			await delay(windowsRenameRetryDelaysMs[attempt]);
+		}
+	}
+}
 
 const unsupportedDirectorySyncErrors = new Set([
 	"EACCES",
@@ -89,19 +113,21 @@ async function preservePreviousGeneration(
 	targetPath: string,
 	backupPath: string,
 	backupTemporaryPath: string,
-): Promise<void> {
+): Promise<boolean> {
 	try {
 		await fs.copyFile(targetPath, backupTemporaryPath, fsConstants.COPYFILE_EXCL);
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-			await fs.rm(backupPath, { force: true });
-			return;
+			// A recovery backup can be the only surviving generation. Do not
+			// discard it until the replacement target has committed successfully.
+			return false;
 		}
 		throw error;
 	}
 
 	await syncExistingFile(backupTemporaryPath);
-	await fs.rename(backupTemporaryPath, backupPath);
+	await renameWithTransientLockRetry(backupTemporaryPath, backupPath);
+	return true;
 }
 
 async function commitProjectFile(projectPath: string, contents: string): Promise<void> {
@@ -114,9 +140,20 @@ async function commitProjectFile(projectPath: string, contents: string): Promise
 
 	try {
 		await writeSyncedTemporaryFile(temporaryPath, contents, existingMode);
-		await preservePreviousGeneration(targetPath, backupPath, backupTemporaryPath);
-		await fs.rename(temporaryPath, targetPath);
+		const preservedPrevious = await preservePreviousGeneration(
+			targetPath,
+			backupPath,
+			backupTemporaryPath,
+		);
+		await renameWithTransientLockRetry(temporaryPath, targetPath);
 		await syncParentDirectory(parentDir);
+		if (!preservedPrevious) {
+			await fs.rm(backupPath, { force: true }).catch((error) => {
+				// The new target is complete; keep an undeletable backup rather
+				// than reporting that the committed project was not saved.
+				console.warn("Unable to remove stale project backup:", error);
+			});
+		}
 	} finally {
 		await Promise.all([
 			fs.rm(temporaryPath, { force: true }).catch(() => undefined),

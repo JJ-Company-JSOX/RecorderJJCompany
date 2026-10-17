@@ -1,21 +1,24 @@
 import { enablePitchPreservingPlayback } from "@/lib/mediaTiming";
 import {
 	type ClipRegion,
-	findClipAtTimelineTime,
 	getClipSourceStartMs,
 	getTimelineDurationMs,
 	sortClipRegions,
 } from "../types";
+
+function findPreviewClipInSortedClips(timeMs: number, clips: ClipRegion[]): ClipRegion | null {
+	const active = clips.find((clip) => timeMs >= clip.startMs && timeMs < clip.endMs);
+	if (active) return active;
+	const last = clips[clips.length - 1];
+	return last && Math.abs(timeMs - last.endMs) < 1e-7 ? last : null;
+}
 
 /** The playhead may stop at the timeline end; that is not a black gap. */
 export function findPreviewClipAtTimelineTime(
 	timeMs: number,
 	clips: ClipRegion[],
 ): ClipRegion | null {
-	const active = findClipAtTimelineTime(timeMs, clips);
-	if (active) return active;
-	const last = sortClipRegions(clips)[clips.length - 1];
-	return last && Math.abs(timeMs - last.endMs) < 1e-7 ? last : null;
+	return findPreviewClipInSortedClips(timeMs, sortClipRegions(clips));
 }
 
 /** Timeline time advances at 1x; only the source media uses the clip's speed. */
@@ -40,7 +43,23 @@ export function createClipPlayback({
 	let lastTick = 0;
 	let activeClip: ClipRegion | null = null;
 	let playRequest = 0;
-	const duration = () => getTimelineDurationMs(getClips(), 0);
+	let indexedClips: ClipRegion[] | null = null;
+	let sortedClips: ClipRegion[] = [];
+	let durationMs = 0;
+	const getSortedClips = () => {
+		const clips = getClips();
+		if (clips !== indexedClips) {
+			// Sort a copy, retaining the original clip objects for cut detection.
+			sortedClips = sortClipRegions(clips);
+			durationMs = getTimelineDurationMs(sortedClips, 0);
+			indexedClips = clips;
+		}
+		return sortedClips;
+	};
+	const duration = () => {
+		getSortedClips();
+		return durationMs;
+	};
 	const readSourceTime = () => {
 		if (!activeClip || video.seeking) return;
 		timeMs = video.ended
@@ -74,14 +93,17 @@ export function createClipPlayback({
 		});
 	};
 	const sync = (seek = false, startSource = false) => {
-		const clips = getClips();
+		const clips = getSortedClips();
+		let clip = findPreviewClipInSortedClips(timeMs, clips);
 		// Empty timeline space is skipped during playback. Clip positions and
 		// paused seeks stay intact so editing a gap never moves source footage.
-		if (playing && !findPreviewClipAtTimelineTime(timeMs, clips)) {
-			const next = sortClipRegions(clips).find((clip) => clip.startMs > timeMs);
-			if (next) timeMs = next.startMs;
+		if (playing && !clip) {
+			const next = clips.find((candidate) => candidate.startMs > timeMs);
+			if (next) {
+				timeMs = next.startMs;
+				clip = findPreviewClipInSortedClips(timeMs, clips);
+			}
 		}
-		const clip = findPreviewClipAtTimelineTime(timeMs, clips);
 		const sourceMs = clip
 			? getClipSourceStartMs(clip) + (timeMs - clip.startMs) * clip.speed
 			: null;
@@ -165,6 +187,8 @@ export function createClipPlayback({
 			sync(true);
 		},
 		refresh: () => {
+			// Explicit refresh also supports edits made in place by non-React callers.
+			indexedClips = null;
 			timeMs = Math.min(timeMs, duration());
 			sync(true);
 		},

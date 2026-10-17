@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { SourceAudioTrackSettings } from "./audioTypes";
 import { useClipAudioReset } from "./useClipAudioReset";
 
@@ -8,15 +10,23 @@ function harness(selectedClipId: string | null, defaults: SourceAudioTrackSettin
 		other: { mic: { volume: 0.4, normalize: true } },
 	} as Record<string, SourceAudioTrackSettings>;
 	const initial = saved;
-	const render = () =>
-		useClipAudioReset({
-			selectedClipId,
-			defaultSourceAudioTrackSettings: defaults,
-			sourceAudioTrackSettingsByClip: saved,
-			setSourceAudioTrackSettingsByClip: (update) => {
-				saved = typeof update === "function" ? update(saved) : update;
-			},
-		});
+	const render = () => {
+		let result: ReturnType<typeof useClipAudioReset> | undefined;
+		function Harness() {
+			result = useClipAudioReset({
+				selectedClipId,
+				defaultSourceAudioTrackSettings: defaults,
+				sourceAudioTrackSettingsByClip: saved,
+				setSourceAudioTrackSettingsByClip: (update) => {
+					saved = typeof update === "function" ? update(saved) : update;
+				},
+			});
+			return null;
+		}
+		renderToStaticMarkup(createElement(Harness));
+		if (!result) throw new Error("Hook did not render");
+		return result;
+	};
 	return { render, initial, read: () => saved };
 }
 

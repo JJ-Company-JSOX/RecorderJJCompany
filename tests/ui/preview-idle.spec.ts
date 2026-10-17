@@ -8,6 +8,7 @@ test("paused preview stops GPU submissions and wakes for seeks and quality chang
 	await page.goto("/tests/ui/paused-motion.html?cursor");
 	const main = page.locator("main");
 	await expect(main).toHaveAttribute("data-ready", "true", { timeout: 60000 });
+	await expect(page.locator("canvas")).toHaveCount(1);
 	const read = async () => {
 		await page.getByRole("button", { name: "Read render count", exact: true }).click();
 		return Number(await main.getAttribute("data-render-count"));

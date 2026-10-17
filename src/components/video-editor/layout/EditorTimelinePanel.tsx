@@ -1,4 +1,5 @@
-import type { RefObject } from "react";
+import type { Span } from "dnd-timeline";
+import { type RefObject, useCallback } from "react";
 import type { useVideoEditorAudio } from "../audio/useVideoEditorAudio";
 import { retimeCaptionFragment } from "../captionTimeline";
 import type { useAnnotationRegionCommands } from "../hooks/useAnnotationRegionCommands";
@@ -56,6 +57,32 @@ export function EditorTimelinePanel(props: Props) {
 		currentTime,
 		handleSelectAnnotation,
 	} = props;
+	const { effectiveCaptionRegions } = projection;
+	const { handleCaptionRetime, handleSelectCaption, handleCaptionDelete } = captionCommands;
+	const { handleTimelineSeek } = playback;
+	const handleCaptionSpanChange = useCallback(
+		(id: string, span: Span) => {
+			const fragment = effectiveCaptionRegions.find((cue) => cue.id === id);
+			if (!fragment) return;
+			handleCaptionRetime(fragment.sourceCueId, retimeCaptionFragment(fragment, span));
+		},
+		[effectiveCaptionRegions, handleCaptionRetime],
+	);
+	const handleSelectCaptionFragment = useCallback(
+		(id: string | null) => {
+			const fragment = effectiveCaptionRegions.find((cue) => cue.id === id);
+			handleSelectCaption(fragment?.sourceCueId ?? null);
+			if (fragment) handleTimelineSeek(fragment.startMs / 1000);
+		},
+		[effectiveCaptionRegions, handleSelectCaption, handleTimelineSeek],
+	);
+	const handleDeleteCaptionFragment = useCallback(
+		(id: string) => {
+			const fragment = effectiveCaptionRegions.find((cue) => cue.id === id);
+			if (fragment) handleCaptionDelete(fragment.sourceCueId);
+		},
+		[effectiveCaptionRegions, handleCaptionDelete],
+	);
 
 	return (
 		<div
@@ -99,16 +126,7 @@ export function EditorTimelinePanel(props: Props) {
 				selectedAudioId={timeline.selectedAudioId}
 				onSelectAudio={audioCommands.handleSelectAudio}
 				captionRegions={projection.effectiveCaptionRegions}
-				onCaptionSpanChange={(id, span) => {
-					const fragment = projection.effectiveCaptionRegions.find(
-						(cue) => cue.id === id,
-					);
-					if (!fragment) return;
-					captionCommands.handleCaptionRetime(
-						fragment.sourceCueId,
-						retimeCaptionFragment(fragment, span),
-					);
-				}}
+				onCaptionSpanChange={handleCaptionSpanChange}
 				selectedCaptionId={
 					projection.effectiveCaptionRegions.find(
 						(cue) =>
@@ -121,19 +139,8 @@ export function EditorTimelinePanel(props: Props) {
 					)?.id ??
 					null
 				}
-				onSelectCaption={(id) => {
-					const fragment = projection.effectiveCaptionRegions.find(
-						(cue) => cue.id === id,
-					);
-					captionCommands.handleSelectCaption(fragment?.sourceCueId ?? null);
-					if (fragment) playback.handleTimelineSeek(fragment.startMs / 1000);
-				}}
-				onCaptionDelete={(id) => {
-					const fragment = projection.effectiveCaptionRegions.find(
-						(cue) => cue.id === id,
-					);
-					if (fragment) captionCommands.handleCaptionDelete(fragment.sourceCueId);
-				}}
+				onSelectCaption={handleSelectCaptionFragment}
+				onCaptionDelete={handleDeleteCaptionFragment}
 				onCaptionAdded={captionCommands.handleCaptionAdded}
 				captionsEnabled={timeline.autoCaptionSettings.enabled}
 				captionQuickAddEnabled={timeline.autoCaptionSettings.timelineQuickAdd}

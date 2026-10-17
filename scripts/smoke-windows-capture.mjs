@@ -97,6 +97,7 @@ const root = path.join(
 );
 await fs.mkdir(root, { recursive: true });
 const report = {
+	reportVersion: 2,
 	requestedFps: fps,
 	requestedSeconds: seconds,
 	provenance,
@@ -105,6 +106,8 @@ const report = {
 		"Current native source obtains a monitor surface and crops to HWND. The synthetic window stays fixed and on top; no display target or desktop fallback is allowed.",
 		"WASAPI captures the default system output; synthetic tone detection proves loopback received this test signal, not microphone capture or every audio route.",
 		"Microphone is disabled. The auxiliary FFmpeg mux is not Jsox editor/export validation.",
+		"r_frame_rate is preserved as a probe field, not treated as proof of the requested fps. Decoded sample cadence includes any repeated frames and does not measure unique captured updates.",
+		"The tone starts after Recording started is observed. Companion startDelayMs is an audio start offset relative to video, not a measurement of missing sound or device startup latency.",
 	],
 	assertions: {},
 	errors: [],
@@ -225,6 +228,13 @@ function audioMetrics(buffer, sampleRate) {
 	};
 }
 
+function parseProbeRatio(value) {
+	if (typeof value !== "string") return null;
+	const parts = value.split("/").map(Number);
+	if (parts.length !== 2 || !parts.every(Number.isFinite) || parts[1] <= 0) return null;
+	return parts[0] / parts[1];
+}
+
 try {
 	const [{ _electron }, { default: ffmpegPath }, { default: ffprobeInfo }] = await Promise.all([
 		import("@playwright/test"),
@@ -239,7 +249,7 @@ try {
 	ctx.fillStyle='#df214d';ctx.fillRect(0,0,w/2,h/2);ctx.fillStyle='#20c997';ctx.fillRect(w/2,0,w/2,h/2);ctx.fillStyle='#3a60ed';ctx.fillRect(0,h/2,w/2,h/2);ctx.fillStyle='#f5b841';ctx.fillRect(w/2,h/2,w/2,h/2);
 	ctx.fillStyle='white';ctx.fillRect(w*.2+(w*.5)*((now%1800)/1800),h*.46,w*.08,h*.08);ctx.fillStyle='black';ctx.font=Math.round(h*.055)+'px sans-serif';ctx.fillText('JSOX SYNTHETIC '+frames++,w*.25,h*.38);requestAnimationFrame(draw)}requestAnimationFrame(draw);
 	window.syntheticStats=()=>({frames,elapsedMs:performance.now()-started,dpr:devicePixelRatio,width:canvas.width,height:canvas.height});
-	window.startSyntheticTone=async()=>{const audio=new AudioContext();await audio.resume();const gain=audio.createGain();gain.gain.value=.03;const oscillator=audio.createOscillator();oscillator.frequency.value=997;oscillator.connect(gain).connect(audio.destination);oscillator.start();window.stopSyntheticTone=async()=>{oscillator.stop();await audio.close()};return audio.state};
+	window.startSyntheticTone=async()=>{const requestedAtMs=performance.now();const audio=new AudioContext();await audio.resume();const gain=audio.createGain();gain.gain.value=.03;const oscillator=audio.createOscillator();oscillator.frequency.value=997;oscillator.connect(gain).connect(audio.destination);oscillator.start();const oscillatorScheduledAtMs=performance.now();window.stopSyntheticTone=async()=>{oscillator.stop();await audio.close()};return {state:audio.state,timing:{clock:'synthetic window performance.now',requestedAtMs,oscillatorScheduledAtMs,audioContextTimeSeconds:audio.currentTime,baseLatencySeconds:audio.baseLatency??null,outputLatencySeconds:audio.outputLatency??null}}};
 	</script></body></html>`;
 	await fs.writeFile(
 		mainPath,
@@ -247,7 +257,15 @@ try {
 	);
 	const env = { ...process.env };
 	delete env.ELECTRON_RUN_AS_NODE;
-	app = await _electron.launch({ args: [mainPath], env, timeout: 30000 });
+	app = await _electron.launch({
+		args: [
+			mainPath,
+			"--disable-features=CalculateNativeWinOcclusion",
+			"--disable-backgrounding-occluded-windows",
+		],
+		env,
+		timeout: 30000,
+	});
 	const page = await app.firstWindow();
 	await page.waitForFunction(() => window.syntheticStats?.().frames > 10);
 	report.syntheticWindow = await app.evaluate(({ BrowserWindow, screen }) => {
@@ -279,6 +297,7 @@ try {
 	};
 	// Intentionally no displayId/display bounds; never add a desktop fallback.
 	await fs.writeFile(path.join(root, "helper-config.json"), JSON.stringify(config, null, 2));
+	const helperSpawnedAtMs = performance.now();
 	helper = spawn(binaryPath, [JSON.stringify(config)], {
 		cwd: root,
 		windowsHide: true,
@@ -292,9 +311,25 @@ try {
 	helper.stdout.on("data", (chunk) => helperLogs.push(chunk.toString()));
 	helper.stderr.on("data", (chunk) => helperLogs.push(chunk.toString()));
 	report.startSignalMs = await waitForStarted();
-	report.toneState = await page.evaluate(() => window.startSyntheticTone());
+	const recordingStartedObservedMs = performance.now() - helperSpawnedAtMs;
+	const toneRequestedAtMs = performance.now() - helperSpawnedAtMs;
+	const tone = await page.evaluate(() => window.startSyntheticTone());
+	report.toneState = tone.state;
+	report.toneTiming = {
+		clock: "script performance.now, relative to helper spawn",
+		recordingStartedObservedMs,
+		requestedAtMs: toneRequestedAtMs,
+		acknowledgedAtMs: performance.now() - helperSpawnedAtMs,
+		renderer: tone.timing,
+		limit: "Renderer and script clocks have different origins. Scheduling/acknowledgement times do not establish when the tone became audible at the output device.",
+	};
 	await delay(seconds * 1000);
 	report.syntheticAfter = await page.evaluate(() => window.syntheticStats());
+	report.syntheticFramesPerSecond =
+		((report.syntheticAfter.frames - report.syntheticBefore.frames) * 1000) /
+		(report.syntheticAfter.elapsedMs - report.syntheticBefore.elapsedMs);
+	// Do not blame capture for missed updates if the test's animation is slow.
+	report.assertions.syntheticCadence = report.syntheticFramesPerSecond >= fps * 0.9;
 	helper.stdin.end("stop\n");
 	report.helperExit = await withTimeout(
 		helperExit,
@@ -326,7 +361,9 @@ try {
 	report.video = await probe(videoPath, ["-count_frames"]);
 	const videoStream = report.video.streams.find((stream) => stream.codec_type === "video");
 	if (!videoStream) throw new Error("Recorded MP4 contains no video stream.");
-	const [nominalN, nominalD = 1] = videoStream.r_frame_rate.split("/").map(Number);
+	const rFrameRate = parseProbeRatio(videoStream.r_frame_rate);
+	const averageFrameRate = parseProbeRatio(videoStream.avg_frame_rate);
+	const timeBaseSeconds = parseProbeRatio(videoStream.time_base);
 	const frameInfo = JSON.parse(
 		(
 			await command(ffprobePath, [
@@ -346,17 +383,42 @@ try {
 	const times = frameInfo.frames
 		.map((frame) => Number(frame.best_effort_timestamp_time))
 		.filter(Number.isFinite);
-	const deltas = times
-		.slice(1)
-		.map((time, index) => (time - times[index]) * 1000)
-		.sort((a, b) => a - b);
+	const orderedDeltas = times.slice(1).map((time, index) => (time - times[index]) * 1000);
+	const deltas = orderedDeltas.filter((delta) => delta > 0).sort((a, b) => a - b);
 	const duration = Number(videoStream.duration || report.video.format.duration);
+	const effectiveFramesPerSecond = times.length / duration;
+	const timestampToleranceMs = Math.max(0.1, (timeBaseSeconds || 0) * 2000);
+	const intervalSpreadMs = deltas.length > 0 ? deltas[deltas.length - 1] - deltas[0] : null;
+	const nonIncreasingTimestampCount = orderedDeltas.filter((delta) => delta <= 0).length;
+	const variableFrameIntervalsObserved =
+		deltas.length > 1 && intervalSpreadMs > timestampToleranceMs;
 	report.cadence = {
 		requestedFps: fps,
-		nominalFps: nominalN / nominalD,
+		probeFields: {
+			r_frame_rate: videoStream.r_frame_rate ?? null,
+			avg_frame_rate: videoStream.avg_frame_rate ?? null,
+			time_base: videoStream.time_base ?? null,
+			codec_time_base: videoStream.codec_time_base ?? null,
+		},
+		rFrameRate,
+		averageFrameRate,
+		timeBaseSeconds,
 		decodedFrames: times.length,
 		durationSeconds: duration,
-		effectiveFramesPerSecond: times.length / duration,
+		effectiveFramesPerSecond,
+		nonIncreasingTimestampCount,
+		variableFrameIntervalsObserved,
+		timestampCadence:
+			deltas.length < 2
+				? "insufficient timestamps"
+				: nonIncreasingTimestampCount > 0
+					? "non-increasing timestamps"
+					: variableFrameIntervalsObserved
+						? "VFR observed (variable presentation intervals)"
+						: "CFR-like observed (within timestamp precision)",
+		minFrameIntervalMs: deltas[0] ?? null,
+		maxFrameIntervalMs: deltas[deltas.length - 1] ?? null,
+		timestampToleranceMs,
 		p95FrameIntervalMs: deltas[Math.floor(deltas.length * 0.95)],
 	};
 	const expectedWidth = Math.floor(report.syntheticBefore.width / 2) * 2;
@@ -364,8 +426,18 @@ try {
 	report.assertions.windowDimensions =
 		Math.abs(videoStream.width - expectedWidth) <= 2 &&
 		Math.abs(videoStream.height - expectedHeight) <= 2;
-	report.assertions.nominalFps = Math.abs(report.cadence.nominalFps - fps) < fps * 0.01;
-	report.assertions.actualCadence = report.cadence.effectiveFramesPerSecond >= fps * 0.9;
+	report.assertions.frameTimingFields =
+		timeBaseSeconds !== null &&
+		timeBaseSeconds > 0 &&
+		deltas.length > 0 &&
+		nonIncreasingTimestampCount === 0;
+	report.assertions.averageRateMatchesDecodedCadence =
+		averageFrameRate !== null &&
+		averageFrameRate > 0 &&
+		Math.abs(averageFrameRate - effectiveFramesPerSecond) <=
+			Math.max(0.1, averageFrameRate * 0.01);
+	report.assertions.actualCadence =
+		effectiveFramesPerSecond >= fps * 0.9 && effectiveFramesPerSecond <= fps * 1.1;
 	report.assertions.duration = duration >= seconds * 0.85 && duration <= seconds + 3;
 	const expectedColors = [
 		[223, 33, 77],
@@ -471,10 +543,29 @@ try {
 	} catch {
 		report.audioTiming = null;
 	}
-	const startDelayMs = Number(report.audioTiming?.startDelayMs || 0);
-	if (!Number.isFinite(startDelayMs) || startDelayMs < 0 || startDelayMs > duration * 1000)
+	const rawAudioStartOffsetMs = report.audioTiming?.startDelayMs;
+	const audioStartOffsetAvailable =
+		rawAudioStartOffsetMs !== null && rawAudioStartOffsetMs !== undefined;
+	const audioStartOffsetMs = audioStartOffsetAvailable ? Number(rawAudioStartOffsetMs) : 0;
+	if (
+		!Number.isFinite(audioStartOffsetMs) ||
+		audioStartOffsetMs < 0 ||
+		audioStartOffsetMs > duration * 1000
+	)
 		throw new Error("Invalid companion audio timing metadata.");
-	report.auxiliaryMuxAudioDelayMs = startDelayMs;
+	report.audioAlignment = {
+		metadataPresent: report.audioTiming !== null,
+		startOffsetAvailable: audioStartOffsetAvailable,
+		startOffsetMs: audioStartOffsetAvailable ? audioStartOffsetMs : null,
+		capturedDurationMs: report.audioSignal.durationSeconds * 1000,
+		alignedEndRelativeToVideoMs: audioStartOffsetAvailable
+			? audioStartOffsetMs + report.audioSignal.durationSeconds * 1000
+			: null,
+		videoDurationMs: duration * 1000,
+		interpretation:
+			"startDelayMs is the first reliable WASAPI packet timestamp minus the first video timestamp. The test starts its tone later; this offset alone does not prove missing audio or device startup latency.",
+	};
+	report.auxiliaryMuxAudioOffsetMs = audioStartOffsetMs;
 	await command(ffmpegPath, [
 		"-v",
 		"error",
@@ -482,7 +573,7 @@ try {
 		"-i",
 		videoPath,
 		"-itsoffset",
-		String(startDelayMs / 1000),
+		String(audioStartOffsetMs / 1000),
 		"-i",
 		audioPath,
 		"-map",

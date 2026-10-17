@@ -83,10 +83,11 @@ export function useVideoEditorAudio({
 	const previewSourceAudioFallbackPaths = sourceTrackRoutingPolicy.playbackPaths;
 	const shouldMutePreviewVideo = sourceTrackRoutingPolicy.muteEmbeddedPreview;
 
-	const activeClipIdAtCurrentTime = useMemo(
-		() => findClipAtTimelineTime(timelineTime * 1000, clipRegions)?.id ?? null,
+	const activeClipAtCurrentTime = useMemo(
+		() => findClipAtTimelineTime(timelineTime * 1000, clipRegions),
 		[clipRegions, timelineTime],
 	);
+	const activeClipIdAtCurrentTime = activeClipAtCurrentTime?.id ?? null;
 	const isCurrentClipMuted = useMemo(
 		() =>
 			activeClipIdAtCurrentTime === null ||
@@ -120,7 +121,7 @@ export function useVideoEditorAudio({
 		currentTime,
 		timelineTime,
 		duration,
-		sourcePlaybackRate: findClipAtTimelineTime(timelineTime * 1000, clipRegions)?.speed ?? 1,
+		sourcePlaybackRate: activeClipAtCurrentTime?.speed ?? 1,
 		previewSourceAudioFallbackPaths,
 		sourceAudioFallbackStartDelayMsByPath,
 		sourceAudioResourceVersion: sourceAudioFallbackRefreshKey,

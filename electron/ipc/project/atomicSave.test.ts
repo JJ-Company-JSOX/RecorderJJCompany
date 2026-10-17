@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getProjectBackupPath, writeProjectFileAtomically } from "./atomicSave";
 
@@ -15,6 +15,7 @@ describe("writeProjectFileAtomically", () => {
 	});
 
 	afterEach(async () => {
+		vi.restoreAllMocks();
 		await fs.rm(tempDir, { recursive: true, force: true });
 	});
 
@@ -42,6 +43,22 @@ describe("writeProjectFileAtomically", () => {
 		await expect(fs.access(getProjectBackupPath(projectPath))).rejects.toMatchObject({
 			code: "ENOENT",
 		});
+	});
+	it("retains the sole recovery backup when creating its replacement fails", async () => {
+		const backupPath = getProjectBackupPath(projectPath);
+		await fs.writeFile(backupPath, '{"revision":"recovery"}');
+		const rename = fs.rename.bind(fs);
+		vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
+			if (String(target) === projectPath)
+				throw Object.assign(new Error("Disk failure"), { code: "EIO" });
+			return rename(source, target);
+		});
+		await expect(
+			writeProjectFileAtomically(projectPath, '{"revision":2}'),
+		).rejects.toMatchObject({ code: "EIO" });
+		expect(await fs.readFile(backupPath, "utf8")).toBe('{"revision":"recovery"}');
+		await expect(fs.access(projectPath)).rejects.toMatchObject({ code: "ENOENT" });
+		await expectNoTemporaryArtifacts();
 	});
 
 	it("preserves the previous complete generation before replacement", async () => {
@@ -92,6 +109,98 @@ describe("writeProjectFileAtomically", () => {
 		);
 		await expectNoTemporaryArtifacts();
 	});
+
+	it.skipIf(process.platform !== "win32")(
+		"retries a transient Windows destination lock without exposing an incomplete project",
+		async () => {
+			await writeProjectFileAtomically(projectPath, '{"revision":1}');
+			const rename = fs.rename.bind(fs);
+			let attempts = 0;
+			vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
+				if (String(target) === projectPath && ++attempts < 3) {
+					expect(await fs.readFile(projectPath, "utf8")).toBe('{"revision":1}');
+					throw Object.assign(new Error("Sharing violation"), { code: "EPERM" });
+				}
+				return rename(source, target);
+			});
+			await writeProjectFileAtomically(projectPath, '{"revision":2}');
+			expect(attempts).toBe(3);
+			expect(await fs.readFile(projectPath, "utf8")).toBe('{"revision":2}');
+			expect(await fs.readFile(getProjectBackupPath(projectPath), "utf8")).toBe(
+				'{"revision":1}',
+			);
+			await expectNoTemporaryArtifacts();
+		},
+	);
+	it.skipIf(process.platform !== "win32")(
+		"retries a locked backup before replacing the active generation",
+		async () => {
+			await writeProjectFileAtomically(projectPath, '{"revision":1}');
+			const rename = fs.rename.bind(fs);
+			let attempts = 0;
+			vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
+				if (String(target) === getProjectBackupPath(projectPath) && ++attempts === 1) {
+					throw Object.assign(new Error("Backup busy"), { code: "EBUSY" });
+				}
+				return rename(source, target);
+			});
+			await writeProjectFileAtomically(projectPath, '{"revision":2}');
+			expect(attempts).toBe(2);
+			expect(await fs.readFile(projectPath, "utf8")).toBe('{"revision":2}');
+			expect(await fs.readFile(getProjectBackupPath(projectPath), "utf8")).toBe(
+				'{"revision":1}',
+			);
+			await expectNoTemporaryArtifacts();
+		},
+	);
+	it.skipIf(process.platform !== "win32").each([
+		{ code: "EACCES", attempts: 7 },
+		{ code: "EIO", attempts: 1 },
+	])("keeps both generations after $code and allows a later save", async ({ code, attempts }) => {
+		await writeProjectFileAtomically(projectPath, '{"revision":1}');
+		const rename = fs.rename.bind(fs);
+		let actualAttempts = 0;
+		const spy = vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
+			if (String(target) === projectPath) {
+				actualAttempts++;
+				throw Object.assign(new Error("Replacement failed"), { code });
+			}
+			return rename(source, target);
+		});
+		await expect(
+			writeProjectFileAtomically(projectPath, '{"revision":2}'),
+		).rejects.toMatchObject({ code });
+		expect(actualAttempts).toBe(attempts);
+		expect(await fs.readFile(projectPath, "utf8")).toBe('{"revision":1}');
+		expect(await fs.readFile(getProjectBackupPath(projectPath), "utf8")).toBe('{"revision":1}');
+		await expectNoTemporaryArtifacts();
+		spy.mockRestore();
+		await writeProjectFileAtomically(projectPath, '{"revision":3}');
+		expect(await fs.readFile(projectPath, "utf8")).toBe('{"revision":3}');
+	});
+	it.skipIf(process.platform !== "win32")(
+		"continues an already queued newer save after a locked save exhausts retries",
+		async () => {
+			await writeProjectFileAtomically(projectPath, '{"revision":1}');
+			const rename = fs.rename.bind(fs);
+			let attempts = 0;
+			vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
+				if (String(target) === projectPath && ++attempts <= 7)
+					throw Object.assign(new Error("Locked"), { code: "EPERM" });
+				return rename(source, target);
+			});
+			const results = await Promise.allSettled([
+				writeProjectFileAtomically(projectPath, '{"revision":2}'),
+				writeProjectFileAtomically(projectPath, '{"revision":3}'),
+			]);
+			expect(results.map((result) => result.status)).toEqual(["rejected", "fulfilled"]);
+			expect(await fs.readFile(projectPath, "utf8")).toBe('{"revision":3}');
+			expect(await fs.readFile(getProjectBackupPath(projectPath), "utf8")).toBe(
+				'{"revision":1}',
+			);
+			await expectNoTemporaryArtifacts();
+		},
+	);
 
 	it.skipIf(process.platform === "win32")(
 		"preserves exact project permission bits despite the process umask",

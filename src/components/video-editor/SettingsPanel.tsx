@@ -8,7 +8,7 @@ import { ProgressBar } from "@heroui/react";
 import { ColorControl, ColorPalette } from "@/components/ui/color-picker";
 import { Palette, Trash as Trash2, UploadSimple as Upload } from "@/components/ui/icons";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import minimalCursorUrl from "@/assets/cursors/custom/minimal-cursor.svg";
 import { Button } from "@/components/ui/button";
@@ -880,7 +880,7 @@ function CursorStylePreview({
 	);
 }
 
-export function SettingsPanel({
+export const SettingsPanel = memo(function SettingsPanel({
 	accountUser = null,
 	onShowOnboarding,
 	advanced = false,
@@ -2258,12 +2258,25 @@ export function SettingsPanel({
 			<SettingsSections
 				categories={
 					advanced
-						? ["general", ...(ACCOUNTS_ENABLED ? ["account" as const] : []), "permissions", "motion", "advanced"]
-						: ["general", ...(ACCOUNTS_ENABLED ? ["account" as const] : []), "permissions", "motion"]
+						? [
+								"general",
+								...(ACCOUNTS_ENABLED ? ["account" as const] : []),
+								"permissions",
+								"motion",
+								"advanced",
+							]
+						: [
+								"general",
+								...(ACCOUNTS_ENABLED ? ["account" as const] : []),
+								"permissions",
+								"motion",
+							]
 				}
 			>
 				<SettingsCategory category="account">
-					{ACCOUNTS_ENABLED && <AccountSettings key={accountUser?.id ?? "signed-out"} user={accountUser} />}
+					{ACCOUNTS_ENABLED && (
+						<AccountSettings key={accountUser?.id ?? "signed-out"} user={accountUser} />
+					)}
 				</SettingsCategory>
 				<SettingsCategory category="permissions">
 					<RecordingPermissionsSettings onReview={onShowOnboarding} />
@@ -3380,4 +3393,4 @@ export function SettingsPanel({
 			</div>
 		</Card>
 	);
-}
+});

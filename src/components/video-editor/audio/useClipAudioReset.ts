@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import type { useTimelineState } from "../state/useTimelineState";
 
 type Input = Pick<
@@ -18,25 +19,26 @@ export function useClipAudioReset({
 		...defaultSourceAudioTrackSettings,
 		...(selectedClipId ? sourceAudioTrackSettingsByClip[selectedClipId] : {}),
 	};
+	const onResetClipAudio = useCallback(() => {
+		if (!selectedClipId) return;
+		setSourceAudioTrackSettingsByClip((current) => {
+			const effective = {
+				...defaultSourceAudioTrackSettings,
+				...current[selectedClipId],
+			};
+			// Explicit neutral values also override inherited project settings.
+			return {
+				...current,
+				[selectedClipId]: Object.fromEntries(
+					Object.keys(effective).map((id) => [id, { volume: 1, normalize: false }]),
+				),
+			};
+		});
+	}, [selectedClipId, defaultSourceAudioTrackSettings, setSourceAudioTrackSettingsByClip]);
 	return {
 		hasClipAudioOverrides:
 			selectedClipId !== null &&
 			Object.values(settings).some((setting) => setting.volume !== 1 || setting.normalize),
-		onResetClipAudio: () => {
-			if (!selectedClipId) return;
-			setSourceAudioTrackSettingsByClip((current) => {
-				const effective = {
-					...defaultSourceAudioTrackSettings,
-					...current[selectedClipId],
-				};
-				// Explicit neutral values also override inherited project settings.
-				return {
-					...current,
-					[selectedClipId]: Object.fromEntries(
-						Object.keys(effective).map((id) => [id, { volume: 1, normalize: false }]),
-					),
-				};
-			});
-		},
+		onResetClipAudio,
 	};
 }

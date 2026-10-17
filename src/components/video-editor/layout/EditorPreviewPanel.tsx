@@ -17,7 +17,7 @@ import {
 	SpeakerLow,
 	SpeakerX,
 } from "@/components/ui/icons";
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import { type Dispatch, type RefObject, type SetStateAction, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -119,79 +119,76 @@ export function EditorPreviewPanel(props: Props) {
 		setError,
 	} = props;
 
+	const previewToolbar = useMemo(
+		() => (
+			<div className="flex h-10 shrink-0 items-center justify-center gap-3">
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+							<span className="font-medium">{getAspectRatioLabel(aspectRatio)}</span>
+							<CaretDown className="h-3 w-3" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="center">
+						{ASPECT_RATIOS.map((ratio) => (
+							<DropdownMenuItem
+								key={ratio}
+								onClick={() => setAspectRatio(ratio)}
+								className="flex cursor-pointer items-center justify-between gap-3 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+							>
+								<span>{getAspectRatioLabel(ratio)}</span>
+								{aspectRatio === ratio ? (
+									<Check className="h-3 w-3 text-[#2563EB]" />
+								) : null}
+							</DropdownMenuItem>
+						))}
+					</DropdownMenuContent>
+				</DropdownMenu>
+				<div className="h-4 w-px bg-foreground/20" />
+				<label
+					className="flex items-center gap-1 text-xs text-muted-foreground"
+					title={t(
+						"editor.previewQuality.help",
+						"Preview only; exported quality follows your export settings.",
+					)}
+				>
+					<span>{t("editor.previewQuality.label", "Preview")}</span>
+					<select
+						className="rounded bg-editor-bg px-1 py-1"
+						aria-label={t("editor.previewQuality.label", "Preview")}
+						value={previewQuality}
+						onChange={(event) =>
+							setPreviewQuality(event.target.value === "full" ? "full" : "balanced")
+						}
+					>
+						<option value="balanced">
+							{t("editor.previewQuality.balanced", "Balanced (720p)")}
+						</option>
+						<option value="full">
+							{t("editor.previewQuality.full", "Full display quality")}
+						</option>
+					</select>
+				</label>
+				<Button
+					variant="ghost"
+					size="sm"
+					onClick={handleOpenCropEditor}
+					className="h-7 gap-1.5 px-2 text-xs"
+				>
+					<Crop className="h-3.5 w-3.5" />
+					<span className="font-medium">{t("settings.crop.title")}</span>
+					{isCropped ? <span className="h-1.5 w-1.5 rounded-full bg-[#2563EB]" /> : null}
+				</Button>
+			</div>
+		),
+		[aspectRatio, t, previewQuality, setAspectRatio, handleOpenCropEditor, isCropped],
+	);
+
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 			<div className="flex min-h-0 flex-1 flex-col">
 				<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-					<div className="flex h-10 shrink-0 items-center justify-center gap-3">
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button
-									variant="ghost"
-									size="sm"
-									className="h-7 gap-1 px-2 text-xs"
-								>
-									<span className="font-medium">
-										{getAspectRatioLabel(aspectRatio)}
-									</span>
-									<CaretDown className="h-3 w-3" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="center">
-								{ASPECT_RATIOS.map((ratio) => (
-									<DropdownMenuItem
-										key={ratio}
-										onClick={() => setAspectRatio(ratio)}
-										className="flex cursor-pointer items-center justify-between gap-3 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
-									>
-										<span>{getAspectRatioLabel(ratio)}</span>
-										{aspectRatio === ratio ? (
-											<Check className="h-3 w-3 text-[#2563EB]" />
-										) : null}
-									</DropdownMenuItem>
-								))}
-							</DropdownMenuContent>
-						</DropdownMenu>
-						<div className="h-4 w-px bg-foreground/20" />
-						<label
-							className="flex items-center gap-1 text-xs text-muted-foreground"
-							title={t(
-								"editor.previewQuality.help",
-								"Preview only; exported quality follows your export settings.",
-							)}
-						>
-							<span>{t("editor.previewQuality.label", "Preview")}</span>
-							<select
-								className="rounded bg-editor-bg px-1 py-1"
-								aria-label={t("editor.previewQuality.label", "Preview")}
-								value={previewQuality}
-								onChange={(event) =>
-									setPreviewQuality(
-										event.target.value === "full" ? "full" : "balanced",
-									)
-								}
-							>
-								<option value="balanced">
-									{t("editor.previewQuality.balanced", "Balanced (720p)")}
-								</option>
-								<option value="full">
-									{t("editor.previewQuality.full", "Full display quality")}
-								</option>
-							</select>
-						</label>
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={handleOpenCropEditor}
-							className="h-7 gap-1.5 px-2 text-xs"
-						>
-							<Crop className="h-3.5 w-3.5" />
-							<span className="font-medium">{t("settings.crop.title")}</span>
-							{isCropped ? (
-								<span className="h-1.5 w-1.5 rounded-full bg-[#2563EB]" />
-							) : null}
-						</Button>
-					</div>
+					{previewToolbar}
 					<div
 						className="flex min-h-0 w-full flex-1 items-stretch px-4 py-3"
 						style={{ flex: "1 1 auto", margin: 0 }}

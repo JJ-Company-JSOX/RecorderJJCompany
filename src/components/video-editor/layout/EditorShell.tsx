@@ -42,6 +42,7 @@ import { EditorHeader } from "./EditorHeader";
 import { EditorPreviewPanel } from "./EditorPreviewPanel";
 import { EditorSidebar } from "./EditorSidebar";
 import { EditorTimelinePanel } from "./EditorTimelinePanel";
+import type { EditorEffectSection } from "../types";
 const AutoEditPanel = lazy(() =>
 	import("../auto-edit/AutoEditPanel").then((module) => ({ default: module.AutoEditPanel })),
 );
@@ -79,14 +80,18 @@ export function EditorShell(props: Props) {
 	const [signInReason, setSignInReason] = useState<SignInReason>("account");
 	const [shareRequestNonce, setShareRequestNonce] = useState(0);
 	const auth = useRecordlyAuth();
-	const requestSignIn = (reason: SignInReason) => {
-		if (reason === "share" && auth.user) {
-			setShareRequestNonce((value) => value + 1);
-			return;
-		}
-		setSignInReason(reason);
-		setSignInOpen(true);
-	};
+	const requestSignIn = useCallback(
+		(reason: SignInReason) => {
+			if (reason === "share" && auth.user) {
+				setShareRequestNonce((value) => value + 1);
+				return;
+			}
+			setSignInReason(reason);
+			setSignInOpen(true);
+		},
+		[auth.user],
+	);
+	const openAccount = useCallback(() => requestSignIn("account"), [requestSignIn]);
 	const handleAuthenticated = useCallback(() => {
 		setSignInOpen(false);
 		if (signInReason === "share") setShareRequestNonce((value) => value + 1);
@@ -114,6 +119,26 @@ export function EditorShell(props: Props) {
 		previewAspectRatioValue,
 	} = props;
 	const library = useRecordingLibrary(project, timeline, ui, appearance);
+	const selectEffectSection = useCallback(
+		(section: EditorEffectSection) => {
+			library.setOpen(false);
+			timeline.setSelectedAnnotationId(null);
+			timeline.setSelectedZoomId(null);
+			timeline.setSelectedClipId(null);
+			timeline.setSelectedAudioId(null);
+			timeline.setSelectedCaptionId(null);
+			ui.setActiveEffectSection(section);
+		},
+		[
+			library.setOpen,
+			timeline.setSelectedAnnotationId,
+			timeline.setSelectedZoomId,
+			timeline.setSelectedClipId,
+			timeline.setSelectedAudioId,
+			timeline.setSelectedCaptionId,
+			ui.setActiveEffectSection,
+		],
+	);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Changing the active inspector closes the Videos view.
 	useEffect(() => {
 		library.setOpen(false);
@@ -407,21 +432,13 @@ export function EditorShell(props: Props) {
 				<div className="relative z-10 flex min-h-0 flex-1 pt-3">
 					<EditorSidebar
 						accountUser={auth.user}
-						onAccountClick={() => requestSignIn("account")}
+						onAccountClick={openAccount}
 						panelContent={
 							library.open ? <RecordingLibraryPanel library={library} /> : undefined
 						}
 						t={t}
 						activeSection={ui.activeEffectSection}
-						setActiveSection={(section) => {
-							library.setOpen(false);
-							timeline.setSelectedAnnotationId(null);
-							timeline.setSelectedZoomId(null);
-							timeline.setSelectedClipId(null);
-							timeline.setSelectedAudioId(null);
-							timeline.setSelectedCaptionId(null);
-							ui.setActiveEffectSection(section);
-						}}
+						setActiveSection={selectEffectSection}
 						settingsPanelProps={{
 							...settingsPanelProps,
 							accountUser: auth.user,

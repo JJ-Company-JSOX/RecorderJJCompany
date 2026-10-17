@@ -1895,10 +1895,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		}, [videoPath]);
 
 		useEffect(() => {
-			onPreviewReadyChange?.(videoReady);
-		}, [onPreviewReadyChange, videoReady]);
-
-		useEffect(() => {
 			if (!pixiReady || !videoReady) return;
 
 			const video = videoRef.current;
@@ -1998,6 +1994,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				videoSpriteRef.current = null;
 			};
 		}, [autoPlay, onPlayStateChange, onTimeUpdate, pixiReady, videoReady]);
+
+		useEffect(() => {
+			// Media metadata can arrive before Pixi/transport initialization. A
+			// ready preview must accept Play immediately, even on a cold launch.
+			onPreviewReadyChange?.(pixiReady && videoReady && clipPlaybackRef.current !== null);
+		}, [onPreviewReadyChange, pixiReady, videoReady]);
 
 		useEffect(() => {
 			if (!pixiReady || !videoReady) return;

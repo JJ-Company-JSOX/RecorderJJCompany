@@ -187,6 +187,8 @@ function isBundledAssetPath(asset: string): boolean {
 }
 
 export async function getRenderableVideoUrl(asset: string): Promise<string> {
+	const localFile = toLocalFilePath(asset);
+	if (localFile) return resolveLocalMediaUrl(localFile);
 	const serverPath = getLocalMediaServerPath(asset);
 	if (serverPath) return resolveLocalMediaUrl(serverPath);
 	if (
@@ -204,7 +206,9 @@ export async function getRenderableVideoUrl(asset: string): Promise<string> {
 	}
 
 	if (asset.startsWith("/") && !asset.startsWith("//")) {
-		return getAssetPath(asset.replace(/^\/+/, ""));
+		const bundledUrl = await getAssetPath(asset.replace(/^\/+/, ""));
+		const bundledFile = toLocalFilePath(bundledUrl);
+		return bundledFile ? resolveLocalMediaUrl(bundledFile) : bundledUrl;
 	}
 
 	return asset;

@@ -993,7 +993,9 @@ export function createEditorWindow(): BrowserWindow {
 			preload: path.join(electronWindowsDir, "preload.mjs"),
 			nodeIntegration: false,
 			contextIsolation: true,
-			webSecurity: false,
+			// Chromium 150 disables WebCodecs when web security is disabled.
+			// Local media is served through the allowlisted loopback media server.
+			webSecurity: true,
 			backgroundThrottling: false,
 		},
 	});

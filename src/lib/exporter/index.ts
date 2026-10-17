@@ -1,5 +1,6 @@
 export { FrameRenderer } from "./frameRenderer";
-export { calculateOutputDimensions, GifExporter } from "./gifExporter";
+export { GifExporter } from "./gifExporter";
+export { calculateOutputDimensions } from "./outputDimensions";
 export { ModernVideoExporter } from "./modernVideoExporter";
 export type {
 	SupportedMp4Dimensions,

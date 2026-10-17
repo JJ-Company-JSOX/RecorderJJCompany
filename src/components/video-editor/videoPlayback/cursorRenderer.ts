@@ -1201,7 +1201,7 @@ export class PixiCursorOverlay {
 	}
 
 	setFilterResolution(resolution: number) {
-		this.cursorMotionBlurFilter.resolution = Math.max(1, resolution);
+		this.cursorMotionBlurFilter.resolution = Math.max(0.1, resolution);
 	}
 
 	setClickBounce(clickBounce: number) {

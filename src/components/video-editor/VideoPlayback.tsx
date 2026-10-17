@@ -1,4 +1,5 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
+import { getPreviewResolution, usePreviewQuality } from "@/lib/previewQuality";
 import { MotionBlurFilter } from "pixi-filters/motion-blur";
 import { ZoomBlurFilter } from "pixi-filters/zoom-blur";
 import type React from "react";
@@ -377,6 +378,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const videoRef = useRef<HTMLVideoElement | null>(null);
 		const previewVideoSourceRef = useRef(new PreviewVideoSource());
 		const attachVideo = useCallback((video: HTMLVideoElement | null) => {
+			if (!video) {
+				// Ref detachment precedes passive-effect cleanup. Remove the sprite
+				// before destroying its source so no pending render samples freed GPU state.
+				appRef.current?.ticker.stop();
+				const sprite = videoSpriteRef.current;
+				sprite?.parent?.removeChild(sprite);
+			}
 			// VideoSource.destroy() clears the media URL, so only destroy it when
 			// React detaches the element, never during a layout effect cleanup.
 			previewVideoSourceRef.current.setVideo(video);
@@ -525,9 +533,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		);
 		const cursorFollowCameraNeedsResetRef = useRef(false);
 		/** Requests one exact composition after an output-affecting edit while paused. */
+		const previewQuality = usePreviewQuality();
+		const previewQualityRef = useRef(previewQuality);
+		previewQualityRef.current = previewQuality;
 		const requestPausedFrameRefresh = useCallback(() => {
 			if (!isPlayingRef.current) {
 				shouldSnapPausedFrameRef.current = true;
+				if (!suspendRenderingRef.current) appRef.current?.ticker.start();
 			}
 		}, []);
 
@@ -559,7 +571,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								backgroundAlpha: 0,
 								antialias: true,
 								failIfMajorPerformanceCaveat: false,
-								resolution: window.devicePixelRatio || 1,
+								resolution: getPreviewResolution(
+									container.clientWidth,
+									container.clientHeight,
+									window.devicePixelRatio,
+									previewQualityRef.current,
+								),
 								autoDensity: true,
 								preference: backend,
 								autoStart: true,
@@ -959,10 +976,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				return;
 			}
 
-			const filterResolution = Math.max(
-				1,
-				app.renderer.resolution || window.devicePixelRatio || 1,
-			);
+			const filterResolution = app.renderer.resolution || 1;
 			const stageWidth = Math.max(1, stageSizeRef.current.width || app.screen.width);
 			const stageHeight = Math.max(1, stageSizeRef.current.height || app.screen.height);
 
@@ -1017,6 +1031,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			});
 
 			if (result) {
+				const resolution = getPreviewResolution(
+					container.clientWidth,
+					container.clientHeight,
+					window.devicePixelRatio,
+					previewQuality,
+				);
+				if (app.renderer.resolution !== resolution)
+					app.renderer.resize(container.clientWidth, container.clientHeight, resolution);
 				stageSizeRef.current = result.stageSize;
 				setPreviewViewportWidth((current) =>
 					Math.abs(current - result.stageSize.width) < 0.5
@@ -1063,8 +1085,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 				updateOverlayForRegion(activeRegion);
 				applyWebcamBubbleLayout(animationStateRef.current.appliedScale || 1);
+				requestPausedFrameRefresh();
 			}
 		}, [
+			previewQuality,
+			requestPausedFrameRefresh,
 			updateOverlayForRegion,
 			cropRegion,
 			borderRadius,
@@ -1102,10 +1127,18 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				return clipPlaybackRef.current?.isPlaying ?? false;
 			},
 			seekTimeline: (time) => clipPlaybackRef.current?.seek(time),
-			video: videoRef.current,
-			app: appRef.current,
-			videoSprite: videoSpriteRef.current,
-			videoContainer: videoContainerRef.current,
+			get video() {
+				return videoRef.current;
+			},
+			get app() {
+				return appRef.current;
+			},
+			get videoSprite() {
+				return videoSpriteRef.current;
+			},
+			get videoContainer() {
+				return videoContainerRef.current;
+			},
 			containerRef,
 			play: async () => {
 				await clipPlaybackRef.current?.play();
@@ -1920,6 +1953,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				},
 				onPlaying: (playing) => {
 					isPlayingRef.current = playing;
+					if (playing && !suspendRenderingRef.current) appRef.current?.ticker.start();
 					onPlayStateChange(playing);
 				},
 				onError: (error) =>
@@ -1937,10 +1971,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				if (!preserveCameraAcrossCut || !isPlayingRef.current)
 					shouldSnapPausedFrameRef.current = true;
 				preserveCameraAcrossCut = false;
+				if (!suspendRenderingRef.current) appRef.current?.ticker.start();
 			};
 			const handleSeeking = () => {
 				isSeekingRef.current = true;
 				if (!preserveCameraAcrossCut) shouldSnapPausedFrameRef.current = true;
+				if (!suspendRenderingRef.current) appRef.current?.ticker.start();
 			};
 			video.addEventListener("seeked", handleSeeked);
 			video.addEventListener("seeking", handleSeeking);
@@ -2054,6 +2090,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						shouldSnapPausedFrame: shouldSnapPausedFrameRef.current,
 					})
 				) {
+					if (
+						!isPlayingRef.current &&
+						!isSeekingRef.current &&
+						!videoRef.current?.seeking
+					)
+						app.ticker.stop();
 					return;
 				}
 				lastRenderedContentTimeRef.current = contentTimeMs;
@@ -2206,6 +2248,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				if (shouldSnapPausedFrameRef.current) {
 					shouldSnapPausedFrameRef.current = false;
 				}
+				// Pixi also registers a LOW-priority GPU render listener. Stop its clock
+				// after this final paused frame; edits, seeks and play explicitly wake it.
+				if (!isPlayingRef.current && !isSeekingRef.current && !videoRef.current?.seeking)
+					app.ticker.stop();
 			};
 
 			app.ticker.add(ticker);
@@ -2432,6 +2478,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				{/* Background layer */}
 				{resolvedWallpaperKind === "video" && resolvedWallpaper ? (
 					<video
+						crossOrigin="anonymous"
 						key={resolvedWallpaper}
 						ref={bgVideoRef}
 						className="absolute object-cover"
@@ -2524,6 +2571,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 											style={webcamCropPreviewContentStyle}
 										>
 											<video
+												crossOrigin="anonymous"
 												ref={webcamVideoRef}
 												src={webcamVideoPath}
 												className="pointer-events-none absolute inset-0 block h-full w-full object-fill"
@@ -2860,6 +2908,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				{/* Keep the source video off-screen instead of display:none so the
 					browser continues producing presented frames for Pixi and preview sync. */}
 				<video
+					crossOrigin="anonymous"
 					ref={attachVideo}
 					src={videoPath}
 					className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"

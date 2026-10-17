@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { setPreviewQuality } from "@/lib/previewQuality";
 import { createRoot } from "react-dom/client";
 import VideoPlayback, { type VideoPlaybackRef } from "@/components/video-editor/VideoPlayback";
 import { I18nProvider } from "@/contexts/I18nContext";
@@ -34,6 +35,21 @@ function Preview() {
 	const [time, setTime] = useState(0.8);
 	const [blur, setBlur] = useState(true);
 	const [ready, setReady] = useState(false);
+	const renderCount = useRef(0);
+	const [observedRenderCount, setObservedRenderCount] = useState(0);
+	const observedRenderer = useRef<VideoPlaybackRef["app"]>(null);
+	const readRenderCount = () => {
+		const app = playback.current?.app;
+		if (app && observedRenderer.current !== app) {
+			observedRenderer.current = app;
+			const original = app.renderer.render.bind(app.renderer);
+			app.renderer.render = (...args) => {
+				renderCount.current++;
+				return original(...args);
+			};
+		}
+		setObservedRenderCount(renderCount.current);
+	};
 	const [cameraOffset, setCameraOffset] = useState<number | null>(null);
 	const onTimeUpdate = useCallback((nextTime: number) => {
 		setTime(nextTime);
@@ -47,9 +63,13 @@ function Preview() {
 			style={{ width: autoZoom ? 400 : 900 }}
 			data-ready={ready}
 			data-camera-offset={cameraOffset}
+			data-render-count={observedRenderCount}
 		>
 			<button onClick={() => playback.current?.play()}>Play</button>
 			<button onClick={() => playback.current?.pause()}>Pause</button>
+			<button onClick={readRenderCount}>Read render count</button>
+			<button onClick={() => setPreviewQuality("full")}>Full preview</button>
+			<button onClick={() => setPreviewQuality("balanced")}>Balanced preview</button>
 			<button onClick={() => setBlur((value) => !value)}>Toggle blur</button>
 			<button onClick={() => playback.current?.seekTimeline(3)}>Seek elsewhere</button>
 			<button onClick={() => playback.current?.seekTimeline(0.8)}>Seek back</button>

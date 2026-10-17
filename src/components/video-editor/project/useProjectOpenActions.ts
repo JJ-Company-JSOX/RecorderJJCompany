@@ -136,6 +136,9 @@ export function useProjectOpenActions({
 			project.setCurrentProjectPath(null);
 			project.setLastSavedSnapshot(null);
 			resetSourceScopedEditorState();
+			// Importing the currently open file still resets the timeline. Reload its
+			// metadata too, since React keeps the same video element and source URL.
+			if (project.videoPath === sourceVideoUrl) videoPlaybackRef.current?.video?.load();
 			pendingFreshRecordingAutoZoomPathRef.current =
 				appearance.autoApplyFreshRecordingAutoZooms ? sourceVideoUrl : null;
 			appearance.setWebcam((previous) => ({

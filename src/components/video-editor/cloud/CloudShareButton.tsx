@@ -17,7 +17,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Export, LinkSimple } from "@phosphor-icons/react";
+import { Export } from "@phosphor-icons/react/dist/csr/Export";
+import { LinkSimple } from "@phosphor-icons/react/dist/csr/LinkSimple";
 import { Label } from "@/components/ui/label";
 
 import { CLOUD_SHARE_ENDPOINT as DEFAULT_CLOUD_ENDPOINT } from "./endpoint";

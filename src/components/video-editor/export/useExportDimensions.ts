@@ -1,13 +1,15 @@
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	calculateOutputDimensions,
 	DEFAULT_MP4_CODEC,
+	probeSupportedMp4Dimensions,
+	type SupportedMp4Dimensions,
+} from "@/lib/exporter/mp4Support";
+import { calculateOutputDimensions } from "@/lib/exporter/outputDimensions";
+import {
 	type ExportMp4FrameRate,
 	GIF_SIZE_PRESETS,
 	type GifSizePreset,
-	probeSupportedMp4Dimensions,
-	type SupportedMp4Dimensions,
-} from "@/lib/exporter";
+} from "@/lib/exporter/types";
 import { getSourceQualityBitrate } from "@/lib/exporter/exportBitrate";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 import {

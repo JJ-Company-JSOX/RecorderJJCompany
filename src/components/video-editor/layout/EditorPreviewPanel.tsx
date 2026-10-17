@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { setPreviewQuality, usePreviewQuality } from "@/lib/previewQuality";
 import { Slider } from "@/components/ui/slider";
 import {
 	CaretDown,
@@ -82,6 +83,7 @@ function formatTime(seconds: number) {
 }
 
 export function EditorPreviewPanel(props: Props) {
+	const previewQuality = usePreviewQuality();
 	const {
 		t,
 		videoPath,
@@ -151,6 +153,32 @@ export function EditorPreviewPanel(props: Props) {
 							</DropdownMenuContent>
 						</DropdownMenu>
 						<div className="h-4 w-px bg-foreground/20" />
+						<label
+							className="flex items-center gap-1 text-xs text-muted-foreground"
+							title={t(
+								"editor.previewQuality.help",
+								"Preview only; exported quality follows your export settings.",
+							)}
+						>
+							<span>{t("editor.previewQuality.label", "Preview")}</span>
+							<select
+								className="rounded bg-editor-bg px-1 py-1"
+								aria-label={t("editor.previewQuality.label", "Preview")}
+								value={previewQuality}
+								onChange={(event) =>
+									setPreviewQuality(
+										event.target.value === "full" ? "full" : "balanced",
+									)
+								}
+							>
+								<option value="balanced">
+									{t("editor.previewQuality.balanced", "Balanced (720p)")}
+								</option>
+								<option value="full">
+									{t("editor.previewQuality.full", "Full display quality")}
+								</option>
+							</select>
+						</label>
 						<Button
 							variant="ghost"
 							size="sm"

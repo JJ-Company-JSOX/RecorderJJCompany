@@ -1,0 +1,18 @@
+// Local unsigned test build: use the installed Electron runtime and prebuilt
+// native helpers. No C++ compiler, signing tools, installer or publishing step.
+{
+  "extends": "./electron-builder.json5",
+  "electronDist": "node_modules/electron/dist",
+  "npmRebuild": false,
+  "buildDependenciesFromSource": false,
+  "publish": null,
+  "extraFiles": [
+    {
+      "from": "scripts/launch-windows-test.cmd",
+      "to": "Start-Jsox-Test.cmd"
+    }
+  ],
+  "win": {
+    "signAndEditExecutable": false
+  }
+}

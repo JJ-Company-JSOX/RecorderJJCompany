@@ -109,6 +109,13 @@ export default defineConfig(({ mode }) => ({
 			"@": path.resolve(__dirname, "src"),
 		},
 	},
+	server: {
+		watch: {
+			// Diagnostic Electron profiles contain locked databases; neither these
+			// files nor generated test packages should trigger source reloads.
+			ignored: ["**/.tmp/**", "**/release/**", "**/electron/native/**/build/**"],
+		},
+	},
 	optimizeDeps: {
 		entries: ["index.html"],
 		// React Aria imports this CommonJS shim through its ESM collection modules.

@@ -1,9 +1,13 @@
 import { Skeleton } from "@heroui/react";
 import type { ProjectPreviewData } from "@/types/projectPreview";
-import { ProjectHoverPreview } from "./ProjectHoverPreview";
 import { ImageSquare } from "@/components/ui/icons";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { toFileUrl } from "../projectPersistence";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { fromFileUrl, toFileUrl } from "../projectPersistence";
+import { getRenderableAssetUrl } from "@/lib/assetPath";
+
+const ProjectHoverPreview = lazy(() =>
+	import("./ProjectHoverPreview").then((module) => ({ default: module.ProjectHoverPreview })),
+);
 export function ProjectThumbnail({
 	path,
 	projectPath,
@@ -21,8 +25,34 @@ export function ProjectThumbnail({
 	const [failedSource, setFailedSource] = useState<string | null>(null);
 	const [visible, setVisible] = useState(false);
 	const [preview, setPreview] = useState<ProjectPreviewData | null>(null);
+	const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+	useEffect(() => {
+		let active = true;
+		setThumbnailUrl(null);
+		if (path) {
+			void (async () => {
+				if (!/^(data:|blob:|https?:)/.test(path) && window.electronAPI?.getLocalMediaUrl) {
+					const result = await window.electronAPI.getLocalMediaUrl(fromFileUrl(path));
+					if (result.success) return result.url;
+				}
+				return getRenderableAssetUrl(
+					/^(data:|blob:|https?:|file:)/.test(path) ? path : toFileUrl(path),
+				);
+			})()
+				.then((url) => {
+					if (active) setThumbnailUrl(url);
+				})
+				.catch(() => {
+					if (active) setFailedSource(`${path}:${revision}`);
+				});
+		}
+		return () => {
+			active = false;
+		};
+	}, [path, revision]);
 	const host = useRef<HTMLDivElement>(null);
 	const finish = useCallback(() => setPreview(null), []);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Reload hover data after the saved project revision changes.
 	useEffect(() => {
 		if (
 			!previewActive ||
@@ -71,12 +101,12 @@ export function ProjectThumbnail({
 			{path && loadedSource !== sourceKey && failedSource !== sourceKey && (
 				<Skeleton className="absolute inset-0 rounded-xl" />
 			)}
-			{path && failedSource !== sourceKey ? (
+			{path && thumbnailUrl && failedSource !== sourceKey ? (
 				<img
 					src={
-						/^(data:|blob:)/.test(path)
-							? path
-							: `${/^https?:/.test(path) ? path : toFileUrl(path)}?v=${revision}`
+						/^(data:|blob:)/.test(thumbnailUrl)
+							? thumbnailUrl
+							: `${thumbnailUrl}${thumbnailUrl.includes("?") ? "&" : "?"}v=${revision}`
 					}
 					alt=""
 					loading="lazy"
@@ -98,7 +128,11 @@ export function ProjectThumbnail({
 			) : (
 				<ImageSquare weight="fill" className="size-8 text-muted-foreground/20" />
 			)}
-			{previewActive && preview && <ProjectHoverPreview data={preview} onFinish={finish} />}
+			{previewActive && preview && (
+				<Suspense fallback={null}>
+					<ProjectHoverPreview data={preview} onFinish={finish} />
+				</Suspense>
+			)}
 		</div>
 	);
 }

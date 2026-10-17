@@ -29,6 +29,7 @@ export function useCursorTelemetry({
 	const pendingRetryTimeoutRef = useRef<number | null>(null);
 	const { setCursorTelemetry, setCursorTelemetrySourcePath } = timeline;
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Metadata reset is also a same-source reimport signal.
 	useEffect(() => {
 		let mounted = true;
 		let retryAttempts = 0;
@@ -84,6 +85,9 @@ export function useCursorTelemetry({
 	}, [
 		videoPath,
 		videoSourcePath,
+		// Reimporting the same file resets source-scoped state and metadata.
+		// Restore its cursor samples even when neither path string changes.
+		duration,
 		setCursorTelemetry,
 		setCursorTelemetrySourcePath,
 		pendingFreshRecordingAutoZoomPathRef,

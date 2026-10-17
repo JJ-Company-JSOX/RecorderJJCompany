@@ -1,6 +1,7 @@
 import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ArrowRight, GithubLogo } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { GithubLogo } from "@phosphor-icons/react/dist/csr/GithubLogo";
 import { OnboardingPermissions } from "./OnboardingPermissions";
 import {
 	OnboardingBody,

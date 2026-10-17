@@ -295,4 +295,5 @@ export const Palette = solar(PaletteLinear, PaletteBold);
 export const PuzzlePiece = solar(WidgetAddLinear, WidgetAddBold);
 export const TranslateIcon = solar(TranslationLinear, TranslationBold);
 // Provider logos are brands, not selectable application icons.
-export { GoogleLogo, XLogo } from "@phosphor-icons/react";
+export { GoogleLogo } from "@phosphor-icons/react/dist/csr/GoogleLogo";
+export { XLogo } from "@phosphor-icons/react/dist/csr/XLogo";

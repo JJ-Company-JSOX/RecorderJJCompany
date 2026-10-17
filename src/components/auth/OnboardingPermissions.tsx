@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@heroui/react";
-import { ArrowLeft, ArrowRight, Check, Cursor, Monitor } from "@phosphor-icons/react";
+import { ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { Check } from "@phosphor-icons/react/dist/csr/Check";
+import { Cursor } from "@phosphor-icons/react/dist/csr/Cursor";
+import { Monitor } from "@phosphor-icons/react/dist/csr/Monitor";
 import { OnboardingBody, OnboardingFooter, OnboardingHeader } from "./OnboardingLayout";
 import { PermissionsConfetti } from "./PermissionsConfetti";
 

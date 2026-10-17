@@ -1,5 +1,7 @@
 import { ExportErrorReportButton } from "@/components/feedback/ExportErrorReportButton";
-import { LinkSimple, HardDrive, Export } from "@phosphor-icons/react";
+import { LinkSimple } from "@phosphor-icons/react/dist/csr/LinkSimple";
+import { HardDrive } from "@phosphor-icons/react/dist/csr/HardDrive";
+import { Export } from "@phosphor-icons/react/dist/csr/Export";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CloudShareButton } from "../cloud/CloudShareButton";
 import { Card, TagGroup, Tag } from "@heroui/react";

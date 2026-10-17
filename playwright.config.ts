@@ -3,11 +3,13 @@ export default defineConfig({
 	testDir: "./tests/ui",
 	timeout: 30000,
 	use: {
+		...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}),
 		baseURL: "http://127.0.0.1:5178",
 		viewport: { width: 1440, height: 1000 },
 		trace: "retain-on-failure",
 	},
 	webServer: {
+		timeout: 180000,
 		env: {
 			RECORDLY_RENDERER_ONLY: "1",
 			VITE_SUPABASE_URL: "https://auth.recordly.test",

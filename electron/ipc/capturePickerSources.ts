@@ -10,7 +10,8 @@ const exec = promisify(execFile);
 
 // GetTopWindow/GetWindow walks front to back. Restrict the result to Electron's
 // capturable sources rather than inventing source IDs or changing capture routes.
-const WINDOWS_SCRIPT = `Add-Type -TypeDefinition @"
+const WINDOWS_SCRIPT = `$ErrorActionPreference = "Stop"
+Add-Type -TypeDefinition @"
 using System; using System.Runtime.InteropServices; using System.Collections.Generic;
 public static class RecordlyPickerWindows {
  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
@@ -76,14 +77,36 @@ export async function listCapturePickerWindows(): Promise<CapturePickerWindow[]>
 			typeof source.id === "string" && source.id.startsWith("window:"),
 	);
 	const byId = new Map(capturable.map((source) => [parseWindowId(source.id), source]));
-	const { stdout } = await exec(
-		"powershell.exe",
-		["-NoProfile", "-NonInteractive", "-Command", WINDOWS_SCRIPT],
-		{ timeout: 10000, maxBuffer: 4 * 1024 * 1024 },
-	);
-	const entries: unknown = JSON.parse(stdout);
-	if (!Array.isArray(entries)) throw new Error("Unable to read window positions.");
+	if (capturable.length === 0) return [];
+	let entries: unknown;
+	try {
+		// UTF-16LE encoded commands preserve C# here-string quotes across the
+		// Windows argv parser; hide the helper's console while the picker opens.
+		const { stdout } = await exec(
+			"powershell.exe",
+			[
+				"-NoProfile",
+				"-NonInteractive",
+				"-EncodedCommand",
+				Buffer.from(WINDOWS_SCRIPT, "utf16le").toString("base64"),
+			],
+			{ timeout: 10000, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
+		);
+		entries = JSON.parse(stdout.trim());
+		if (!Array.isArray(entries)) throw new Error("Unable to read window positions.");
+	} catch (error) {
+		const detail = error as { code?: string; stderr?: string };
+		console.warn(
+			"[capture-picker] Window positions unavailable; full-screen selection is still available.",
+			(detail.stderr?.trim() || detail.code || "Invalid window geometry response").slice(
+				0,
+				500,
+			),
+		);
+		return [];
+	}
 	return entries.flatMap((entry) => {
+		if (!entry || typeof entry !== "object") return [];
 		const source = byId.get(entry.id);
 		if (
 			!source ||

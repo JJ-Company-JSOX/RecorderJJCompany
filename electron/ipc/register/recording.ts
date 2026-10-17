@@ -46,13 +46,12 @@ import {
 	getSystemCursorHelperSourcePath,
 	getWindowsCaptureExePath,
 } from "../paths/binaries";
-import { rememberApprovedLocalReadPath } from "../project/manager";
+import { getApprovedCompanionAudioFallbackInfo } from "../recording/approvedAudioFallbacks";
 import {
 	getBrowserMicSidecarFilters,
 	shouldKeepRecordingAudioSidecars,
 } from "../recording/audioFilters";
 import {
-	getCompanionAudioFallbackInfo,
 	getFileSizeIfPresent,
 	type MicrophoneChunkTimingEvent,
 	type MicrophonePauseInterval,
@@ -1458,12 +1457,7 @@ export function registerRecordingHandlers(
 		}
 
 		try {
-			const { paths, startDelayMsByPath } = await getCompanionAudioFallbackInfo(videoPath);
-			await Promise.all([
-				rememberApprovedLocalReadPath(videoPath),
-				...paths.map((fallbackPath) => rememberApprovedLocalReadPath(fallbackPath)),
-			]);
-			return { success: true, paths, startDelayMsByPath };
+			return await getApprovedCompanionAudioFallbackInfo(videoPath);
 		} catch (error) {
 			console.error("Failed to resolve companion audio fallback paths:", error);
 			return { success: false, paths: [], startDelayMsByPath: {}, error: String(error) };

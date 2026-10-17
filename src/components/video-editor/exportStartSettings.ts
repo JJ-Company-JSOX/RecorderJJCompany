@@ -1,5 +1,4 @@
 import {
-	calculateOutputDimensions,
 	type ExportBackendPreference,
 	type ExportEncodingMode,
 	type ExportFormat,
@@ -10,7 +9,8 @@ import {
 	GIF_SIZE_PRESETS,
 	type GifFrameRate,
 	type GifSizePreset,
-} from "@/lib/exporter";
+} from "@/lib/exporter/types";
+import { calculateOutputDimensions } from "@/lib/exporter/outputDimensions";
 
 export function resolveExportStartSettings({
 	sourceWidth,

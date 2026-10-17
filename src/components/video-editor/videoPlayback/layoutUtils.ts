@@ -1,4 +1,4 @@
-import { Application, Graphics, Sprite } from "pixi.js";
+import type { Application, Graphics, Sprite } from "pixi.js";
 import { drawSquircleOnGraphics } from "@/lib/geometry/squircle";
 import { ADVANCED_VERTICAL_PADDING_MAX, type CropRegion, type Padding } from "../types";
 

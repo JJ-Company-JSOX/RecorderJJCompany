@@ -10,6 +10,7 @@ import { app } from "electron";
 import { RECORDINGS_DIR, USER_DATA_PATH } from "../../appPaths";
 import { isSupportedLocalMediaPath } from "../../mediaTypes";
 import {
+	COMPANION_AUDIO_LAYOUTS,
 	LEGACY_PROJECT_FILE_EXTENSIONS,
 	MAX_RECENT_PROJECTS,
 	PROJECT_FILE_EXTENSION,
@@ -122,6 +123,36 @@ async function collectApprovedLocalReadPaths(filePath?: string | null): Promise<
 		if (!approvedPaths.includes(normalizedRealPath)) {
 			approvedPaths.push(normalizedRealPath);
 		}
+
+		// Companion tracks belong to the explicitly selected video. Keep their
+		// exact paths approved when a session refresh replaces the allowlist,
+		// without granting access to its entire parent directory. Only accept
+		// real siblings: a sidecar symlink must not opt unrelated files in.
+		if (
+			/\.(mp4|webm|mov|mkv|avi)$/iu.test(normalizedPath) &&
+			!/\.(mic|system)\./iu.test(path.basename(normalizedPath))
+		) {
+			const basePath = approvedPaths[0].replace(/\.[^.]+$/u, "");
+			const realBasePath = normalizedRealPath.replace(/\.[^.]+$/u, "");
+			const sidecars = await Promise.all(
+				COMPANION_AUDIO_LAYOUTS.flatMap((layout) => [
+					layout.systemSuffix,
+					layout.micSuffix,
+				]).map(async (suffix) => {
+					const sidecarPath = `${basePath}${suffix}`;
+					const realSidecarPath = await fs.realpath(sidecarPath).catch(() => null);
+					if (
+						!realSidecarPath ||
+						path.relative(realSidecarPath, `${realBasePath}${suffix}`) !== ""
+					) {
+						return [];
+					}
+					const stat = await fs.stat(realSidecarPath).catch(() => null);
+					return stat?.isFile() ? [sidecarPath, normalizePath(realSidecarPath)] : [];
+				}),
+			);
+			approvedPaths.push(...sidecars.flat());
+		}
 	} catch {
 		// Ignore missing files; the eventual read will surface the real error.
 	}
@@ -141,25 +172,41 @@ export async function rememberApprovedLocalReadPath(filePath?: string | null) {
 	}
 }
 
-export async function resolveApprovedLocalMediaPath(candidatePath: string): Promise<string | null> {
+export type LocalMediaAccessResult =
+	| { success: true; path: string }
+	| { success: false; reason: "missing" | "not-file" | "unsupported" | "denied" };
+
+export async function resolveLocalMediaAccess(
+	candidatePath: string,
+): Promise<LocalMediaAccessResult> {
 	const normalizedCandidatePath = normalizePath(candidatePath);
 	const realPath = await fs.realpath(normalizedCandidatePath).catch(() => null);
 
 	if (!realPath) {
-		return null;
+		return { success: false, reason: "missing" };
 	}
 
 	const stat = await fs.stat(realPath).catch(() => null);
-	if (!stat?.isFile() || !isSupportedLocalMediaPath(realPath)) {
-		return null;
+	if (!stat?.isFile()) {
+		return { success: false, reason: "not-file" };
+	}
+	if (!isSupportedLocalMediaPath(realPath)) {
+		return { success: false, reason: "unsupported" };
 	}
 
 	if (!(await isAllowedLocalMediaPath(realPath))) {
-		return null;
+		return { success: false, reason: "denied" };
 	}
 
-	await rememberApprovedLocalReadPath(candidatePath);
-	return realPath;
+	if (!approvedLocalReadPaths.has(realPath)) {
+		await rememberApprovedLocalReadPath(candidatePath);
+	}
+	return { success: true, path: realPath };
+}
+
+export async function resolveApprovedLocalMediaPath(candidatePath: string): Promise<string | null> {
+	const result = await resolveLocalMediaAccess(candidatePath);
+	return result.success ? result.path : null;
 }
 
 export async function replaceApprovedSessionLocalReadPaths(

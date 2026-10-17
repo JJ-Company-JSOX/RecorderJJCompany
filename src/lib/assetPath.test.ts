@@ -81,6 +81,9 @@ describe("getRenderableVideoUrl", () => {
 		await expect(getRenderableVideoUrl("/Users/egg/Desktop/bg.mp4")).resolves.toBe(
 			"http://127.0.0.1:4321/video?path=%2FUsers%2Fegg%2FDesktop%2Fbg.mp4",
 		);
+		await expect(getRenderableVideoUrl("file:///Users/egg/Desktop/bg.mp4")).resolves.toBe(
+			"http://127.0.0.1:4321/video?path=%2FUsers%2Fegg%2FDesktop%2Fbg.mp4",
+		);
 	});
 
 	it("falls back to a file URL for absolute local video paths", async () => {

@@ -24,6 +24,11 @@ describe("local media path policy", () => {
 		);
 
 		vi.resetModules();
+		// Policy fixtures are plain text, so do not start a real FFmpeg process
+		// for them. Thumbnail-specific cases provide their own decoder below.
+		vi.doMock("./firstFrameThumbnail", () => ({
+			createProjectFirstFrameThumbnail: vi.fn().mockRejectedValue(new Error("No test frame")),
+		}));
 		vi.doMock("electron", () => ({
 			app: {
 				isPackaged: false,
@@ -44,6 +49,7 @@ describe("local media path policy", () => {
 		vi.doUnmock("electron");
 		vi.doUnmock("../../mediaServer");
 		vi.doUnmock("./firstFrameThumbnail");
+		vi.doUnmock("../recording/diagnostics");
 		if (tempRoot) {
 			await fs.rm(tempRoot, { recursive: true, force: true });
 		}
@@ -148,7 +154,147 @@ describe("local media path policy", () => {
 		expect(isAllowedMediaPath(textPath)).toBe(false);
 	});
 
-	it("rejects symlinks under allowed prefixes that point outside the allowlist", async () => {
+	it("keeps a selected video's existing microphone and system tracks approved across session refreshes", async () => {
+		const externalDir = path.join(tempRoot, "Custom recordings");
+		await fs.mkdir(externalDir);
+		const videoPath = path.join(externalDir, "recording.mp4");
+		const micPath = path.join(externalDir, "recording.mic.wav");
+		const systemPath = path.join(externalDir, "recording.system.m4a");
+		const unrelatedPath = path.join(externalDir, "private.wav");
+		await Promise.all(
+			[videoPath, micPath, systemPath, unrelatedPath].map((file) =>
+				fs.writeFile(file, "media"),
+			),
+		);
+		const manager = await import("./manager");
+		await manager.rememberApprovedLocalReadPath(unrelatedPath);
+		await manager.rememberApprovedLocalReadPath(videoPath);
+		await manager.replaceApprovedSessionLocalReadPaths([videoPath]);
+
+		await expect(manager.resolveApprovedLocalMediaPath(micPath)).resolves.toBe(
+			await fs.realpath(micPath),
+		);
+		await expect(manager.resolveApprovedLocalMediaPath(systemPath)).resolves.toBe(
+			await fs.realpath(systemPath),
+		);
+		await expect(manager.resolveApprovedLocalMediaPath(unrelatedPath)).resolves.toBeNull();
+	});
+
+	it("does not approve a companion symlink pointing to an unrelated file", async ({ skip }) => {
+		const videoPath = path.join(tempRoot, "recording.mp4");
+		const privateAudio = path.join(tempRoot, "private.wav");
+		const micPath = path.join(tempRoot, "recording.mic.wav");
+		await fs.writeFile(videoPath, "video");
+		await fs.writeFile(privateAudio, "private audio");
+		try {
+			await fs.symlink(privateAudio, micPath);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "EPERM")
+				skip("Windows file symlinks are unavailable for this user.");
+			throw error;
+		}
+		const manager = await import("./manager");
+		await manager.rememberApprovedLocalReadPath(videoPath);
+		await expect(manager.resolveApprovedLocalMediaPath(micPath)).resolves.toBeNull();
+		await expect(manager.resolveApprovedLocalMediaPath(privateAudio)).resolves.toBeNull();
+	});
+
+	it("rejects a companion whose canonical path belongs to an unrelated file", async () => {
+		const videoPath = path.join(tempRoot, "recording.mp4");
+		const privateAudio = path.join(tempRoot, "private.wav");
+		const micPath = path.join(tempRoot, "recording.mic.wav");
+		await Promise.all(
+			[videoPath, privateAudio, micPath].map((file) => fs.writeFile(file, "media")),
+		);
+		const realpath = fs.realpath;
+		const canonicalize = vi
+			.spyOn(fs, "realpath")
+			.mockImplementation(async (input) =>
+				String(input) === micPath ? privateAudio : realpath(input),
+			);
+		try {
+			const manager = await import("./manager");
+			await manager.rememberApprovedLocalReadPath(videoPath);
+			await expect(manager.resolveApprovedLocalMediaPath(micPath)).resolves.toBeNull();
+			await expect(manager.resolveApprovedLocalMediaPath(privateAudio)).resolves.toBeNull();
+		} finally {
+			canonicalize.mockRestore();
+		}
+	});
+
+	it("distinguishes missing sidecars, unsupported files, directories, and denied media", async () => {
+		const manager = await import("./manager");
+		const denied = path.join(tempRoot, "unselected.wav");
+		const unsupported = path.join(tempPath, "notes.txt");
+		await fs.writeFile(denied, "private audio");
+		await fs.writeFile(unsupported, "text");
+		await expect(
+			manager.resolveLocalMediaAccess(path.join(tempPath, "missing.mic.wav")),
+		).resolves.toEqual({ success: false, reason: "missing" });
+		await expect(manager.resolveLocalMediaAccess(tempPath)).resolves.toEqual({
+			success: false,
+			reason: "not-file",
+		});
+		await expect(manager.resolveLocalMediaAccess(unsupported)).resolves.toEqual({
+			success: false,
+			reason: "unsupported",
+		});
+		await expect(manager.resolveLocalMediaAccess(denied)).resolves.toEqual({
+			success: false,
+			reason: "denied",
+		});
+	});
+
+	it("does not probe or approve an unselected video's companion tracks", async () => {
+		const videoPath = path.join(tempRoot, "unselected.mp4");
+		const micPath = path.join(tempRoot, "unselected.mic.wav");
+		await fs.writeFile(videoPath, "video");
+		await fs.writeFile(micPath, "private audio");
+		const probe = vi.fn();
+		vi.doMock("../recording/diagnostics", () => ({ getCompanionAudioFallbackInfo: probe }));
+		const { getApprovedCompanionAudioFallbackInfo } = await import(
+			"../recording/approvedAudioFallbacks"
+		);
+		const manager = await import("./manager");
+		await expect(getApprovedCompanionAudioFallbackInfo(videoPath)).resolves.toMatchObject({
+			success: false,
+			paths: [],
+		});
+		expect(probe).not.toHaveBeenCalled();
+		await expect(manager.resolveApprovedLocalMediaPath(micPath)).resolves.toBeNull();
+	});
+
+	it("filters unapproved probe results while retaining selected companion timing", async () => {
+		const videoPath = path.join(tempRoot, "selected.mp4");
+		const micPath = path.join(tempRoot, "selected.mic.wav");
+		const unrelatedPath = path.join(tempRoot, "private.wav");
+		await Promise.all(
+			[videoPath, micPath, unrelatedPath].map((file) => fs.writeFile(file, "media")),
+		);
+		const realVideoPath = await fs.realpath(videoPath);
+		const realMicPath = await fs.realpath(micPath);
+		const probe = vi.fn().mockResolvedValue({
+			paths: [realMicPath, unrelatedPath],
+			startDelayMsByPath: { [realMicPath]: 125, [unrelatedPath]: 333 },
+		});
+		vi.doMock("../recording/diagnostics", () => ({ getCompanionAudioFallbackInfo: probe }));
+		const { getApprovedCompanionAudioFallbackInfo } = await import(
+			"../recording/approvedAudioFallbacks"
+		);
+		const manager = await import("./manager");
+		await manager.rememberApprovedLocalReadPath(videoPath);
+		await expect(getApprovedCompanionAudioFallbackInfo(videoPath)).resolves.toEqual({
+			success: true,
+			paths: [realMicPath],
+			startDelayMsByPath: { [realMicPath]: 125 },
+		});
+		expect(probe).toHaveBeenCalledWith(realVideoPath);
+		await expect(manager.resolveApprovedLocalMediaPath(unrelatedPath)).resolves.toBeNull();
+	});
+
+	it("rejects symlinks under allowed prefixes that point outside the allowlist", async ({
+		skip,
+	}) => {
 		const outsideTarget = path.join(tempRoot, "outside-secret.mp4");
 		const symlinkInsideUserData = path.join(userDataPath, "shortcut-to-secret.mp4");
 		await fs.writeFile(outsideTarget, "secret-bytes");
@@ -160,7 +306,7 @@ describe("local media path policy", () => {
 			// we can't create one, the bypass we're guarding against also can't be
 			// crafted on this machine, so skipping is safe.
 			if ((error as NodeJS.ErrnoException).code === "EPERM") {
-				return;
+				skip("Windows file symlinks are unavailable for this user.");
 			}
 			throw error;
 		}
@@ -314,7 +460,7 @@ describe("local media path policy", () => {
 		expect(ready).toHaveBeenCalledWith(expect.objectContaining({ path: projectPath }));
 	});
 
-	it("replaces a thumbnail symlink without overwriting its target", async () => {
+	it("replaces a thumbnail symlink without overwriting its target", async ({ skip }) => {
 		vi.doMock("./firstFrameThumbnail", () => ({
 			createProjectFirstFrameThumbnail: vi.fn().mockResolvedValue(Buffer.from("new poster")),
 		}));
@@ -332,7 +478,8 @@ describe("local media path policy", () => {
 		try {
 			await fs.symlink(target, thumbnail);
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "EPERM") return;
+			if ((error as NodeJS.ErrnoException).code === "EPERM")
+				skip("Windows file symlinks are unavailable for this user.");
 			throw error;
 		}
 		await manager.refreshProjectThumbnail(projectPath, await fs.stat(projectPath));

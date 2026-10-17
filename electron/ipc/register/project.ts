@@ -27,7 +27,7 @@ import {
 	rememberApprovedLocalReadPath,
 	rememberRecentProject,
 	replaceApprovedSessionLocalReadPaths,
-	resolveApprovedLocalMediaPath,
+	resolveLocalMediaAccess,
 	saveProjectThumbnail,
 	saveRecentProjectPaths,
 } from "../project/manager";
@@ -947,12 +947,20 @@ export function registerProjectHandlers() {
 		if (!baseUrl || !filePath) {
 			return { success: false as const };
 		}
-		const resolved = await resolveApprovedLocalMediaPath(filePath);
-		if (!resolved) {
+		const result = await resolveLocalMediaAccess(filePath);
+		if (!result.success) {
 			const normalized = path.resolve(filePath);
-			console.warn(`[get-local-media-url] Blocked disallowed path: ${normalized}`);
-			return { success: false as const };
+			// Waveform fallback probes optional mic/system files. Missing sidecars
+			// are expected and should not be reported as access-policy failures.
+			if (result.reason === "denied") {
+				console.warn(`[get-local-media-url] Blocked disallowed path: ${normalized}`);
+			} else if (result.reason !== "missing") {
+				console.warn(
+					`[get-local-media-url] Unavailable media (${result.reason}): ${normalized}`,
+				);
+			}
+			return { success: false as const, reason: result.reason };
 		}
-		return { success: true as const, url: buildMediaUrl(baseUrl, resolved) };
+		return { success: true as const, url: buildMediaUrl(baseUrl, result.path) };
 	});
 }

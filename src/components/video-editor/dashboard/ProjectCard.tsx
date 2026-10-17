@@ -1,4 +1,4 @@
-import { Globe } from "@phosphor-icons/react";
+import { Globe } from "@phosphor-icons/react/dist/csr/Globe";
 import { ProjectFolderChips } from "./ProjectFolderChips";
 import { RawThumbnail } from "./RawRecordings";
 import { AccountAvatar } from "@/components/ui/account-avatar";

@@ -52,7 +52,7 @@
   "publish": [
     {
       "provider": "github",
-      "owner": "profunction",
+      "owner": "JJ-Company-JSOX",
       "repo": "RecorderJJCompany",
       "tagNamePrefix": "v",
       "publishAutoUpdate": true

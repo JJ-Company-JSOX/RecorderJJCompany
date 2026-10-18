@@ -22,7 +22,7 @@ npm run build:win:test
 npm run package:win:test
 ```
 
-这两个命令均使用 `--publish never`。测试配置复用 `node_modules/electron/dist`，关闭 native 重建和签名资源下载；所需依赖或二进制不存在时会中止。普通构建中的 GitHub 发布配置指向 `profunction/RecorderJJCompany`。
+这两个命令均使用 `--publish never`。测试配置复用 `node_modules/electron/dist`，关闭 native 重建和签名资源下载；所需依赖或二进制不存在时会中止。普通构建中的 GitHub 发布配置指向 `JJ-Company-JSOX/RecorderJJCompany`。
 
 输出为 `release\win-unpacked`。保留整个目录，双击其中的 `Start-Jsox-Test.cmd`；启动无需 Node.js、Vite、编译器或开发服务器。启动器禁用自动更新，并把测试设置、录制及缓存隔离在 `%APPDATA%\Jsox-test`，不迁移现有 `.recordly` 项目或录制文件。需要原项目时在测试应用中自行打开。
 

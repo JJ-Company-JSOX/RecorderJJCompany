@@ -279,6 +279,28 @@ export function CapturePicker() {
 					</div>
 				</div>
 			)}
+			<div
+				className="absolute top-6 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2 rounded-xl bg-black/80 p-3 text-white"
+				onPointerDown={(event) => event.stopPropagation()}
+				onPointerUp={(event) => event.stopPropagation()}
+				onPointerMove={(event) => event.stopPropagation()}
+				onKeyDown={(event) => {
+					if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+				}}
+			>
+				<Button
+					aria-describedby="entire-screen-description"
+					onClick={() => {
+						press.current = null;
+						finish({ kind: "screen", rect: screenRect() });
+					}}
+				>
+					Entire screen
+				</Button>
+				<p id="entire-screen-description" className="text-center text-xs text-white/80">
+					All windows and the taskbar or Dock on this display
+				</p>
+			</div>
 			{target?.kind === "area" && (
 				<div
 					className="absolute bottom-12 left-1/2 -translate-x-1/2"

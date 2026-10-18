@@ -25,7 +25,14 @@ const windows = [
 	},
 ];
 
-async function openPicker(page: Page, allowArea = true, previousArea = false) {
+async function openPicker(
+	page: Page,
+	allowArea = true,
+	previousArea = false,
+	pickerWindows = windows,
+) {
+	// Cold Vite compilation can exceed the default 30s navigation budget on Windows.
+	test.setTimeout(90000);
 	await installDesktopBridge(page);
 	await installDesktopBridgeOverrides(
 		page,
@@ -40,14 +47,16 @@ async function openPicker(page: Page, allowArea = true, previousArea = false) {
 					cursor: null,
 				}),
 				completeCapturePick: async (pick: unknown) => {
-					document.documentElement.dataset.pick = JSON.stringify(pick);
+					const html = document.documentElement;
+					html.dataset.pick = JSON.stringify(pick);
+					html.dataset.pickCalls = String(Number(html.dataset.pickCalls ?? 0) + 1);
 				},
 				capturePickerReady: () => {
 					document.documentElement.dataset.pickerReady = "true";
 				},
 			});
 		},
-		{ pickerWindows: windows, allowArea, previousArea },
+		{ pickerWindows, allowArea, previousArea },
 	);
 	await page.goto("/?windowType=capture-picker&displayId=1");
 	await expect(page.locator("html")).toHaveAttribute("data-picker-ready", "true");
@@ -81,6 +90,33 @@ test("a click on the desktop picks the whole screen", async ({ page }) => {
 	await page.mouse.click(1380, 60);
 	expect(await pick(page)).toEqual({ kind: "screen", displayId: 1, record: false });
 });
+
+for (const activation of ["click", "Enter", "Space"] as const) {
+	test(`Entire screen selects the full display once via ${activation} after hovering a window`, async ({
+		page,
+	}) => {
+		await openPicker(page, false, false, [
+			{ ...windows[0], x: 0, y: 0, width: 1440, height: 928 },
+		]);
+		await page.mouse.move(600, 300);
+		await expect(page.getByText("Notes — Launch checklist · 1440 × 928")).toBeVisible();
+
+		const entireScreen = page.getByRole("button", { name: "Entire screen", exact: true });
+		await expect(entireScreen).toHaveAccessibleDescription(
+			"All windows and the taskbar or Dock on this display",
+		);
+		if (activation === "click") {
+			await entireScreen.click();
+		} else {
+			await page.keyboard.press("Tab");
+			await expect(entireScreen).toBeFocused();
+			await page.keyboard.press(activation);
+		}
+
+		expect(await pick(page)).toEqual({ kind: "screen", displayId: 1, record: false });
+		await expect(page.locator("html")).toHaveAttribute("data-pick-calls", "1");
+	});
+}
 
 test("a drag draws an area", async ({ page }) => {
 	await openPicker(page);

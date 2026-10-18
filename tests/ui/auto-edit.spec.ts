@@ -2,11 +2,11 @@ import { expect, test } from "@playwright/test";
 import { installDesktopBridge, installDesktopBridgeOverrides } from "./bridge";
 
 test.use({ viewport: { width: 1440, height: 1000 } });
+test.beforeEach(() => test.setTimeout(90000));
 
 test("review is explicit, JSON is downloadable, accepted trim ripples and Undo restores", async ({
 	page,
 }) => {
-	test.setTimeout(60000);
 	const errors: string[] = [];
 	page.on("pageerror", (error) => errors.push(error.message));
 	await installDesktopBridge(page, "filmstrip.mp4");
@@ -45,7 +45,9 @@ test("review is explicit, JSON is downloadable, accepted trim ripples and Undo r
 		.filter({ has: page.getByText("Zoom at click", { exact: true }) });
 	await trim.getByRole("radio", { name: "Accept", exact: true }).check();
 	await expect(apply).toBeDisabled();
-	await zoom.getByRole("radio", { name: "Reject", exact: true }).check();
+	await dialog.getByRole("button", { name: "Reject remaining suggestions" }).click();
+	await expect(trim.getByRole("radio", { name: "Accept", exact: true })).toBeChecked();
+	await expect(zoom.getByRole("radio", { name: "Reject", exact: true })).toBeChecked();
 	await expect(apply).toBeEnabled();
 	const downloadEvent = page.waitForEvent("download");
 	await dialog.getByRole("button", { name: "Download JSON" }).click();
@@ -158,4 +160,118 @@ test("a plan becomes stale when existing edits change", async ({ page }) => {
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
 	await expect(page.getByRole("alert")).toContainText("timeline changed");
 	await expect(page.getByRole("button", { name: "Apply accepted edits" })).toBeDisabled();
+	await expect(page.getByRole("button", { name: "Accept remaining suggestions" })).toBeDisabled();
+	await expect(page.getByRole("button", { name: "Reject remaining suggestions" })).toBeDisabled();
 });
+
+for (const allProtected of [false, true]) {
+	test(`batch review preserves choices and existing zooms (all protected: ${allProtected})`, async ({
+		page,
+	}) => {
+		if (allProtected) await page.setViewportSize({ width: 1280, height: 720 });
+		await installDesktopBridge(page, "filmstrip.mp4", { signedIn: false });
+		await installDesktopBridgeOverrides(
+			page,
+			(allProtected) => {
+				window.electronAPI.loadCurrentProjectFile = async () => ({
+					success: true,
+					path: "/projects/protected.recordly",
+					project: {
+						version: 2,
+						videoPath: `${location.origin}/tests/ui/fixtures/filmstrip.mp4`,
+						editor: {
+							clipRegions: [{ id: "clip-1", startMs: 0, endMs: 6000, speed: 1 }],
+							zoomRegions: [
+								{
+									id: "existing",
+									startMs: 0,
+									endMs: allProtected ? 6000 : 1500,
+									depth: 2,
+									focus: { cx: 0.5, cy: 0.5 },
+								},
+							],
+						},
+					},
+				});
+				window.electronAPI.analyzeAutoEdit = async () => ({
+					success: true,
+					evidence: {
+						durationMs: 6000,
+						staticRanges: [],
+						silentRanges: [],
+						audioVerified: false,
+						warnings: [],
+					},
+				});
+				window.electronAPI.getCursorTelemetry = async () => ({
+					success: true,
+					samples: [500, 2500, 5000].map((timeMs) => ({
+						timeMs,
+						cx: 0.7,
+						cy: 0.3,
+						interactionType: "click" as const,
+					})),
+				});
+				window.electronAPI.cancelAutoEditAnalysis = async () => undefined;
+			},
+			allProtected,
+		);
+		await page.goto("/?windowType=editor");
+		const zooms = page.locator('[data-variant="zoom"]');
+		await expect(zooms).toHaveCount(1, { timeout: 20000 });
+		await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+		const dialog = page.locator("[data-auto-edit-panel]");
+		await dialog.getByRole("button", { name: "Generate local plan" }).click();
+		const items = dialog.locator("[data-suggestion-id]");
+		await expect(items).toHaveCount(3);
+		expect(
+			(await dialog.getByRole("button", { name: "Generate local plan" }).boundingBox())!
+				.height,
+		).toBeGreaterThanOrEqual(32);
+		await expect(items.first().getByRole("radio")).toHaveCount(0);
+		await expect(dialog.getByText(/No AI model or JSON download is needed/)).toBeVisible();
+		const apply = dialog.getByRole("button", { name: "Apply accepted edits" });
+		if (allProtected) {
+			await expect(dialog.locator("[data-plan-summary]")).toHaveText(
+				"Available: 0 · Protected: 3 · Review required: 0 · Accept: 0",
+			);
+			await expect(dialog.locator("[data-plan-all-protected]")).toContainText(
+				"nothing new to apply",
+			);
+			await expect(
+				dialog.getByRole("button", { name: "Accept remaining suggestions" }),
+			).toHaveCount(0);
+			await expect(apply).toBeDisabled();
+			await page.getByLabel("Plan language").selectOption("zh");
+			await expect(dialog.locator("[data-plan-all-protected]")).toContainText(
+				"没有新的修改可应用",
+			);
+			await page.screenshot({ path: "test-results/auto-edit-protected.png" });
+		} else {
+			await items.nth(1).getByRole("radio", { name: "Reject", exact: true }).check();
+			await dialog.getByRole("button", { name: "Accept remaining suggestions" }).click();
+			await expect(
+				items.nth(1).getByRole("radio", { name: "Reject", exact: true }),
+			).toBeChecked();
+			await expect(
+				items.nth(2).getByRole("radio", { name: "Accept", exact: true }),
+			).toBeChecked();
+			await expect(dialog.locator("[data-plan-summary]")).toHaveText(
+				"Available: 2 · Protected: 1 · Review required: 0 · Accept: 1",
+			);
+			await expect(zooms).toHaveCount(1);
+			await expect(
+				dialog.getByRole("button", { name: "Accept remaining suggestions" }),
+			).toBeDisabled();
+			await expect(apply).toBeEnabled();
+			await page.screenshot({ path: "test-results/auto-edit-batch.png" });
+			await apply.click();
+			await dialog.getByRole("button", { name: "Close", exact: true }).click();
+			await expect(zooms).toHaveCount(2);
+			await page.getByRole("button", { name: "Undo", exact: true }).click();
+		}
+		await expect(zooms).toHaveCount(1);
+		await expect(zooms).toHaveAttribute("data-start-ms", "0");
+		await expect(zooms).toHaveAttribute("data-end-ms", allProtected ? "6000" : "1500");
+	});
+}

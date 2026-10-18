@@ -1,5 +1,3 @@
-import { addVisualSuggestions } from "./vision";
-import { visionMessages } from "./visionMessages";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,6 +6,8 @@ import type { CursorTelemetryPoint } from "../types";
 import { applyEditPlan } from "./apply";
 import { messages, type PlanLanguage } from "./messages";
 import { baselineFor, buildEditPlan, type Decision, type EditPlan, type EditState } from "./plan";
+import { addVisualSuggestions } from "./vision";
+import { visionMessages } from "./visionMessages";
 
 export function AutoEditPanel({
 	open,
@@ -54,10 +54,20 @@ export function AutoEditPanel({
 		setBusy(null);
 	}, [open]);
 	const stale = !!plan && plan.baseline !== baselineFor(state, source);
-	const pending = plan?.suggestions.some(
-		(s) => !s.blocked && (!decisions[s.id] || decisions[s.id] === "pending"),
-	);
-	const accepted = plan?.suggestions.some((s) => decisions[s.id] === "accept");
+	const available = plan?.suggestions.filter((s) => !s.blocked) ?? [];
+	const pending = available.filter((s) => !decisions[s.id] || decisions[s.id] === "pending");
+	const accepted = available.filter((s) => decisions[s.id] === "accept");
+	const decideRemaining = (choice: "accept" | "reject") => {
+		if (!plan || stale || busy) return;
+		setDecisions((current) => ({
+			...current,
+			...Object.fromEntries(
+				available
+					.filter((s) => !current[s.id] || current[s.id] === "pending")
+					.map((s) => [s.id, choice]),
+			),
+		}));
+	};
 	const analyze = async () => {
 		const run = ++generation.current;
 		setBusy("analysis");
@@ -145,7 +155,7 @@ export function AutoEditPanel({
 		>
 			<DialogContent
 				data-auto-edit-panel
-				className="max-h-[85vh] max-w-3xl overflow-y-auto p-6"
+				className="max-h-[85vh] max-w-3xl overflow-y-auto p-6 [&>*]:shrink-0"
 				aria-label={m.title}
 			>
 				<DialogHeader>
@@ -194,7 +204,43 @@ export function AutoEditPanel({
 									: (m[warning as keyof typeof m] ?? warning)}
 							</p>
 						))}
-						<p className="text-sm">{m.decisionHint}</p>
+						{plan.warnings.includes("audio-unverified") && (
+							<p className="text-sm text-muted-foreground">{m.audioHelp}</p>
+						)}
+						{plan.suggestions.length > 0 && (
+							<p className="text-sm" aria-live="polite" data-plan-summary>
+								{m.available}: {available.length} · {m.protectedCount}:{" "}
+								{plan.suggestions.length - available.length} · {m.pending}:{" "}
+								{pending.length} · {m.accept}: {accepted.length}
+							</p>
+						)}
+						{available.length > 0 ? (
+							<>
+								<p className="text-sm">{m.decisionHint}</p>
+								<div className="flex flex-wrap gap-2">
+									<Button
+										variant="secondary"
+										disabled={stale || !!busy || pending.length === 0}
+										onClick={() => decideRemaining("accept")}
+									>
+										{m.acceptRemaining}
+									</Button>
+									<Button
+										variant="secondary"
+										disabled={stale || !!busy || pending.length === 0}
+										onClick={() => decideRemaining("reject")}
+									>
+										{m.rejectRemaining}
+									</Button>
+								</div>
+							</>
+						) : (
+							plan.suggestions.length > 0 && (
+								<p className="rounded-lg border p-3" data-plan-all-protected>
+									{m.allProtected}
+								</p>
+							)
+						)}
 						{plan.reviewer === "local-ai" && !plan.visualAnalysis && (
 							<p role="status">{m.reviewed}</p>
 						)}
@@ -414,7 +460,9 @@ export function AutoEditPanel({
 								{m.json}
 							</Button>
 							<Button
-								disabled={stale || !!busy || pending || !accepted}
+								disabled={
+									stale || !!busy || pending.length > 0 || accepted.length === 0
+								}
 								onClick={() => {
 									try {
 										onApply(applyEditPlan(state, source, plan, decisions));

@@ -2,6 +2,8 @@
 
 语言: [EN](README.md) | 简中
 
+本地编辑：[自动剪辑的批量审阅、已有编辑保护与音频检查](docs/local-auto-edit.md)。
+
 <p align="center">
   <img width="220" alt="Recordly logo" src="https://github.com/user-attachments/assets/082bb4b0-5fc5-4e9f-abda-55611fd6aded" />
 </p>

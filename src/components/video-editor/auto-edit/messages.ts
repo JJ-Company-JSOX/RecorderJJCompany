@@ -18,6 +18,14 @@ export const messages = {
 			"No cloud provider or telemetry is used by this feature. Full-frame analysis can take time on long recordings. Silence means below −50 dB; static means identical decoded frames (zero noise tolerance). Review before deleting.",
 		empty: "No suggestions. Existing edits, speech or missing audio evidence may protect this recording.",
 		accept: "Accept",
+		available: "Available",
+		protectedCount: "Protected",
+		acceptRemaining: "Accept remaining suggestions",
+		rejectRemaining: "Reject remaining suggestions",
+		allProtected:
+			"All suggestions overlap existing edits. There is nothing new to apply; you can close this panel and keep editing. Existing edits have been preserved.",
+		audioHelp:
+			"For future recordings, enable microphone or system audio and check playback. Missing recorded sound cannot be recovered here. No AI model or JSON download is needed for this local plan.",
 		reject: "Reject",
 		pending: "Review required",
 		apply: "Apply accepted edits",
@@ -48,7 +56,7 @@ export const messages = {
 		unavailable: "Local analysis requires the desktop app.",
 		reviewed: "Local AI reviewed this plan. Review every remaining item again.",
 		decisionHint:
-			"Each item starts undecided. Accept or reject every available item before applying. Existing edits are protected; later items move with accepted cuts.",
+			"Preview the suggestions, then choose individually or decide the remaining items together. Bulk decisions preserve your earlier choices and protected edits. Nothing changes until Apply; accepted cuts move later items on the timeline.",
 	},
 	zh: {
 		"webcam-alignment-unverified": "独立摄像头轨道尚未完成画面分析或对齐，不生成时间删改建议。",
@@ -68,6 +76,14 @@ export const messages = {
 			"此功能不调用云端、不加遥测。长录屏的逐帧分析需要时间。静音阈值为 −50 dB，画面检测使用零容差的解码帧比较；删除前请先预览。",
 		empty: "没有建议。现有编辑、语音或缺失音频证据可能保护了这段录屏。",
 		accept: "接受",
+		available: "可用建议",
+		protectedCount: "已保护",
+		acceptRemaining: "接受剩余建议",
+		rejectRemaining: "拒绝剩余建议",
+		allProtected:
+			"全部建议都与已有编辑重叠，没有新的修改可应用。可以关闭此面板继续编辑，已有编辑已保留。",
+		audioHelp:
+			"下次录制请启用麦克风或系统声音，并回放确认。这里无法恢复未录下的声音。生成此本地方案无需安装 AI 模型或下载 JSON。",
 		reject: "拒绝",
 		pending: "待审阅",
 		apply: "应用已接受的建议",
@@ -97,7 +113,7 @@ export const messages = {
 		unavailable: "本地媒体分析需要桌面应用。",
 		reviewed: "本地 AI 已审阅，请重新审阅每一项。",
 		decisionHint:
-			"每项默认待审，全部接受或拒绝后才能应用。保护现有编辑；接受删减后，后续项目会随时间线前移。",
+			"先预览建议，再逐项选择或批量决定剩余项目。批量操作保留你之前的选择和受保护的编辑；点击应用前不会修改时间线，接受删减后后续项目会随时间线前移。",
 	},
 	ms: {
 		"webcam-alignment-unverified":
@@ -118,6 +134,14 @@ export const messages = {
 			"Ciri ini tidak menggunakan awan atau telemetri. Rakaman panjang mungkin mengambil masa. Ambang senyap ialah −50 dB; bingkai dinyahkod mesti sama (toleransi hingar sifar). Pratonton sebelum memadam.",
 		empty: "Tiada cadangan. Suntingan sedia ada, pertuturan atau bukti audio yang tiada mungkin melindungi rakaman ini.",
 		accept: "Terima",
+		available: "Tersedia",
+		protectedCount: "Dilindungi",
+		acceptRemaining: "Terima cadangan selebihnya",
+		rejectRemaining: "Tolak cadangan selebihnya",
+		allProtected:
+			"Semua cadangan bertindih dengan suntingan sedia ada. Tiada perubahan baharu untuk digunakan; tutup panel ini untuk terus menyunting. Suntingan sedia ada dikekalkan.",
+		audioHelp:
+			"Untuk rakaman seterusnya, aktifkan mikrofon atau audio sistem dan semak main balik. Bunyi yang tidak dirakam tidak dapat dipulihkan di sini. Pelan setempat ini tidak memerlukan model AI atau muat turun JSON.",
 		reject: "Tolak",
 		pending: "Perlu disemak",
 		apply: "Gunakan cadangan diterima",
@@ -149,7 +173,7 @@ export const messages = {
 		unavailable: "Analisis setempat memerlukan aplikasi desktop.",
 		reviewed: "AI setempat telah menyemak pelan ini. Semak setiap item sekali lagi.",
 		decisionHint:
-			"Semua item bermula tanpa keputusan. Terima atau tolak setiap item sebelum digunakan. Suntingan sedia ada dilindungi; item kemudian bergerak mengikut potongan diterima.",
+			"Pratonton cadangan, kemudian pilih satu demi satu atau putuskan item selebihnya serentak. Pilihan terdahulu dan suntingan dilindungi dikekalkan. Tiada perubahan sehingga digunakan; potongan diterima mengalihkan item seterusnya pada garis masa.",
 	},
 } as const;
 export type PlanLanguage = keyof typeof messages;

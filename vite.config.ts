@@ -113,7 +113,12 @@ export default defineConfig(({ mode }) => ({
 		watch: {
 			// Diagnostic Electron profiles contain locked databases; neither these
 			// files nor generated test packages should trigger source reloads.
-			ignored: ["**/.tmp/**", "**/release/**", "**/electron/native/**/build/**"],
+			ignored: [
+				"**/.tmp/**",
+				"**/release/**",
+				"**/vendor/offline-ai/**",
+				"**/electron/native/**/build/**",
+			],
 		},
 	},
 	optimizeDeps: {

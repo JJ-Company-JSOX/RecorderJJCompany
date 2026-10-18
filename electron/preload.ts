@@ -185,16 +185,24 @@ function settleNativeVideoExportPendingRequests(
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
-	analyzeAutoEditFrames: (input: {videoPath:string;model:string;count:number}) => ipcRenderer.invoke("auto-edit-vision",input),
-	onAutoEditFrameProgress: (callback: (progress: {completed:number;total:number;timeMs:number}) => void) => {
-		const listener=(_event: unknown, progress: {completed:number;total:number;timeMs:number})=>callback(progress);
-		ipcRenderer.on("auto-edit-vision-progress",listener);
-		return ()=>ipcRenderer.removeListener("auto-edit-vision-progress",listener);
+	getBundledAiStatus: () => ipcRenderer.invoke("auto-edit-bundled-status"),
+	analyzeAutoEditFrames: (input: { videoPath: string; model: string; count: number }) =>
+		ipcRenderer.invoke("auto-edit-vision", input),
+	onAutoEditFrameProgress: (
+		callback: (progress: { completed: number; total: number; timeMs: number }) => void,
+	) => {
+		const listener = (
+			_event: unknown,
+			progress: { completed: number; total: number; timeMs: number },
+		) => callback(progress);
+		ipcRenderer.on("auto-edit-vision-progress", listener);
+		return () => ipcRenderer.removeListener("auto-edit-vision-progress", listener);
 	},
 	inspectAutoEditLocalModel: (model: string) => ipcRenderer.invoke("auto-edit-model-info", model),
 	analyzeAutoEdit: (videoPath: string) => ipcRenderer.invoke("auto-edit-analyze", videoPath),
 	cancelAutoEditAnalysis: () => ipcRenderer.invoke("auto-edit-cancel"),
-	reviewAutoEditLocally: (plan: EditPlan, model: string) => ipcRenderer.invoke("auto-edit-review-local", plan, model),
+	reviewAutoEditLocally: (plan: EditPlan, model: string) =>
+		ipcRenderer.invoke("auto-edit-review-local", plan, model),
 	hudOverlaySetIgnoreMouse: (ignore: boolean) => {
 		ipcRenderer.send("hud-overlay-set-ignore-mouse", ignore);
 	},

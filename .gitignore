@@ -27,6 +27,7 @@ release/**
 *.kiro/
 # npx electron-builder --mac --win
 .tmp/
+vendor/offline-ai/
 .history/
 extension-sources/
 *.tsbuildinfo

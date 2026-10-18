@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useI18n } from "@/contexts/I18nContext";
 import type { CursorTelemetryPoint } from "../types";
 import { applyEditPlan } from "./apply";
+import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { messages, type PlanLanguage } from "./messages";
 import { baselineFor, buildEditPlan, type Decision, type EditPlan, type EditState } from "./plan";
 import { addVisualSuggestions } from "./vision";
@@ -45,7 +46,24 @@ export function AutoEditPanel({
 		capabilities?: string[];
 	} | null>(null);
 	const [modelConsent, setModelConsent] = useState(false);
+	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
+	const [keepFullFrame, setKeepFullFrame] = useState(true);
 	const generation = useRef(0);
+	useEffect(() => {
+		if (!open) return;
+		let active = true;
+		void window.electronAPI
+			.getBundledAiStatus?.()
+			.then((status) => {
+				if (active) setBundledStatus(status);
+			})
+			.catch(() => {
+				if (active) setBundledStatus(null);
+			});
+		return () => {
+			active = false;
+		};
+	}, [open]);
 	useEffect(() => window.electronAPI.onAutoEditFrameProgress?.(setProgress), []);
 	useEffect(() => {
 		if (open) return;
@@ -68,7 +86,7 @@ export function AutoEditPanel({
 			),
 		}));
 	};
-	const analyze = async () => {
+	const analyze = async (withAi = false) => {
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
@@ -80,15 +98,31 @@ export function AutoEditPanel({
 			const result = await window.electronAPI.analyzeAutoEdit(source);
 			if (run !== generation.current) return;
 			if (!result.success || !result.evidence) throw new Error(result.error);
-			setPlan(
-				buildEditPlan({
-					state,
-					source,
-					evidence: result.evidence,
-					cursor,
-					id: crypto.randomUUID(),
-				}),
-			);
+			let next = buildEditPlan({
+				state,
+				source,
+				evidence: result.evidence,
+				cursor,
+				id: crypto.randomUUID(),
+			});
+			if (withAi) {
+				setBusy("vision");
+				setProgress({ completed: 0, total: 4 });
+				const frames = await window.electronAPI.analyzeAutoEditFrames({
+					videoPath: source,
+					model: BUNDLED_MODEL_ID,
+					count: 4,
+				});
+				if (run !== generation.current) return;
+				if (!frames.success || !frames.analysis) throw Error(frames.error || m.error);
+				next = addVisualSuggestions(next, state, source, frames.analysis);
+				if (keepFullFrame)
+					next = {
+						...next,
+						suggestions: next.suggestions.filter((s) => s.kind !== "zoom"),
+					};
+			}
+			setPlan(next);
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -173,6 +207,40 @@ export function AutoEditPanel({
 				</select>
 				<p>{m.intro}</p>
 				<p className="text-sm text-muted-foreground">{m.privacy}</p>
+				<section className="space-y-2 rounded-lg border p-3" aria-label={m.offlineTitle}>
+					<strong>{m.offlineTitle}</strong>
+					<p className="text-sm">{m.offlineInfo}</p>
+					<label className="flex items-start gap-2 text-sm">
+						<input
+							type="checkbox"
+							checked={keepFullFrame}
+							disabled={!!busy}
+							onChange={(event) => setKeepFullFrame(event.target.checked)}
+						/>
+						{m.keepFullFrame}
+					</label>
+					{bundledStatus?.available ? (
+						<p className="text-sm">{m.offlineReady}</p>
+					) : (
+						<p className="text-sm">{m.offlineMissing}</p>
+					)}
+					<Button
+						disabled={
+							!!busy ||
+							!bundledStatus?.available ||
+							!source ||
+							state.clipRegions.length === 0
+						}
+						onClick={() => void analyze(true)}
+					>
+						{busy ? m.offlineBusy : m.offlineAnalyze}
+					</Button>
+					{busy === "vision" && (
+						<p role="status">
+							{m.offlineBusy}: {progress.completed}/{progress.total}
+						</p>
+					)}
+				</section>
 				<Button
 					disabled={!!busy || !source || state.clipRegions.length === 0}
 					onClick={() => void analyze()}
@@ -309,131 +377,133 @@ export function AutoEditPanel({
 								</li>
 							))}
 						</ol>
-						<details>
-							<summary>{m.ai}</summary>
-							<p className="my-2 text-sm">{m.aiInfo}</p>
-							<input
-								aria-label={m.model}
-								placeholder={m.model}
-								value={model}
-								disabled={!!busy}
-								onChange={(e) => {
-									setModel(e.target.value);
-									setModelInfo(null);
-									setModelConsent(false);
-									setVisionConsent(false);
-								}}
-								className="w-full rounded border p-2"
-							/>
-							<Button
-								disabled={!model.trim() || !!busy}
-								onClick={async () => {
-									const run = ++generation.current;
-									setBusy("review");
-									setError("");
-									setModelInfo(null);
-									setModelConsent(false);
-									try {
-										const result =
-											await window.electronAPI.inspectAutoEditLocalModel(
-												model,
-											);
-										if (run !== generation.current) return;
-										if (!result.success || !result.info)
-											throw new Error(result.error);
-										setModelInfo(result.info);
-									} catch (e) {
-										if (run === generation.current)
-											setError(
-												`${m.error} ${e instanceof Error ? e.message : ""}`,
-											);
-									} finally {
-										if (run === generation.current) setBusy(null);
-									}
-								}}
-							>
-								{m.inspect}
-							</Button>
-							{modelInfo && (
-								<div className="space-y-2 rounded border p-3 text-sm">
-									<p>
-										{modelInfo.name} · {m.modelSize}:{" "}
-										{(modelInfo.sizeBytes / 1024 ** 3).toFixed(2)} GiB
-									</p>
-									<details>
-										<summary>{m.modelLicense}</summary>
-										<pre className="max-h-40 overflow-auto whitespace-pre-wrap">
-											{modelInfo.license}
-										</pre>
-									</details>
-									<p>{m.modelTerms}</p>
-									<label className="flex gap-2">
-										<input
-											type="checkbox"
-											checked={modelConsent}
-											onChange={(e) => setModelConsent(e.target.checked)}
-										/>
-										{m.modelConsent}
-									</label>
-								</div>
-							)}
-							<Button
-								disabled={
-									!modelInfo ||
-									!modelConsent ||
-									!model.trim() ||
-									stale ||
-									!!busy ||
-									!plan.suggestions.some((s) => !s.blocked)
-								}
-								onClick={() => void review()}
-							>
-								{busy === "review" ? m.reviewing : m.review}
-							</Button>
-							<section
-								className="mt-4 space-y-3 rounded border p-3"
-								aria-label={v.title}
-							>
-								<h3>{v.title}</h3>
-								<p className="text-sm">{v.info}</p>
-								{!modelInfo?.capabilities?.includes("vision") && (
-									<p className="text-sm">{v.visionRequired}</p>
+						{import.meta.env.DEV && (
+							<details>
+								<summary>{m.ai}</summary>
+								<p className="my-2 text-sm">{m.aiInfo}</p>
+								<input
+									aria-label={m.model}
+									placeholder={m.model}
+									value={model}
+									disabled={!!busy}
+									onChange={(e) => {
+										setModel(e.target.value);
+										setModelInfo(null);
+										setModelConsent(false);
+										setVisionConsent(false);
+									}}
+									className="w-full rounded border p-2"
+								/>
+								<Button
+									disabled={!model.trim() || !!busy}
+									onClick={async () => {
+										const run = ++generation.current;
+										setBusy("review");
+										setError("");
+										setModelInfo(null);
+										setModelConsent(false);
+										try {
+											const result =
+												await window.electronAPI.inspectAutoEditLocalModel(
+													model,
+												);
+											if (run !== generation.current) return;
+											if (!result.success || !result.info)
+												throw new Error(result.error);
+											setModelInfo(result.info);
+										} catch (e) {
+											if (run === generation.current)
+												setError(
+													`${m.error} ${e instanceof Error ? e.message : ""}`,
+												);
+										} finally {
+											if (run === generation.current) setBusy(null);
+										}
+									}}
+								>
+									{m.inspect}
+								</Button>
+								{modelInfo && (
+									<div className="space-y-2 rounded border p-3 text-sm">
+										<p>
+											{modelInfo.name} · {m.modelSize}:{" "}
+											{(modelInfo.sizeBytes / 1024 ** 3).toFixed(2)} GiB
+										</p>
+										<details>
+											<summary>{m.modelLicense}</summary>
+											<pre className="max-h-40 overflow-auto whitespace-pre-wrap">
+												{modelInfo.license}
+											</pre>
+										</details>
+										<p>{m.modelTerms}</p>
+										<label className="flex gap-2">
+											<input
+												type="checkbox"
+												checked={modelConsent}
+												onChange={(e) => setModelConsent(e.target.checked)}
+											/>
+											{m.modelConsent}
+										</label>
+									</div>
 								)}
-								<label className="flex gap-2 text-sm">
-									<input
-										type="checkbox"
-										checked={visionConsent}
-										disabled={!!busy}
-										onChange={(e) => setVisionConsent(e.target.checked)}
-									/>
-									{v.consent}
-								</label>
 								<Button
 									disabled={
-										!!busy ||
-										stale ||
+										!modelInfo ||
 										!modelConsent ||
-										!visionConsent ||
-										!modelInfo?.capabilities?.includes("vision")
+										!model.trim() ||
+										stale ||
+										!!busy ||
+										!plan.suggestions.some((s) => !s.blocked)
 									}
-									onClick={() => void analyzeFrames()}
+									onClick={() => void review()}
 								>
-									{v.analyze}
+									{busy === "review" ? m.reviewing : m.review}
 								</Button>
-								{busy === "vision" && (
-									<p role="status">
-										{v.busy}: {progress.completed}/{progress.total}
-									</p>
-								)}
-								{plan.visualAnalysis && (
-									<p role="status">
-										{v.result}: {plan.visualAnalysis.sampledTimesMs.length} ·{" "}
-										{plan.visualAnalysis.model} ·{" "}
-										{(plan.visualAnalysis.elapsedMs / 1000).toFixed(1)} s
-									</p>
-								)}
-							</section>
-						</details>
+								<section
+									className="mt-4 space-y-3 rounded border p-3"
+									aria-label={v.title}
+								>
+									<h3>{v.title}</h3>
+									<p className="text-sm">{v.info}</p>
+									{!modelInfo?.capabilities?.includes("vision") && (
+										<p className="text-sm">{v.visionRequired}</p>
+									)}
+									<label className="flex gap-2 text-sm">
+										<input
+											type="checkbox"
+											checked={visionConsent}
+											disabled={!!busy}
+											onChange={(e) => setVisionConsent(e.target.checked)}
+										/>
+										{v.consent}
+									</label>
+									<Button
+										disabled={
+											!!busy ||
+											stale ||
+											!modelConsent ||
+											!visionConsent ||
+											!modelInfo?.capabilities?.includes("vision")
+										}
+										onClick={() => void analyzeFrames()}
+									>
+										{v.analyze}
+									</Button>
+									{busy === "vision" && (
+										<p role="status">
+											{v.busy}: {progress.completed}/{progress.total}
+										</p>
+									)}
+									{plan.visualAnalysis && (
+										<p role="status">
+											{v.result}: {plan.visualAnalysis.sampledTimesMs.length}{" "}
+											· {plan.visualAnalysis.model} ·{" "}
+											{(plan.visualAnalysis.elapsedMs / 1000).toFixed(1)} s
+										</p>
+									)}
+								</section>
+							</details>
+						)}
 						<details>
 							<summary>{m.details}</summary>
 							<pre className="max-h-48 overflow-auto text-xs">

@@ -1,8 +1,11 @@
-import { analyzeVideoFrames } from "../autoEdit/vision";
-import { ipcMain } from "electron";
+import path from "node:path";
+import { app, ipcMain } from "electron";
+import { BUNDLED_MODEL_ID } from "../../../src/components/video-editor/auto-edit/bundledTypes";
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
+import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bundled";
 import { analyzeLocalMedia } from "../autoEdit/media";
 import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
+import { analyzeVideoFrames } from "../autoEdit/vision";
 import { resolveCaptionAudioCandidates } from "../captions/generate";
 import { getFfmpegBinaryPath, getFfprobeBinaryPath } from "../ffmpeg/binary";
 import { resolveApprovedLocalMediaPath } from "../project/manager";
@@ -10,6 +13,12 @@ import { getCompanionAudioStartDelayMs } from "../recording/diagnostics";
 import { normalizeVideoSourcePath } from "../utils";
 
 export function registerAutoEditHandlers() {
+	const bundledRoot = () =>
+		app.isPackaged
+			? path.join(process.resourcesPath, "offline-ai")
+			: path.join(app.getAppPath(), "vendor/offline-ai/win32-x64");
+	app.once("before-quit", stopBundledAi);
+	ipcMain.handle("auto-edit-bundled-status", () => bundledAiStatus(bundledRoot()));
 	ipcMain.handle("auto-edit-model-info", async (_event, model: string) => {
 		try {
 			return { success: true, info: await inspectLocalModel(model) };
@@ -30,6 +39,7 @@ export function registerAutoEditHandlers() {
 			running.set(event.sender.id, controller);
 			const abort = () => controller.abort();
 			event.sender.once("destroyed", abort);
+			let bundled: Awaited<ReturnType<typeof startBundledAi>> | undefined;
 			try {
 				if (
 					!input ||
@@ -43,6 +53,8 @@ export function registerAutoEditHandlers() {
 				const normalized = normalizeVideoSourcePath(input.videoPath);
 				const approved = normalized && (await resolveApprovedLocalMediaPath(normalized));
 				if (!approved) throw Error("Select an approved local recording first");
+				if (input.model === BUNDLED_MODEL_ID)
+					bundled = await startBundledAi(bundledRoot(), controller.signal);
 				const analysis = await analyzeVideoFrames({
 					videoPath: approved,
 					model: input.model,
@@ -50,6 +62,9 @@ export function registerAutoEditHandlers() {
 					ffmpegPath: getFfmpegBinaryPath(),
 					ffprobePath: getFfprobeBinaryPath(),
 					signal: controller.signal,
+					bundled: bundled
+						? { name: "Qwen3-VL-2B-Instruct Q4_K_M", describe: bundled.describe }
+						: undefined,
 					onProgress: (completed, total, timeMs) => {
 						if (!event.sender.isDestroyed())
 							event.sender.send("auto-edit-vision-progress", {
@@ -66,6 +81,7 @@ export function registerAutoEditHandlers() {
 					error: error instanceof Error ? error.message : "Visual analysis failed",
 				};
 			} finally {
+				await bundled?.close();
 				running.delete(event.sender.id);
 				event.sender.removeListener("destroyed", abort);
 			}

@@ -218,12 +218,40 @@ interface RendererExportHardwareInfo {
 
 interface Window {
 	electronAPI: {
-		analyzeAutoEditFrames: (input: {videoPath:string;model:string;count:number}) => Promise<{success:boolean;analysis?:import("../src/components/video-editor/auto-edit/vision").VisualAnalysis;error?:string}>;
-		onAutoEditFrameProgress: (callback:(progress:{completed:number;total:number;timeMs:number})=>void)=>()=>void;
-		inspectAutoEditLocalModel: (model: string) => Promise<{ success: boolean; info?: import("./ipc/autoEdit/reviewer").LocalModelInfo; error?: string }>;
-		analyzeAutoEdit: (videoPath: string) => Promise<{ success: boolean; evidence?: import("../src/components/video-editor/auto-edit/plan").MediaEvidence; error?: string }>;
+		getBundledAiStatus: () => Promise<
+			import("../src/components/video-editor/auto-edit/bundledTypes").BundledAiStatus
+		>;
+		analyzeAutoEditFrames: (input: {
+			videoPath: string;
+			model: string;
+			count: number;
+		}) => Promise<{
+			success: boolean;
+			analysis?: import("../src/components/video-editor/auto-edit/vision").VisualAnalysis;
+			error?: string;
+		}>;
+		onAutoEditFrameProgress: (
+			callback: (progress: { completed: number; total: number; timeMs: number }) => void,
+		) => () => void;
+		inspectAutoEditLocalModel: (model: string) => Promise<{
+			success: boolean;
+			info?: import("./ipc/autoEdit/reviewer").LocalModelInfo;
+			error?: string;
+		}>;
+		analyzeAutoEdit: (videoPath: string) => Promise<{
+			success: boolean;
+			evidence?: import("../src/components/video-editor/auto-edit/plan").MediaEvidence;
+			error?: string;
+		}>;
 		cancelAutoEditAnalysis: () => Promise<void>;
-		reviewAutoEditLocally: (plan: import("../src/components/video-editor/auto-edit/plan").EditPlan, model: string) => Promise<{ success: boolean; plan?: import("../src/components/video-editor/auto-edit/plan").EditPlan; error?: string }>;
+		reviewAutoEditLocally: (
+			plan: import("../src/components/video-editor/auto-edit/plan").EditPlan,
+			model: string,
+		) => Promise<{
+			success: boolean;
+			plan?: import("../src/components/video-editor/auto-edit/plan").EditPlan;
+			error?: string;
+		}>;
 		hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
 		hudOverlaySetSourceSelectionActive: (active: boolean) => void;
 		hudOverlayDrag: (phase: "start" | "move" | "end", screenX: number, screenY: number) => void;

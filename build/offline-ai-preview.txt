@@ -1,0 +1,3 @@
+Jsox Recorder Offline AI preview
+This test edition disables automatic updates, including direct executable and NSIS shortcut launches.
+Update this edition only with a newer complete offline AI package so its bundled models and runtime stay together.

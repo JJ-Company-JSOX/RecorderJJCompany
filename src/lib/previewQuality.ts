@@ -1,13 +1,23 @@
 import { useSyncExternalStore } from "react";
+import { loadAppSetting, saveAppSetting } from "./appSettings";
 
 export type PreviewQuality = "balanced" | "full";
 const KEY = "recordly.previewQuality";
 const listeners = new Set<() => void>();
 let quality: PreviewQuality = "balanced";
-try {
-	if (localStorage.getItem(KEY) === "full") quality = "full";
-} catch {
-	/* Storage is optional. */
+const savedQuality = loadAppSetting<unknown>(KEY);
+if (savedQuality === "full" || savedQuality === "balanced") {
+	quality = savedQuality;
+} else {
+	try {
+		const legacyQuality = localStorage.getItem(KEY);
+		if (legacyQuality === "full" || legacyQuality === "balanced") {
+			quality = legacyQuality;
+			saveAppSetting(KEY, legacyQuality);
+		}
+	} catch {
+		/* Browser storage is an optional fallback. */
+	}
 }
 
 // Only the preview backing store is scaled. Source media and export dimensions are untouched.
@@ -24,6 +34,7 @@ export function getPreviewResolution(
 
 export function setPreviewQuality(next: PreviewQuality) {
 	quality = next;
+	saveAppSetting(KEY, next);
 	try {
 		localStorage.setItem(KEY, next);
 	} catch {

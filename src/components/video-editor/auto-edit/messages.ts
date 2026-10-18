@@ -1,5 +1,14 @@
 export const messages = {
 	en: {
+		offlineTitle: "Built-in offline AI",
+		keepFullFrame: "Keep the whole frame visible; do not add zooms",
+		offlineInfo:
+			"Analyze video on this computer. No internet, account, model installation or API key is needed. AI loads only during analysis and closes when finished or canceled. Preview suggestions before applying.",
+		offlineReady: "The included AI is ready.",
+		offlineMissing:
+			"This build does not contain a complete offline AI bundle. Use the full offline AI edition; no separate AI setup is needed.",
+		offlineAnalyze: "Generate offline AI plan",
+		offlineBusy: "Offline AI is analyzing…",
 		"webcam-alignment-unverified":
 			"A separate webcam track has not been analyzed/aligned. Timing edits are disabled.",
 		inspect: "Inspect installed model",
@@ -59,6 +68,14 @@ export const messages = {
 			"Preview the suggestions, then choose individually or decide the remaining items together. Bulk decisions preserve your earlier choices and protected edits. Nothing changes until Apply; accepted cuts move later items on the timeline.",
 	},
 	zh: {
+		offlineTitle: "内置离线 AI",
+		keepFullFrame: "保持完整画面，不新增缩放",
+		offlineInfo:
+			"在本机分析视频，无需联网、账号、安装模型或 API Key。AI 仅在分析时加载，完成或取消后关闭。应用前可预览建议。",
+		offlineReady: "随软件提供的 AI 已就绪。",
+		offlineMissing: "此版本未包含完整离线 AI 组件。请使用完整离线 AI 版，无需单独配置 AI。",
+		offlineAnalyze: "生成离线 AI 方案",
+		offlineBusy: "离线 AI 正在分析…",
 		"webcam-alignment-unverified": "独立摄像头轨道尚未完成画面分析或对齐，不生成时间删改建议。",
 		inspect: "检查已安装模型",
 		modelLicense: "模型许可证",
@@ -116,6 +133,15 @@ export const messages = {
 			"先预览建议，再逐项选择或批量决定剩余项目。批量操作保留你之前的选择和受保护的编辑；点击应用前不会修改时间线，接受删减后后续项目会随时间线前移。",
 	},
 	ms: {
+		offlineTitle: "AI luar talian terbina dalam",
+		keepFullFrame: "Kekalkan seluruh bingkai; jangan tambah zum",
+		offlineInfo:
+			"Analisis video pada komputer ini. Tiada internet, akaun, pemasangan model atau kunci API diperlukan. AI dimuatkan hanya semasa analisis dan ditutup setelah selesai atau dibatalkan. Pratonton cadangan sebelum digunakan.",
+		offlineReady: "AI yang disertakan sudah sedia.",
+		offlineMissing:
+			"Binaan ini tidak mengandungi pakej AI luar talian yang lengkap. Gunakan edisi AI luar talian penuh; tiada persediaan AI berasingan diperlukan.",
+		offlineAnalyze: "Jana pelan AI luar talian",
+		offlineBusy: "AI luar talian sedang menganalisis…",
 		"webcam-alignment-unverified":
 			"Trek kamera web berasingan belum dianalisis/dijajarkan. Suntingan masa dinyahdayakan.",
 		inspect: "Periksa model dipasang",

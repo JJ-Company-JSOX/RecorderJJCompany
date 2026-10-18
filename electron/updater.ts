@@ -11,7 +11,12 @@ const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INITIAL_UPDATE_CHECK_DELAY_MS = 15 * 1000;
 export const UPDATE_REMINDER_DELAY_MS = 3 * 60 * 60 * 1000;
 const DISMISSED_READY_REMINDER_DELAY_MS = 5 * 60 * 1000;
-const AUTO_UPDATES_DISABLED = process.env.RECORDLY_DISABLE_AUTO_UPDATES === "1";
+// NSIS shortcuts launch the executable directly, bypassing our optional test launcher.
+// This marker belongs only to the offline preview package: generic releases keep updates.
+const OFFLINE_AI_PREVIEW =
+	app.isPackaged && fs.existsSync(path.join(process.resourcesPath, "offline-ai-preview.txt"));
+const AUTO_UPDATES_DISABLED =
+	process.env.RECORDLY_DISABLE_AUTO_UPDATES === "1" || OFFLINE_AI_PREVIEW;
 const UPDATE_FEED_URL_OVERRIDE = process.env.RECORDLY_UPDATE_FEED_URL?.trim() ?? "";
 const UPDATER_LOG_PATH =
 	process.env.RECORDLY_UPDATER_LOG_PATH?.trim() || path.join(USER_DATA_PATH, "updater.log");
@@ -708,7 +713,9 @@ export async function checkForAppUpdates(
 				title: "Updates Not Enabled",
 				message: "Auto-updates are only available in packaged releases.",
 				detail: AUTO_UPDATES_DISABLED
-					? "This build disabled auto-updates through RECORDLY_DISABLE_AUTO_UPDATES=1."
+					? OFFLINE_AI_PREVIEW
+						? "This offline AI preview disables automatic updates. Install a newer complete offline AI package to update."
+						: "This build disabled auto-updates through RECORDLY_DISABLE_AUTO_UPDATES=1."
 					: "Development builds do not ship the packaged update metadata required by electron-updater.",
 			});
 		}

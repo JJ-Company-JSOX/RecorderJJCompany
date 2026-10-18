@@ -4,6 +4,8 @@ Language: EN | [简中](README.zh-CN.md)
 
 Local editing: [Auto-edit batch review, protected edits and audio checks (简中)](docs/local-auto-edit.md).
 
+Customer offline AI edition: [bundled Windows model/runtime and validation status (简中)](docs/offline-ai-windows.md).
+
 <p align="center">
   <img width="220" alt="Recordly Logo" src="https://github.com/user-attachments/assets/414b8838-6731-45d4-a815-6e3c0aa1fe52" />
 </p>

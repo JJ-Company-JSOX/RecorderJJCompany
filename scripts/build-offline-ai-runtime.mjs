@@ -39,6 +39,7 @@ await fs.mkdir(tools, { recursive: true });
 const sevenZip = createRequire(import.meta.url)("7zip-bin").path7za;
 for (const asset of [lock.llvm, lock.cmake, lock.ninja]) {
 	const zip = path.join(tools, asset.file);
+	let zipChanged = false;
 	if ((await hash(zip).catch(() => "")) !== asset.sha256) {
 		console.log(`Downloading official portable build tool: ${asset.file}`);
 		const response = await fetch(asset.url, { signal: AbortSignal.timeout(600000) });
@@ -48,6 +49,7 @@ for (const asset of [lock.llvm, lock.cmake, lock.ninja]) {
 		if ((await hash(`${zip}.download`)) !== asset.sha256)
 			throw Error("Build tool checksum mismatch");
 		await fs.rename(`${zip}.download`, zip);
+		zipChanged = true;
 	}
 	const requiredTool = asset.directory
 		? path.join(
@@ -57,7 +59,10 @@ for (const asset of [lock.llvm, lock.cmake, lock.ninja]) {
 				asset === lock.llvm ? "x86_64-w64-mingw32-clang.exe" : "cmake.exe",
 			)
 		: path.join(tools, "ninja.exe");
-	if (!(await fs.stat(requiredTool).catch(() => null)))
+	// ninja has no `directory` field, so its extracted path doesn't change
+	// across versions. Re-extract whenever the zip itself changed, not just
+	// when the (possibly stale) extracted binary happens to be missing.
+	if (zipChanged || !(await fs.stat(requiredTool).catch(() => null)))
 		execFileSync(sevenZip, ["x", "-y", `-o${tools}`, zip], {
 			windowsHide: true,
 			stdio: "ignore",

@@ -322,6 +322,56 @@ test("a missing speech bundle disables complete editing and explains the full ed
 	).toBeEnabled();
 });
 
+test("missing audio is visible on small screens and offers visual review without applying edits", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1024, height: 640 });
+	const panel = await setup(page);
+	await page.evaluate(() => {
+		window.electronAPI.analyzeCompleteAutoEdit = async () => ({
+			success: false,
+			errorCode: "NO_AUDIO",
+			error: "Technical extraction details",
+		});
+	});
+	await panel
+		.getByRole("button", { name: "Automatically edit speech and video", exact: true })
+		.click();
+	const alert = panel.getByRole("alert");
+	await expect(alert).toContainText("your video is unchanged");
+	await expect(alert).toBeInViewport();
+	await expect(alert).not.toContainText("Technical extraction details");
+	await expect(panel.locator("[data-draft-result]")).toHaveCount(0);
+	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
+	await page.evaluate(() => {
+		window.electronAPI.analyzeAutoEdit = async () => ({
+			success: true,
+			evidence: {
+				durationMs: 6000,
+				staticRanges: [],
+				silentRanges: [],
+				audioVerified: false,
+				warnings: [],
+			},
+		});
+		window.electronAPI.analyzeAutoEditFrames = async () => ({
+			success: true,
+			analysis: {
+				durationMs: 6000,
+				sampledTimesMs: [],
+				observations: [],
+				model: "Fixture",
+				elapsedMs: 1,
+			},
+		});
+	});
+	await panel.getByRole("button", { name: "Review a visual-only plan instead" }).click();
+	await expect(panel.locator("[data-no-edits]")).toContainText("No safe automatic edits");
+	await expect(panel.locator("[data-no-edits]")).toBeInViewport();
+	await expect(panel.locator("[data-draft-result]")).toHaveCount(0);
+	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
+});
+
 test("small screens keep the main workflow and footer usable in Chinese and English", async ({
 	page,
 }) => {

@@ -41,6 +41,7 @@ export function AutoEditPanel({
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
 	const [busy, setBusy] = useState<"analysis" | "review" | "vision" | "tools" | null>(null);
 	const [error, setError] = useState("");
+	const [missingAudio, setMissingAudio] = useState(false);
 	const [applied, setApplied] = useState(false);
 	const [model, setModel] = useState("");
 	const [modelInfo, setModelInfo] = useState<{
@@ -58,6 +59,10 @@ export function AutoEditPanel({
 	const [draftSummary, setDraftSummary] = useState("");
 	const resultAnchor = useRef<HTMLDivElement>(null);
 	const progressAnchor = useRef<HTMLDivElement>(null);
+	const errorAnchor = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (error) errorAnchor.current?.scrollIntoView({ block: "nearest" });
+	}, [error]);
 	useEffect(() => {
 		if (busy) progressAnchor.current?.scrollIntoView({ block: "nearest" });
 	}, [busy]);
@@ -121,6 +126,7 @@ export function AutoEditPanel({
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
+		setMissingAudio(false);
 		setApplied(false);
 		setSpeechStage("");
 		setDraftSummary("");
@@ -134,6 +140,12 @@ export function AutoEditPanel({
 						language: "auto",
 					})
 				: undefined;
+			if (complete?.errorCode === "NO_AUDIO") {
+				if (run !== generation.current) return;
+				setMissingAudio(true);
+				setError(ui.noAudio);
+				return;
+			}
 			const result = complete ?? (await window.electronAPI.analyzeAutoEdit(source));
 			if (run !== generation.current) return;
 			if (!result.success || !result.evidence) throw new Error(result.error);
@@ -351,6 +363,24 @@ export function AutoEditPanel({
 							{ui.actionHelp}
 						</p>
 						{speechReady === false && <p className="text-sm">{m.speechMissing}</p>}
+						{error && (
+							<div
+								ref={errorAnchor}
+								role="alert"
+								className="space-y-3 rounded-lg border border-danger/30 bg-background p-3 text-sm"
+							>
+								<p>{error}</p>
+								{missingAudio && (
+									<Button
+										variant="secondary"
+										disabled={!!busy || !bundledStatus?.available}
+										onClick={() => void analyze(true)}
+									>
+										{ui.visualAlternative}
+									</Button>
+								)}
+							</div>
+						)}
 						{busy && (
 							<div
 								ref={progressAnchor}
@@ -459,11 +489,6 @@ export function AutoEditPanel({
 						</div>
 					</details>
 					<div ref={resultAnchor} />
-					{error && (
-						<p role="alert" className="rounded-lg border border-danger/30 p-3 text-sm">
-							{error}
-						</p>
-					)}
 					{stale && <p role="alert">{m.stale}</p>}
 					{applied && (
 						<section
@@ -481,6 +506,15 @@ export function AutoEditPanel({
 					)}
 					{plan && (
 						<>
+							{!available.length && (
+								<p
+									role="status"
+									data-no-edits
+									className="rounded-lg border p-3 text-sm"
+								>
+									{ui.noChanges}
+								</p>
+							)}
 							<h3 className="font-semibold">{ui.reviewTitle}</h3>
 							{plan.warnings.map((warning, i) => (
 								<p key={`${warning}-${i}`} className="text-sm">

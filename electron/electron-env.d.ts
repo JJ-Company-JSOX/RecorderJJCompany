@@ -253,6 +253,7 @@ interface Window {
 		analyzeCompleteAutoEdit: (input: { videoPath: string; language?: string }) => Promise<{
 			success: boolean;
 			error?: string;
+			errorCode?: "NO_AUDIO";
 			evidence?: import("../src/components/video-editor/auto-edit/plan").MediaEvidence;
 			speech?: import("../src/components/video-editor/auto-edit/speechTypes").SpeechAnalysis;
 			analysis?: import("../src/components/video-editor/auto-edit/vision").VisualAnalysis;

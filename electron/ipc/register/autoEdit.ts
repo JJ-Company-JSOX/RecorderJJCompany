@@ -10,7 +10,7 @@ import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
 import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
 import type { SpeechTranscript } from "../../../src/components/video-editor/auto-edit/speechTypes";
 import { generateBundledSpeechTranscript, getBundledSpeechStatus } from "../captions/bundledSpeech";
-import { resolveCaptionAudioCandidates } from "../captions/generate";
+import { NoCaptionAudioError, resolveCaptionAudioCandidates } from "../captions/generate";
 import { getFfmpegBinaryPath, getFfprobeBinaryPath } from "../ffmpeg/binary";
 import { resolveApprovedLocalMediaPath } from "../project/manager";
 import { getCompanionAudioStartDelayMs } from "../recording/diagnostics";
@@ -144,6 +144,7 @@ export function registerAutoEditHandlers() {
 					success: false,
 					error:
 						error instanceof Error ? error.message : "Offline automatic editing failed",
+					errorCode: error instanceof NoCaptionAudioError ? "NO_AUDIO" : undefined,
 				};
 			} finally {
 				await session?.close();

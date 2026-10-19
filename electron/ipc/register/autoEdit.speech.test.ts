@@ -29,6 +29,7 @@ vi.mock("../autoEdit/reviewer", () => ({
 	LocalPlanReviewer: class {},
 }));
 vi.mock("../captions/generate", () => ({
+	NoCaptionAudioError: class extends Error {},
 	resolveCaptionAudioCandidates: async () => [{ path: "/approved.mp4", label: "recording" }],
 }));
 vi.mock("../captions/bundledSpeech", () => ({
@@ -43,6 +44,7 @@ vi.mock("../project/manager", () => ({ resolveApprovedLocalMediaPath: fixture.ap
 vi.mock("../recording/diagnostics", () => ({ getCompanionAudioStartDelayMs: async () => 0 }));
 vi.mock("../utils", () => ({ normalizeVideoSourcePath: (value: string) => value }));
 import { registerAutoEditHandlers } from "./autoEdit";
+import { NoCaptionAudioError } from "../captions/generate";
 const event = () => ({
 	sender: {
 		id: 7,
@@ -101,6 +103,19 @@ it("does not load reasoning models when speech recognition finds nothing", async
 	});
 	expect(result.error).toContain("No usable speech");
 	expect(fixture.start).not.toHaveBeenCalled();
+});
+it("reports missing audio distinctly and releases the job for retry", async () => {
+	fixture.recognize.mockRejectedValueOnce(new NoCaptionAudioError("No source audio"));
+	const result = await fixture.handlers.get("auto-edit-complete")!(event(), {
+		videoPath: "/approved.mp4",
+	});
+	expect(result).toMatchObject({ success: false, errorCode: "NO_AUDIO" });
+	expect(fixture.start).not.toHaveBeenCalled();
+	expect(fixture.vision).not.toHaveBeenCalled();
+	expect(
+		(await fixture.handlers.get("auto-edit-complete")!(event(), { videoPath: "/approved.mp4" }))
+			.success,
+	).toBe(true);
 });
 it("passes only approved sources, grounds transcript, and closes model after vision failure", async () => {
 	fixture.vision.mockRejectedValue(Error("fixture vision failure"));

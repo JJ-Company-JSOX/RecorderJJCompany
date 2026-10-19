@@ -1,5 +1,9 @@
 {
-  "extends": "./electron-builder.test.json5",
+  "extends": "./electron-builder.json5",
+  "electronDist": "node_modules/electron/dist",
+  "npmRebuild": false,
+  "buildDependenciesFromSource": false,
+  "publish": null,
   "appId": "com.jsox.recorder.offline.tools.preview",
   "productName": "Jsox Recorder",
   "directories": { "output": "release/offline-tools-test" },

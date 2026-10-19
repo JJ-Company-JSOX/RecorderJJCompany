@@ -36,7 +36,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-class NoCaptionAudioError extends Error {}
+export class NoCaptionAudioError extends Error {}
 
 function rethrowCancellation(error: unknown, signal?: AbortSignal) {
 	signal?.throwIfAborted();

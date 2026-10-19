@@ -20,6 +20,14 @@ export function RecordingLibraryPanel({
 }: {
 	library: ReturnType<typeof useRecordingLibrary>;
 }) {
+	// Dev-only render counter so tests/ui/library-profile.spec.ts can assert on
+	// how often this panel actually re-renders during playback. Never ships:
+	// import.meta.env.DEV is statically replaced with `false` in production
+	// builds, so bundlers dead-code-eliminate this block.
+	if (import.meta.env.DEV) {
+		const counted = window as unknown as { __libraryRenders?: number };
+		counted.__libraryRenders = (counted.__libraryRenders ?? 0) + 1;
+	}
 	const panelRef = useRef<HTMLElement>(null);
 	const [query, setQuery] = useState("");
 	// biome-ignore lint/correctness/useExhaustiveDependencies: restore focus when removal unmounts the focused recording.

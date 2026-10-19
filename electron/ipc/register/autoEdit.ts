@@ -5,6 +5,7 @@ import type { EditPlan } from "../../../src/components/video-editor/auto-edit/pl
 import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bundled";
 import { analyzeLocalMedia } from "../autoEdit/media";
 import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
+import { LocalNarrationGenerator } from "../autoEdit/narrator";
 import { analyzeVideoFrames } from "../autoEdit/vision";
 import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
 import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
@@ -270,6 +271,23 @@ export function registerAutoEditHandlers() {
 			return {
 				success: false,
 				error: error instanceof Error ? error.message : "Local review failed",
+			};
+		}
+	});
+	ipcMain.handle("auto-edit-narrate-local", async (_event, plan: EditPlan, model: string) => {
+		try {
+			if (
+				!plan ||
+				plan.version !== 1 ||
+				!Array.isArray(plan.suggestions) ||
+				plan.suggestions.length > 5000
+			)
+				throw new Error("Invalid plan");
+			return { success: true, draft: await new LocalNarrationGenerator().generate(plan, model) };
+		} catch (error) {
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : "Local narration draft failed",
 			};
 		}
 	});

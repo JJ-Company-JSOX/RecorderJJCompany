@@ -119,6 +119,25 @@ export function EditorShell(props: Props) {
 		previewAspectRatioValue,
 	} = props;
 	const library = useRecordingLibrary(project, timeline, ui, appearance);
+	// `library` is a fresh object every render, so memoize this element on its
+	// actual value fields — not `library` itself — or EditorSidebar's memo()
+	// comparator sees a new panelContent reference on every render and never
+	// skips re-rendering while the library panel is open.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: depending on `library` itself would defeat this memo, since it's a new object every render; the listed value fields are what should trigger a recompute.
+	const libraryPanelContent = useMemo(
+		() => (library.open ? <RecordingLibraryPanel library={library} /> : undefined),
+		[
+			library.open,
+			library.entries,
+			library.selected,
+			library.loading,
+			library.busy,
+			library.error,
+			library.importing,
+			library.cancelling,
+			library.canUndo,
+		],
+	);
 	const selectEffectSection = useCallback(
 		(section: EditorEffectSection) => {
 			library.setOpen(false);
@@ -433,9 +452,7 @@ export function EditorShell(props: Props) {
 					<EditorSidebar
 						accountUser={auth.user}
 						onAccountClick={openAccount}
-						panelContent={
-							library.open ? <RecordingLibraryPanel library={library} /> : undefined
-						}
+						panelContent={libraryPanelContent}
 						t={t}
 						activeSection={ui.activeEffectSection}
 						setActiveSection={selectEffectSection}

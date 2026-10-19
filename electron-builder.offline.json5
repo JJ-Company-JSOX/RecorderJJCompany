@@ -1,7 +1,17 @@
 // Complete Windows offline-AI edition. Assets are prepared on the build machine.
 // Installing/running this package never downloads models or installs AI services.
+//
+// Extends electron-builder.json5 directly (not electron-builder.test.json5):
+// electron-builder's config merge concatenates array fields like `extraFiles`
+// rather than replacing them, so extending the test config would also pull in
+// its "Start-Jsox-Test.cmd" launcher. The test-only settings this build still
+// needs are duplicated below instead.
 {
-  "extends": "./electron-builder.test.json5",
+  "extends": "./electron-builder.json5",
+  "electronDist": "node_modules/electron/dist",
+  "npmRebuild": false,
+  "buildDependenciesFromSource": false,
+  "publish": null,
   "appId": "com.jsox.recorder.offline.preview",
   "productName": "Jsox Recorder",
   "directories": { "output": "release/offline-ai-test" },

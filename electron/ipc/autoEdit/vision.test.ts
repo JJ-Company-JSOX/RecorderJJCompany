@@ -11,14 +11,16 @@ const ffmpegPath = require("ffmpeg-static") as string,
 	ffprobePath = require("ffprobe-static").path as string;
 const dir = mkdtempSync(path.join(tmpdir(), "jsox-vision-")),
 	videoPath = path.join(dir, "fixture.mkv");
-const requests: { route: string; body: Record<string, any> }[] = [];
+const requests: { route: string; body: Record<string, unknown> }[] = [];
 let remote = false,
 	vision = true,
 	malformed = false;
 let onChat: (() => void) | undefined;
 const server = http.createServer((req, res) => {
 	let body = "";
-	req.on("data", (chunk) => (body += chunk));
+	req.on("data", (chunk) => {
+		body += chunk;
+	});
 	req.on("end", () => {
 		const input = body ? JSON.parse(body) : {};
 		requests.push({ route: req.url!, body: input });

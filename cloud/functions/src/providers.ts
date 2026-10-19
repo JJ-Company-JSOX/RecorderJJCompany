@@ -52,11 +52,11 @@ export async function searchStock(
 		const data = await json(`https://api.pexels.com/videos/search?query=${q}&per_page=5`, {
 			Authorization: key,
 		});
-		return (data.videos ?? []).slice(0, 5).flatMap((video: any) => {
+		return (data.videos ?? []).slice(0, 5).flatMap((video) => {
 			if (!providerPage("pexels", video.url) || !Array.isArray(video.video_files)) return [];
 			const file = video.video_files
-				.filter((f: any) => f.file_type === "video/mp4" && f.width <= 1920)
-				.sort((a: any, b: any) => b.width - a.width)[0];
+				.filter((f) => f.file_type === "video/mp4" && f.width <= 1920)
+				.sort((a, b) => b.width - a.width)[0];
 			if (!file) return [];
 			return [
 				{
@@ -77,7 +77,7 @@ export async function searchStock(
 		`https://pixabay.com/api/videos/?key=${encodeURIComponent(key)}&q=${q}&per_page=5`,
 		{},
 	);
-	return (data.hits ?? []).slice(0, 5).flatMap((video: any) => {
+	return (data.hits ?? []).slice(0, 5).flatMap((video) => {
 		if (!providerPage("pixabay", video.pageURL)) return [];
 		const file = video.videos?.medium ?? video.videos?.small;
 		if (!file?.url) return [];

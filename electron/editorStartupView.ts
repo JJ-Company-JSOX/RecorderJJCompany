@@ -16,3 +16,21 @@ export function resolveEditorStartupView({
 		? "editor"
 		: "home";
 }
+
+/** A demo is an initial input only. Real recordings/projects always take precedence. */
+export function resolveInitialDemoInput({
+	projectPath,
+	videoPath,
+	recordingVideoPath,
+	devInput,
+	devWebcam,
+}: {
+	projectPath?: string | null;
+	videoPath?: string | null;
+	recordingVideoPath?: string | null;
+	devInput?: string;
+	devWebcam?: string;
+}): { devOpenInput?: string; devOpenWebcam?: string } {
+	if (projectPath || videoPath || recordingVideoPath || !devInput) return {};
+	return { devOpenInput: devInput, ...(devWebcam ? { devOpenWebcam: devWebcam } : {}) };
+}

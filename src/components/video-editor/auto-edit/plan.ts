@@ -33,6 +33,20 @@ export interface EditState {
 	autoCaptions: CaptionCue[];
 	speedRegions: SpeedRegion[];
 }
+export type ConflictReason =
+	| "webcam-alignment-unverified"
+	| "legacy-speed"
+	| "existing-edit"
+	| "existing-speed"
+	| "existing-zoom"
+	| "existing-annotation"
+	| "speech-invalid-grounding"
+	| "speech-audio-unverified"
+	| "speech-asr-uncertain"
+	| "speech-vad-unverified"
+	| "speech-overlapping-speech"
+	| "speech-unique-content"
+	| "speech-confidence-unverified";
 export interface EditSuggestion extends Span {
 	id: string;
 	kind: "trim" | "zoom" | "speed" | "annotation" | "caption";
@@ -42,7 +56,7 @@ export interface EditSuggestion extends Span {
 	depth?: 1 | 2 | 3;
 	speed?: number;
 	text?: string;
-	blocked?: string;
+	blocked?: ConflictReason;
 }
 export interface EditPlan {
 	version: 1;
@@ -86,7 +100,7 @@ export function intersectRanges(a: Span[], b: Span[]): Span[] {
 		.sort((x, y) => x.startMs - y.startMs);
 }
 
-export function conflictFor(s: EditSuggestion, state: EditState): string | undefined {
+export function conflictFor(s: EditSuggestion, state: EditState): ConflictReason | undefined {
 	if (s.kind === "trim" || s.kind === "speed") {
 		if (state.additionalVisualSource) return "webcam-alignment-unverified";
 		if (state.speedRegions.length) return "legacy-speed";

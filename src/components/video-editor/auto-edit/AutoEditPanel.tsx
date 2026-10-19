@@ -598,7 +598,7 @@ export function AutoEditPanel({
 											{m.seek}
 										</Button>
 										{s.blocked ? (
-											<p>{m.blocked}</p>
+											<p>{m[s.blocked]}</p>
 										) : (
 											<fieldset
 												disabled={stale || !!busy}

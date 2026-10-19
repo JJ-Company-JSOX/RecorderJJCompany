@@ -31,6 +31,7 @@ test("review is explicit, JSON is downloadable, accepted trim ripples and Undo r
 	const clips = page.locator('[data-variant="clip"]');
 	await expect(clips).toHaveAttribute("data-end-ms", "6000", { timeout: 20000 });
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+	await page.locator("[data-analysis-options] > summary").click();
 	const dialog = page.getByRole("dialog", { name: "Auto edit plan", exact: true });
 	await dialog.getByRole("button", { name: "Generate local plan" }).click();
 	await expect(dialog.locator("[data-suggestion-id]")).toHaveCount(2);
@@ -39,7 +40,7 @@ test("review is explicit, JSON is downloadable, accepted trim ripples and Undo r
 	await expect(clips).toHaveCount(1);
 	const trim = dialog
 		.locator("li")
-		.filter({ has: page.getByText("Remove pause", { exact: true }) });
+		.filter({ has: page.getByText("Remove segment", { exact: true }) });
 	const zoom = dialog
 		.locator("li")
 		.filter({ has: page.getByText("Zoom at click", { exact: true }) });
@@ -50,6 +51,7 @@ test("review is explicit, JSON is downloadable, accepted trim ripples and Undo r
 	await expect(zoom.getByRole("radio", { name: "Reject", exact: true })).toBeChecked();
 	await expect(apply).toBeEnabled();
 	const downloadEvent = page.waitForEvent("download");
+	await dialog.getByText("Inspect JSON plan", { exact: true }).click();
 	await dialog.getByRole("button", { name: "Download JSON" }).click();
 	const download = await downloadEvent;
 	expect(download.suggestedFilename()).toBe("recordly-edit-plan.json");
@@ -106,8 +108,9 @@ test("Malay and Chinese controls; local AI changes require another explicit deci
 		timeout: 20000,
 	});
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+	await page.locator("[data-analysis-options] > summary").click();
 	await page.getByLabel("Plan language").selectOption("ms");
-	await expect(page.getByRole("heading", { name: "Pelan suntingan automatik" })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Suntingan automatik AI" })).toBeVisible();
 	await page.getByRole("button", { name: "Jana pelan setempat" }).click();
 	await page.getByRole("radio", { name: "Terima", exact: true }).check();
 	await expect(page.getByRole("button", { name: "Gunakan cadangan diterima" })).toBeEnabled();
@@ -125,7 +128,7 @@ test("Malay and Chinese controls; local AI changes require another explicit deci
 	await expect(page.getByRole("dialog").getByRole("status")).toContainText("AI setempat");
 	await expect(page.getByRole("button", { name: "Gunakan cadangan diterima" })).toBeDisabled();
 	await page.getByLabel("Plan language").selectOption("zh");
-	await expect(page.getByRole("heading", { name: "自动剪辑方案" })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "AI 自动剪辑" })).toBeVisible();
 	await page.getByRole("radio", { name: "接受", exact: true }).check();
 	await page.getByRole("button", { name: "应用已接受的建议" }).click();
 	await expect(page.getByRole("dialog").getByRole("status")).toContainText("已应用");
@@ -150,6 +153,7 @@ test("a plan becomes stale when existing edits change", async ({ page }) => {
 	const clip = page.locator('[data-variant="clip"]');
 	await expect(clip).toHaveAttribute("data-end-ms", "6000", { timeout: 20000 });
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+	await page.locator("[data-analysis-options] > summary").click();
 	await page.getByRole("button", { name: "Generate local plan" }).click();
 	await page.getByRole("radio", { name: "Accept", exact: true }).check();
 	await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
@@ -158,6 +162,7 @@ test("a plan becomes stale when existing edits change", async ({ page }) => {
 	await speed.focus();
 	await speed.press("ArrowRight");
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+	await page.locator("[data-analysis-options] > summary").click();
 	await expect(page.getByRole("alert")).toContainText("timeline changed");
 	await expect(page.getByRole("button", { name: "Apply accepted edits" })).toBeDisabled();
 	await expect(page.getByRole("button", { name: "Accept remaining suggestions" })).toBeDisabled();
@@ -220,6 +225,7 @@ for (const allProtected of [false, true]) {
 		const zooms = page.locator('[data-variant="zoom"]');
 		await expect(zooms).toHaveCount(1, { timeout: 20000 });
 		await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+		await page.locator("[data-analysis-options] > summary").click();
 		const dialog = page.locator("[data-auto-edit-panel]");
 		await dialog.getByRole("button", { name: "Generate local plan" }).click();
 		const items = dialog.locator("[data-suggestion-id]");

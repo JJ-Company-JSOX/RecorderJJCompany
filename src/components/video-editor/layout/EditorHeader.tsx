@@ -1,14 +1,16 @@
-import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 import { Separator } from "@heroui/react";
+import type { CSSProperties, FormEvent, RefObject } from "react";
+import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
+import { Button } from "@/components/ui/button";
 import {
-	House,
 	FilmStrip,
+	House,
 	ArrowClockwise as Redo2,
 	ArrowCounterClockwise as Undo2,
 } from "@/components/ui/icons";
-import type { CSSProperties, FormEvent, RefObject } from "react";
-import { Button } from "@/components/ui/button";
 import type { useI18n } from "@/contexts/I18nContext";
+import { useI18n as useEditorI18n } from "@/contexts/I18nContext";
+import { interfaceMessages } from "../auto-edit/interfaceMessages";
 import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
 import type { useExportSettings } from "../export/useExportSettings";
@@ -63,6 +65,10 @@ type Props = {
 };
 
 export function EditorHeader(props: Props) {
+	const { locale } = useEditorI18n();
+	const autoEditLabel =
+		interfaceMessages[locale.startsWith("zh") ? "zh" : locale.startsWith("ms") ? "ms" : "en"]
+			.title;
 	const {
 		t,
 		headerLeftControlsPaddingClass,
@@ -181,8 +187,14 @@ export function EditorHeader(props: Props) {
 					)}
 				</div>
 				<Separator orientation="vertical" className="mx-3 h-5 shrink-0 self-center" />
-				<Button variant="secondary" size="sm" onClick={props.onOpenAutoEdit}>
-					{t("editor.autoEdit.title", "Auto edit plan")}
+				<Button
+					variant="secondary"
+					size="sm"
+					className="h-9 shrink-0 border border-primary/30 text-primary"
+					aria-label={t("editor.autoEdit.title", "Auto edit plan")}
+					onClick={props.onOpenAutoEdit}
+				>
+					{autoEditLabel}
 				</Button>
 				<Button
 					variant="secondary"

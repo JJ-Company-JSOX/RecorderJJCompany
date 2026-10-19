@@ -2,11 +2,11 @@ import { expect, test } from "@playwright/test";
 
 test("publish preserves local destination and stays open throughout sharing", async ({ page }) => {
 	await page.goto("/tests/ui/publish.html?switch");
-	await page.getByRole("button", { name: "Publish", exact: true }).click();
+	await page.getByRole("button", { name: "Export", exact: true }).click();
 	await page.getByRole("row", { name: "Local", exact: true }).click();
 	await expect(page.getByRole("button", { name: "Export Video", exact: true })).toBeVisible();
 	await page.reload();
-	await page.getByRole("button", { name: "Publish", exact: true }).click();
+	await page.getByRole("button", { name: "Export", exact: true }).click();
 	await expect(page.getByRole("row", { name: "Local", exact: true })).toHaveAttribute(
 		"aria-selected",
 		"true",
@@ -35,7 +35,8 @@ test("publish preserves local destination and stays open throughout sharing", as
 
 test("a full cloud quota prevents starting preparation", async ({ page }) => {
 	await page.goto("/tests/ui/publish.html?full");
-	await page.getByRole("button", { name: "Publish", exact: true }).click();
+	await page.getByRole("button", { name: "Export", exact: true }).click();
+	await page.getByRole("row", { name: "Link", exact: true }).click();
 	await expect(
 		page.getByText(
 			"You have 5 cloud recordings. Delete one from Shared before sharing another.",
@@ -73,7 +74,8 @@ test("shared cards open ready links and delete incomplete uploads", async ({ pag
 
 test("switching accounts clears the previous account's cloud quota", async ({ page }) => {
 	await page.goto("/tests/ui/publish.html?full&switch");
-	await page.getByRole("button", { name: "Publish", exact: true }).click();
+	await page.getByRole("button", { name: "Export", exact: true }).click();
+	await page.getByRole("row", { name: "Link", exact: true }).click();
 	await expect(
 		page.getByText(
 			"You have 5 cloud recordings. Delete one from Shared before sharing another.",
@@ -98,7 +100,8 @@ for (const fails of [false, true]) {
 		page,
 	}) => {
 		await page.goto(`/tests/ui/publish.html?switch&controlled${fails ? "&fail" : ""}`);
-		await page.getByRole("button", { name: "Publish", exact: true }).click();
+		await page.getByRole("button", { name: "Export", exact: true }).click();
+		await page.getByRole("row", { name: "Link", exact: true }).click();
 		await page.getByRole("button", { name: "Share", exact: true }).click();
 		await expect(page.getByText("Uploading · 85%", { exact: true })).toBeVisible();
 		await page
@@ -143,7 +146,7 @@ test("deleting from another shared library refreshes a mounted Share quota", asy
 for (const destination of ["Local", "Link"]) {
 	test(`Publish preserves manual export reporting for ${destination}`, async ({ page }) => {
 		await page.goto("/tests/ui/publish.html?export-error");
-		await page.getByRole("button", { name: "Publish", exact: true }).click();
+		await page.getByRole("button", { name: "Export", exact: true }).click();
 		await page.getByRole("row", { name: destination, exact: true }).click();
 		await page.getByRole("button", { name: "Report error", exact: true }).click();
 		const dialog = page.getByRole("dialog", { name: "Report export error", exact: true });

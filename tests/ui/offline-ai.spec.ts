@@ -60,6 +60,7 @@ test("included offline AI needs one click, no model setup, and keeps Apply and U
 		timeout: 60000,
 	});
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+	await page.locator("[data-analysis-options] > summary").click();
 	const panel = page.locator("[data-auto-edit-panel]");
 	await panel.getByRole("button", { name: "Generate offline AI plan" }).click();
 	await expect(panel.locator("[data-suggestion-id]")).toHaveCount(1);
@@ -92,6 +93,7 @@ test("a build without model assets explains the full edition and does not prompt
 	await page.goto("/?windowType=editor");
 	await expect(page.locator('[data-variant="clip"]')).toBeVisible({ timeout: 60000 });
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+	await page.locator("[data-analysis-options] > summary").click();
 	const panel = page.locator("[data-auto-edit-panel]");
 	await expect(panel.getByRole("button", { name: "Generate offline AI plan" })).toBeDisabled();
 	await expect(panel.getByText(/Use the full offline AI edition/)).toBeVisible();

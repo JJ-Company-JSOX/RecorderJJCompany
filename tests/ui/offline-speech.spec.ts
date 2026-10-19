@@ -161,6 +161,7 @@ test("one click automatically applies grounded subtitles and trim in one undoabl
 });
 
 test("cancel ignores a late completed model reply without applying any edits", async ({ page }) => {
+	await page.setViewportSize({ width: 1024, height: 640 });
 	const panel = await setup(page, { speechAvailable: true, deferred: true });
 	await panel
 		.getByRole("button", { name: "Automatically edit speech and video", exact: true })
@@ -168,6 +169,10 @@ test("cancel ignores a late completed model reply without applying any edits", a
 	await expect(
 		panel.getByRole("status").filter({ hasText: "Recognizing speech locally" }),
 	).toBeVisible();
+	await expect(panel.locator("[data-analysis-progress]")).toBeInViewport();
+	await expect(
+		panel.getByRole("button", { name: "Cancel analysis", exact: true }),
+	).toBeInViewport();
 	await panel.getByRole("button", { name: "Cancel analysis", exact: true }).click();
 	await expect(page.locator("html")).toHaveAttribute("data-speech-cancelled", "true");
 	await page.evaluate(() => window.dispatchEvent(new Event("test-finish-speech")));
@@ -181,6 +186,18 @@ test("cancel ignores a late completed model reply without applying any edits", a
 	await expect(
 		panel.getByText("Applied. Use Undo to restore the previous timeline.", { exact: true }),
 	).toHaveCount(0);
+});
+
+test("new signed-out projects export locally without opening a sign-in flow", async ({ page }) => {
+	const panel = await setup(page);
+	await panel.getByRole("button", { name: "Back to editor", exact: true }).click();
+	await page.getByRole("button", { name: "Export", exact: true }).click();
+	await expect(page.getByRole("row", { name: "Local", exact: true })).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	await expect(page.getByRole("button", { name: "Export Video", exact: true })).toBeVisible();
+	await expect(page.locator('input[type="email"]')).toHaveCount(0);
 });
 
 test("review mode shows speech proposals and leaves the timeline unchanged until Apply", async ({
@@ -232,7 +249,47 @@ test("a missing speech bundle disables complete editing and explains the full ed
 			{ exact: true },
 		),
 	).toBeVisible();
+	await panel.locator("[data-analysis-options] > summary").click();
 	await expect(
 		panel.getByRole("button", { name: "Generate offline AI plan", exact: true }),
 	).toBeEnabled();
+});
+
+test("small screens keep the main workflow and footer usable in Chinese and English", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1024, height: 640 });
+	const panel = await setup(page);
+	await expect(panel.locator("[data-edit-workflow]")).toBeVisible();
+	await expect(panel.locator("[data-analysis-options]")).not.toHaveAttribute("open");
+	const footer = panel.locator("[data-auto-edit-footer]");
+	for (const language of ["en", "zh"]) {
+		await panel.getByLabel("Plan language").selectOption(language);
+		await expect(footer).toBeInViewport();
+		const bounds = await panel.boundingBox();
+		expect(bounds).not.toBeNull();
+		expect(bounds!.x).toBeGreaterThanOrEqual(0);
+		expect(bounds!.y).toBeGreaterThanOrEqual(0);
+		expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(1024);
+		expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(640);
+		await expect(
+			panel.getByRole("button", {
+				name:
+					language === "zh"
+						? "一键自动剪辑语音和视频"
+						: "Automatically edit speech and video",
+				exact: true,
+			}),
+		).toBeInViewport();
+		await panel.screenshot({ path: `test-results/ai-workflow-${language}-1024.png` });
+	}
+	await panel.locator("[data-hardware-guide] > summary").click();
+	await expect(panel.getByText(/16GB/)).toBeVisible();
+	await expect(footer).toBeInViewport();
+	await panel.locator("[data-auto-edit-scroll]").evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	await expect(footer).toBeInViewport();
+	await panel.getByRole("button", { name: "返回编辑器", exact: true }).click();
+	await expect(panel).toHaveCount(0);
 });

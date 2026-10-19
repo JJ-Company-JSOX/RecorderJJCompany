@@ -25,6 +25,8 @@
 		"verify:offline-speech": "node scripts/prepare-offline-speech.mjs --verify",
 		"package:win:speech": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && electron-builder --config electron-builder.speech.json5 --win --x64 --publish never",
 		"build:win:speech": "npm run build:app && npm run package:win:speech",
+		"package:win:speech-ui": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && electron-builder --config electron-builder.speech-ui.json5 --win --x64 --publish never",
+		"build:win:speech-ui": "npm run build:app && npm run package:win:speech-ui",
 		"smoke:offline-speech": "node scripts/smoke-offline-speech.mjs",
 		"verify:offline-ai": "node scripts/prepare-offline-ai.mjs --verify",
 		"package:win:offline": "npm run prepare:win:test && npm run verify:offline-ai && electron-builder --config electron-builder.offline.json5 --win --x64 --publish never && npm run smoke:packaged-binaries",

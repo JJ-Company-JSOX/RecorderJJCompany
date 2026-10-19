@@ -78,7 +78,7 @@ export function normalizeExportPreferences(raw: Partial<ExportPreferences>): Exp
 			raw.gifSizePreset === "original"
 				? raw.gifSizePreset
 				: "medium",
-		publishDestination: raw.publishDestination === "local" ? "local" : "link",
+		publishDestination: raw.publishDestination === "link" ? "link" : "local",
 		includeCaptionSidecar: raw.includeCaptionSidecar === true,
 	};
 }

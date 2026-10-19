@@ -166,6 +166,7 @@ async function run(executable) {
 			exact: true,
 		});
 		await expect(button).toBeEnabled();
+		await panel.screenshot({ path: path.join(artifacts, "ready-to-edit.png") });
 		const aiStart = performance.now();
 		await button.click();
 		await expect(button).toBeEnabled({ timeout: 600_000 });
@@ -315,7 +316,7 @@ async function run(executable) {
 			)
 			.toBe(timelineMs);
 		check("saved automatic speech draft reopens with its edited timeline");
-		await page.getByRole("button", { name: "Publish", exact: true }).click();
+		await page.getByRole("button", { name: "Export", exact: true }).click();
 		await page.getByRole("row", { name: "Local", exact: true }).click();
 		await page.getByRole("button", { name: "Export Video", exact: true }).click();
 		await expect

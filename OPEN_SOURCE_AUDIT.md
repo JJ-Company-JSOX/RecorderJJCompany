@@ -29,3 +29,5 @@ Existing FFmpeg + existing recorder/timeline/compositor + [whisper.cpp](https://
 Weights are not licensed merely by a wrapper repository's license. Deferred components have **not** passed a distribution review of every transitive binary/model. They are integration candidates, not shipped or legally certified features. No proprietary Canvid code has been copied.
 
 See [integration report and stage gates](docs/ai-integration-report.md). No end-to-end claim is made for highlights, multi-video mixing or semantic search in this first speech integration.
+
+The subsequent [prioritized candidate review](docs/next-open-source-candidates.zh-CN.md) considers Silero VAD, RNNoise, sherpa-onnx and scene detection for specific remaining gaps. These are recommendations, not additions to the shipped runtime.

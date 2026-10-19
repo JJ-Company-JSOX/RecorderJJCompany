@@ -1,0 +1,12 @@
+{
+  "extends": "./electron-builder.speech.json5",
+  "appId": "com.jsox.recorder.offline.speech.ui.preview",
+  "directories": { "output": "release/offline-speech-ui-test" },
+  "extraFiles": [
+    { "from": "scripts/launch-windows-offline-speech-ui.cmd", "to": "Start-Jsox-Offline-Speech-UI.cmd" }
+  ],
+  "win": {
+    "artifactName": "Jsox-Recorder-Offline-Speech-UI-${version}-${arch}.${ext}"
+  },
+  "nsis": { "shortcutName": "Jsox Recorder Offline Speech UI" }
+}

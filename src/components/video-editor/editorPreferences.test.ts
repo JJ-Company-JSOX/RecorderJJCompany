@@ -530,9 +530,9 @@ describe("source-specific webcam metadata", () => {
 
 describe("user preferences stay independent from projects and presets", () => {
 	afterEach(() => vi.unstubAllGlobals());
-	it("defaults Publish to Link and persists Local and export settings across reloads", () => {
+	it("defaults export to Local and preserves explicitly saved destinations across reloads", () => {
 		vi.stubGlobal("localStorage", createStorageMock());
-		expect(loadEditorPreferences().publishDestination).toBe("link");
+		expect(loadEditorPreferences().publishDestination).toBe("local");
 		saveEditorPreferences({
 			publishDestination: "local",
 			exportQuality: "high",
@@ -548,8 +548,10 @@ describe("user preferences stay independent from projects and presets", () => {
 		saveEditorPreferences({ wallpaper: "#123456" });
 		expect(loadEditorPreferences().publishDestination).toBe("local");
 		expect(normalizeEditorPreferences({ publishDestination: null }).publishDestination).toBe(
-			"link",
+			"local",
 		);
+		saveEditorPreferences({ publishDestination: "link" });
+		expect(loadEditorPreferences().publishDestination).toBe("link");
 	});
 	it("drops export settings and machine paths from legacy presets", () => {
 		vi.stubGlobal("localStorage", createStorageMock());

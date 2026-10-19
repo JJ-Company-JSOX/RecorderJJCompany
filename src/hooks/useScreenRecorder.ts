@@ -2162,9 +2162,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						videoFileName,
 					);
 					if (!videoResult.success) {
-						console.error("Failed to store video:", videoResult.message);
+						console.error("Failed to store video:", videoResult.message, videoResult.error);
+						const baseMessage = videoResult.message || "Failed to store the recording.";
 						await notifyRecordingFinalizationFailure(
-							videoResult.message || "Failed to store the recording.",
+							videoResult.error ? `${baseMessage} (${videoResult.error})` : baseMessage,
 						);
 						return;
 					}

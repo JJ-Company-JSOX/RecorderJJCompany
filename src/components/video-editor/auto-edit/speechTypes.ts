@@ -99,8 +99,19 @@ export function assertSpeechTranscript(raw: unknown): asserts raw is SpeechTrans
 	}
 }
 
+export type SpeechCutIssue =
+	| "speech-invalid-grounding"
+	| "speech-audio-unverified"
+	| "speech-asr-uncertain"
+	| "speech-vad-unverified"
+	| "speech-overlapping-speech"
+	| "speech-unique-content"
+	| "speech-confidence-unverified";
 /** Recheck this in both processes: a model cannot authorize deleting novel facts. */
-export function speechCutIssue(cut: SpeechCut, transcript: SpeechTranscript): string | undefined {
+export function speechCutIssue(
+	cut: SpeechCut,
+	transcript: SpeechTranscript,
+): SpeechCutIssue | undefined {
 	const byId = new Map(transcript.cues.map((cue) => [cue.id, cue]));
 	const removed = cut.removeCueIds.map((id) => byId.get(id));
 	const kept = cut.keepCueIds.map((id) => byId.get(id));

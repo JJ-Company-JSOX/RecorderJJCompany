@@ -7,6 +7,8 @@ import { applyEditPlan } from "./apply";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { interfaceMessages } from "./interfaceMessages";
 import { messages, type PlanLanguage } from "./messages";
+import type { NarrationDraft } from "./narration";
+import { narrationMessages } from "./narrationMessages";
 import { baselineFor, buildEditPlan, type Decision, type EditPlan, type EditState } from "./plan";
 import { addSpeechSuggestions } from "./speechPlan";
 import { addVisualSuggestions } from "./vision";
@@ -35,11 +37,14 @@ export function AutoEditPanel({
 	const m = messages[language];
 	const ui = interfaceMessages[language];
 	const v = visionMessages[language];
+	const n = narrationMessages[language];
 	const [visionConsent, setVisionConsent] = useState(false);
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
-	const [busy, setBusy] = useState<"analysis" | "review" | "vision" | "tools" | null>(null);
+	const [busy, setBusy] = useState<"analysis" | "review" | "narrate" | "vision" | "tools" | null>(
+		null,
+	);
 	const [error, setError] = useState("");
 	const [missingAudio, setMissingAudio] = useState(false);
 	const [applied, setApplied] = useState(false);
@@ -51,6 +56,9 @@ export function AutoEditPanel({
 		capabilities?: string[];
 	} | null>(null);
 	const [modelConsent, setModelConsent] = useState(false);
+	const [narrationDraft, setNarrationDraft] = useState<NarrationDraft | null>(null);
+	const [narrationEdits, setNarrationEdits] = useState<Record<string, string>>({});
+	const [narrationApproved, setNarrationApproved] = useState(false);
 	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
 	const [keepFullFrame, setKeepFullFrame] = useState(true);
 	const [speechReady, setSpeechReady] = useState<boolean | null>(null);
@@ -132,6 +140,9 @@ export function AutoEditPanel({
 		setDraftSummary("");
 		setPlan(null);
 		setDecisions({});
+		setNarrationDraft(null);
+		setNarrationEdits({});
+		setNarrationApproved(false);
 		try {
 			if (!window.electronAPI.analyzeAutoEdit) throw new Error(m.unavailable);
 			const complete = withSpeech
@@ -243,6 +254,25 @@ export function AutoEditPanel({
 			if (run === generation.current) setBusy(null);
 		}
 	};
+	const narrate = async () => {
+		if (!plan || !modelInfo || !modelConsent) return;
+		const run = ++generation.current;
+		setBusy("narrate");
+		setError("");
+		setNarrationApproved(false);
+		try {
+			const result = await window.electronAPI.narrateAutoEditLocally(plan, model);
+			if (run !== generation.current) return;
+			if (!result.success || !result.draft) throw new Error(result.error);
+			setNarrationDraft(result.draft);
+			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
 	const review = async () => {
 		if (!plan || !modelInfo || !modelConsent) return;
 		const run = ++generation.current;
@@ -254,6 +284,9 @@ export function AutoEditPanel({
 			if (!result.success || !result.plan) throw new Error(result.error);
 			setPlan(result.plan);
 			setDecisions({});
+			setNarrationDraft(null);
+			setNarrationEdits({});
+			setNarrationApproved(false);
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -598,7 +631,7 @@ export function AutoEditPanel({
 											{m.seek}
 										</Button>
 										{s.blocked ? (
-											<p>{m.blocked}</p>
+											<p>{m[s.blocked]}</p>
 										) : (
 											<fieldset
 												disabled={stale || !!busy}
@@ -720,6 +753,78 @@ export function AutoEditPanel({
 									</Button>
 									<section
 										className="mt-4 space-y-3 rounded border p-3"
+										aria-label={n.title}
+									>
+										<h3>{n.title}</h3>
+										<p className="text-sm">{n.info}</p>
+										<Button
+											disabled={
+												!modelInfo ||
+												!modelConsent ||
+												!model.trim() ||
+												stale ||
+												!!busy ||
+												!plan.suggestions.some((s) => !s.blocked)
+											}
+											onClick={() => void narrate()}
+										>
+											{busy === "narrate" ? n.busy : n.draft}
+										</Button>
+										{narrationDraft &&
+											(narrationDraft.cues.length === 0 ? (
+												<p className="text-sm">{n.empty}</p>
+											) : (
+												<div className="space-y-3">
+													<p className="text-sm">{n.editHint}</p>
+													<ol className="space-y-2">
+														{narrationDraft.cues.map((cue) => (
+															<li key={cue.id} className="space-y-1">
+																<Button
+																	variant="ghost"
+																	disabled={stale || !!busy}
+																	onClick={() =>
+																		onSeek(cue.startMs / 1000)
+																	}
+																>
+																	{m.seek}
+																</Button>
+																<textarea
+																	aria-label={cue.id}
+																	value={
+																		narrationEdits[cue.id] ?? cue.text
+																	}
+																	disabled={stale || !!busy}
+																	onChange={(e) => {
+																		setNarrationEdits((prev) => ({
+																			...prev,
+																			[cue.id]: e.target.value,
+																		}));
+																		setNarrationApproved(false);
+																	}}
+																	className="w-full rounded border p-2 text-sm"
+																/>
+															</li>
+														))}
+													</ol>
+													<label className="flex gap-2">
+														<input
+															type="checkbox"
+															checked={narrationApproved}
+															disabled={stale || !!busy}
+															onChange={(e) =>
+																setNarrationApproved(e.target.checked)
+															}
+														/>
+														{n.approve}
+													</label>
+													{narrationApproved && (
+														<p className="text-sm">{n.approved}</p>
+													)}
+												</div>
+											))}
+									</section>
+									<section
+										className="mt-4 space-y-3 rounded border p-3"
 										aria-label={v.title}
 									>
 										<h3>{v.title}</h3>
@@ -809,6 +914,9 @@ export function AutoEditPanel({
 									onApply(applyEditPlan(state, source, plan, decisions));
 									setPlan(null);
 									setDecisions({});
+									setNarrationDraft(null);
+									setNarrationEdits({});
+									setNarrationApproved(false);
 									setApplied(true);
 									setError("");
 								} catch (e) {

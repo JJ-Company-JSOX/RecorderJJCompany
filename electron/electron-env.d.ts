@@ -293,6 +293,14 @@ interface Window {
 			plan?: import("../src/components/video-editor/auto-edit/plan").EditPlan;
 			error?: string;
 		}>;
+		narrateAutoEditLocally: (
+			plan: import("../src/components/video-editor/auto-edit/plan").EditPlan,
+			model: string,
+		) => Promise<{
+			success: boolean;
+			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;
+			error?: string;
+		}>;
 		hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
 		hudOverlaySetSourceSelectionActive: (active: boolean) => void;
 		hudOverlayDrag: (phase: "start" | "move" | "end", screenX: number, screenY: number) => void;
@@ -404,7 +412,7 @@ interface Window {
 		storeRecordedVideo: (
 			videoData: ArrayBuffer,
 			fileName: string,
-		) => Promise<{ success: boolean; path?: string; message?: string }>;
+		) => Promise<{ success: boolean; path?: string; message?: string; error?: string }>;
 		storeMicrophoneSidecar: (
 			audioData: ArrayBuffer,
 			videoPath: string,

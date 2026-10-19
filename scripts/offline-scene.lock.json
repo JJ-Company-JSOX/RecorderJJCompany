@@ -1,0 +1,104 @@
+{
+	"version": 1,
+	"platform": "win32-x64",
+	"files": [
+		{
+			"name": "python",
+			"version": "3.13.16",
+			"file": "python-3.13.16-embeddable-amd64.zip",
+			"url": "https://www.python.org/ftp/python/3.13.16/python-3.13.16-embeddable-amd64.zip",
+			"sha256": "589dc1e9d02549ca5f680710307ff9b77f6e3ffc4aa3efccd7fa54eeeafac94b",
+			"size": 11439788
+		},
+		{
+			"name": "scenedetect-headless",
+			"version": "0.7.2",
+			"file": "scenedetect_headless-0.7.2-py3-none-any.whl",
+			"url": "https://files.pythonhosted.org/packages/e3/14/727cbb58c72d6df4520153ea6788e1efdebb5d6b446392c784017c70ce0a/scenedetect_headless-0.7.2-py3-none-any.whl",
+			"size": 149852,
+			"sha256": "583fd5dbc2418f027a1c17c3444d0bbd8cb630357e19705c4f68ae4c1aa51ef2",
+			"license": "BSD-3-Clause",
+			"requires": [
+				"click!=8.3.0,~=8.0",
+				"numpy",
+				"opencv-python-headless",
+				"platformdirs",
+				"tqdm",
+				"av>=9.2; extra == \"pyav\"",
+				"moviepy; extra == \"moviepy\""
+			]
+		},
+		{
+			"name": "opencv-python-headless",
+			"version": "5.0.0.93",
+			"file": "opencv_python_headless-5.0.0.93-cp37-abi3-win_amd64.whl",
+			"url": "https://files.pythonhosted.org/packages/b8/88/763b967f7efd7226b82c9fae16d560cba049b1f0c036647e65c610fd636e/opencv_python_headless-5.0.0.93-cp37-abi3-win_amd64.whl",
+			"size": 43825962,
+			"sha256": "829717b6a95554f273e49e357cee3b3a2a26b6f4842fbc1bed2b45bdd8f87e0e",
+			"license": "Apache 2.0",
+			"requires": [
+				"numpy<2.0; python_version < \"3.9\"",
+				"numpy>=2; python_version >= \"3.9\""
+			]
+		},
+		{
+			"name": "numpy",
+			"version": "2.5.4",
+			"file": "numpy-2.5.4-cp313-cp313-win_amd64.whl",
+			"url": "https://files.pythonhosted.org/packages/90/8c/140a40398a66b4471211be1affdb6ed24c486d581bd28d07b7f2fcb69540/numpy-2.5.4-cp313-cp313-win_amd64.whl",
+			"size": 12566113,
+			"sha256": "8b4d2fd2d34e5f8c9235ee787de5631a37a28402b15cb80814df973d2be54129",
+			"license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+			"requires": []
+		},
+		{
+			"name": "click",
+			"version": "8.5.0",
+			"file": "click-8.5.0-py3-none-any.whl",
+			"url": "https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl",
+			"size": 125251,
+			"sha256": "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360",
+			"license": "BSD-3-Clause",
+			"requires": []
+		},
+		{
+			"name": "platformdirs",
+			"version": "4.13.5",
+			"file": "platformdirs-4.13.5-py3-none-any.whl",
+			"url": "https://files.pythonhosted.org/packages/6c/8a/1d8cb3842909dc193a73835adedf412e32e18f8ffd59f43983949622fe6f/platformdirs-4.13.5-py3-none-any.whl",
+			"size": 32779,
+			"sha256": "53d3ec4280b815c1e0b02edad7f9ee8fda1ba9c0865dd9c2e6e63849ce82fc1e",
+			"license": "MIT",
+			"requires": []
+		},
+		{
+			"name": "tqdm",
+			"version": "4.70.1",
+			"file": "tqdm-4.70.1-py3-none-any.whl",
+			"url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+			"size": 80199,
+			"sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+			"license": "MPL-2.0 AND MIT",
+			"requires": [
+				"colorama; platform_system == \"Windows\"",
+				"requests; extra == \"discord\"",
+				"envwrap; extra == \"discord\"",
+				"slack-sdk; extra == \"slack\"",
+				"envwrap; extra == \"slack\"",
+				"requests; extra == \"telegram\"",
+				"envwrap; extra == \"telegram\"",
+				"ipywidgets>=6; extra == \"notebook\""
+			]
+		},
+		{
+			"name": "colorama",
+			"version": "0.4.6",
+			"file": "colorama-0.4.6-py2.py3-none-any.whl",
+			"url": "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl",
+			"size": 25335,
+			"sha256": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+			"license": "",
+			"requires": []
+		}
+	]
+}

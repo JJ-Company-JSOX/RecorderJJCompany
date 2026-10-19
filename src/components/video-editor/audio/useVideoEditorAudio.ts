@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
 import { resolveSourceTrackRoutingPolicy } from "@/lib/exporter/sourceTrackRoutingPolicy";
+import { resolveEnhancedAudioPath } from "@/lib/exporter/audioRoutingEngine";
 import type { AudioRegion, ClipRegion } from "../types";
 import { findClipAtTimelineTime } from "../types";
 import { isClipMutedById } from "./clipAudio";
@@ -80,8 +81,6 @@ export function useVideoEditorAudio({
 		() => resolveSourceTrackRoutingPolicy(currentSourcePath, sourceAudioFallbackPaths),
 		[currentSourcePath, sourceAudioFallbackPaths],
 	);
-	const previewSourceAudioFallbackPaths = sourceTrackRoutingPolicy.playbackPaths;
-	const shouldMutePreviewVideo = sourceTrackRoutingPolicy.muteEmbeddedPreview;
 
 	const activeClipAtCurrentTime = useMemo(
 		() => findClipAtTimelineTime(timelineTime * 1000, clipRegions),
@@ -113,6 +112,20 @@ export function useVideoEditorAudio({
 		defaultSourceAudioTrackSettings,
 		setDefaultSourceAudioTrackSettings,
 	});
+	const enhancedEmbedded =
+		currentSourcePath &&
+		sourceTrackRoutingPolicy.includeEmbeddedInExport &&
+		resolveEnhancedAudioPath(currentSourcePath, activeSourceAudioTrackSettings) !==
+			currentSourcePath;
+	const previewSourceAudioFallbackPaths = useMemo(
+		() =>
+			enhancedEmbedded && currentSourcePath
+				? [...sourceTrackRoutingPolicy.playbackPaths, currentSourcePath]
+				: sourceTrackRoutingPolicy.playbackPaths,
+		[enhancedEmbedded, currentSourcePath, sourceTrackRoutingPolicy],
+	);
+	const shouldMutePreviewVideo =
+		sourceTrackRoutingPolicy.muteEmbeddedPreview || Boolean(enhancedEmbedded);
 
 	const { playSourceAudioPreview } = useAudioPreviewSync({
 		audioRegions,
@@ -127,6 +140,7 @@ export function useVideoEditorAudio({
 		sourceAudioResourceVersion: sourceAudioFallbackRefreshKey,
 		isCurrentClipMuted,
 		getSourceTrackPreviewGain,
+		sourceAudioTrackSettings: activeSourceAudioTrackSettings,
 		onSourceFallbackLoadError,
 	});
 

@@ -186,6 +186,13 @@ function settleNativeVideoExportPendingRequests(
 
 contextBridge.exposeInMainWorld("electronAPI", {
 	getBundledSpeechStatus: () => ipcRenderer.invoke("auto-edit-speech-status"),
+	getOfflineToolsStatus: () => ipcRenderer.invoke("offline-tools-status"),
+	runOfflineTool: (input: {
+		kind: "scene" | "sherpa" | "rnnoise";
+		videoPath: string;
+		language?: string;
+		track?: "mic" | "mixed";
+	}) => ipcRenderer.invoke("offline-tools-run", input),
 	analyzeCompleteAutoEdit: (input: { videoPath: string; language?: string }) =>
 		ipcRenderer.invoke("auto-edit-complete", input),
 	onCompleteAutoEditProgress: (callback: (stage: string) => void) => {

@@ -129,7 +129,9 @@ function hasNonDefaultSourceTrackSettings(sourceAudioTrackSettings?: SourceAudio
 	}
 	return Object.values(sourceAudioTrackSettings).some(
 		(settings) =>
-			Math.abs((settings?.volume ?? 1) - 1) > 0.0005 || Boolean(settings?.normalize),
+			Math.abs((settings?.volume ?? 1) - 1) > 0.0005 ||
+			Boolean(settings?.normalize) ||
+			Boolean(settings?.voiceEnhancement?.enabled),
 	);
 }
 

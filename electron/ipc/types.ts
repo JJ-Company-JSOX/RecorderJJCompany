@@ -221,6 +221,8 @@ export type CaptionCuePayload = {
 	uncertain?: boolean;
 	/** Estimated sentence range from DTW anchors and measured acoustic silence. */
 	alignment?: "dtw-speech";
+	/** Silero confirmed full-phrase bounds with protected cut edges on the same WAV. */
+	vadBoundaryVerified?: boolean;
 };
 
 export type WhisperJsonToken = {

@@ -20,8 +20,22 @@ const transcript = (): SpeechTranscript => ({
 	audioVerified: true,
 	alignmentVerified: true,
 	cues: [
-		{ id: "first", startMs: 1000, endMs: 2000, text: "Open file", confidence: 0.98 },
-		{ id: "last", startMs: 4000, endMs: 5000, text: "Open file", confidence: 0.98 },
+		{
+			id: "first",
+			startMs: 1000,
+			endMs: 2000,
+			text: "Open file",
+			confidence: 0.98,
+			vadBoundaryVerified: true,
+		},
+		{
+			id: "last",
+			startMs: 4000,
+			endMs: 5000,
+			text: "Open file",
+			confidence: 0.98,
+			vadBoundaryVerified: true,
+		},
 	],
 });
 const analysis = (t = transcript()): SpeechAnalysis =>
@@ -99,8 +113,22 @@ it("retains the final timeline take after clip reorder instead of trusting sourc
 
 it("does not treat independently reordered keeper fragments as a complete later take", () => {
 	const t = transcript();
-	t.cues[1] = { id: "keep1", startMs: 4000, endMs: 4500, text: "Open", confidence: 0.98 };
-	t.cues.push({ id: "keep2", startMs: 4500, endMs: 5000, text: "file", confidence: 0.98 });
+	t.cues[1] = {
+		id: "keep1",
+		startMs: 4000,
+		endMs: 4500,
+		text: "Open",
+		confidence: 0.98,
+		vadBoundaryVerified: true,
+	};
+	t.cues.push({
+		id: "keep2",
+		startMs: 4500,
+		endMs: 5000,
+		text: "file",
+		confidence: 0.98,
+		vadBoundaryVerified: true,
+	});
 	const a = validateSpeechPlan(
 		{
 			edits: [
@@ -161,7 +189,14 @@ it("vetoes silence cuts across recognized speech and leaves other timing edits n
 it("globally rejects cross-window keeper chains, preserves prior captions and rejects stale plans", () => {
 	const s = state(),
 		t = transcript();
-	t.cues.push({ id: "final", startMs: 7000, endMs: 8000, text: "Open file", confidence: 0.98 });
+	t.cues.push({
+		id: "final",
+		startMs: 7000,
+		endMs: 8000,
+		text: "Open file",
+		confidence: 0.98,
+		vadBoundaryVerified: true,
+	});
 	const a = analysis(t);
 	a.cuts.push({
 		kind: "repeat",

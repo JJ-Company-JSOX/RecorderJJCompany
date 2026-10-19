@@ -11,6 +11,7 @@ import { baselineFor, buildEditPlan, type Decision, type EditPlan, type EditStat
 import { addSpeechSuggestions } from "./speechPlan";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
+import { OfflineToolsPanel } from "./OfflineToolsPanel";
 
 export function AutoEditPanel({
 	open,
@@ -38,7 +39,7 @@ export function AutoEditPanel({
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
-	const [busy, setBusy] = useState<"analysis" | "review" | "vision" | null>(null);
+	const [busy, setBusy] = useState<"analysis" | "review" | "vision" | "tools" | null>(null);
 	const [error, setError] = useState("");
 	const [applied, setApplied] = useState(false);
 	const [model, setModel] = useState("");
@@ -426,6 +427,16 @@ export function AutoEditPanel({
 							</Button>
 						</div>
 					</details>
+					<OfflineToolsPanel
+						key={open ? source : "closed"}
+						source={source}
+						state={state}
+						language={language}
+						busy={!!busy}
+						setBusy={(value) => setBusy(value ? "tools" : null)}
+						onApply={onApply}
+						onSeek={onSeek}
+					/>
 					<details className="rounded-xl border border-separator p-4" data-hardware-guide>
 						<summary className="cursor-pointer text-sm font-medium">
 							{ui.hardware}

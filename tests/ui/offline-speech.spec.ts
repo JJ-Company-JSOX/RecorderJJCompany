@@ -76,6 +76,7 @@ async function setup(
 									endMs: 1500,
 									text: "Open file",
 									confidence: 0.98,
+									vadBoundaryVerified: true,
 								},
 								{
 									id: "last",
@@ -83,6 +84,7 @@ async function setup(
 									endMs: 4000,
 									text: "Open file",
 									confidence: 0.98,
+									vadBoundaryVerified: true,
 								},
 							],
 						},
@@ -131,6 +133,71 @@ async function setup(
 	).toBeEnabled();
 	return panel;
 }
+
+test("offline scene tool previews source boundaries and Sherpa never auto-applies captions", async ({
+	page,
+}) => {
+	const panel = await setup(page);
+	await page.evaluate(() => {
+		window.electronAPI.getOfflineToolsStatus = async () => ({
+			rnnoise: { available: true },
+			scene: { available: true },
+			sherpa: { available: true },
+		});
+		window.electronAPI.runOfflineTool = async (input) =>
+			input.kind === "scene"
+				? {
+						success: true,
+						kind: "scene",
+						analysis: {
+							version: 1,
+							engine: "PySceneDetect",
+							engineVersion: "0.7.2",
+							durationMs: 6000,
+							timing: "sampled-frame-boundary",
+							frameSkip: 2,
+							scenes: [
+								{ startMs: 0, endMs: 3000 },
+								{ startMs: 3000, endMs: 6000 },
+							],
+						},
+					}
+				: {
+						success: true,
+						kind: "sherpa",
+						transcript: {
+							engine: "sherpa-onnx",
+							model: "fixture",
+							durationMs: 6000,
+							elapsedMs: 10,
+							warning: "comparison",
+							cues: [
+								{
+									startMs: 500,
+									endMs: 1500,
+									text: "Reviewed offline transcript",
+									alignment: "audio-chunk",
+								},
+							],
+						},
+					};
+	});
+	const tools = panel.locator("[data-offline-tools]");
+	await tools.locator("summary").click();
+	await tools.getByRole("button", { name: "Detect scenes", exact: true }).click();
+	await expect(tools.getByText("2 scenes, sampled frame timing", { exact: true })).toBeVisible();
+	await tools.getByRole("button", { name: "2: 3.00–6.00s", exact: true }).click();
+	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
+	await tools
+		.getByRole("button", { name: "Generate comparison transcript", exact: true })
+		.click();
+	await expect(tools.getByText(/Reviewed offline transcript/)).toBeVisible();
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
+	await tools.getByRole("button", { name: "Apply reviewed result", exact: true }).click();
+	await expect(
+		tools.getByText("Edits changed. Generate a fresh result before applying.", { exact: true }),
+	).toBeVisible();
+});
 
 test("one click automatically applies grounded subtitles and trim in one undoable transaction", async ({
 	page,

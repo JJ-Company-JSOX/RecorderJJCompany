@@ -607,6 +607,25 @@ export async function loadProjectFromPath(projectPath: string) {
 			}
 		}
 	}
+	// Derived voice assets are references like ordinary audio regions. Original
+	// media remains available for undo/A-B and both are approved on reopen.
+	const settingGroups: unknown[] = [editorObj?.defaultSourceAudioTrackSettings];
+	if (
+		editorObj?.sourceAudioTrackSettingsByClip &&
+		typeof editorObj.sourceAudioTrackSettingsByClip === "object"
+	) {
+		settingGroups.push(...Object.values(editorObj.sourceAudioTrackSettingsByClip));
+	}
+	for (const group of settingGroups) {
+		if (!group || typeof group !== "object") continue;
+		for (const value of Object.values(group)) {
+			const effect = value?.voiceEnhancement;
+			if (effect?.engine !== "rnnoise") continue;
+			if (typeof effect.audioPath === "string") approvedProjectPaths.push(effect.audioPath);
+			if (typeof effect.originalPath === "string")
+				approvedProjectPaths.push(effect.originalPath);
+		}
+	}
 	await replaceApprovedSessionLocalReadPaths(approvedProjectPaths);
 	await rememberRecentProject(normalizedPath);
 

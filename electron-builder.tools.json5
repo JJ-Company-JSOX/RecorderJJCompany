@@ -1,0 +1,21 @@
+{
+  "extends": "./electron-builder.test.json5",
+  "appId": "com.jsox.recorder.offline.tools.preview",
+  "productName": "Jsox Recorder",
+  "directories": { "output": "release/offline-tools-test" },
+  "extraFiles": [{ "from": "scripts/launch-windows-offline-tools.cmd", "to": "Start-Jsox-Offline-Tools.cmd" }],
+  "extraResources": [
+    { "from": "build/offline-ai-preview.txt", "to": "offline-ai-preview.txt" },
+    { "from": "LICENSE.md", "to": "LICENSE-AGPL-3.0.txt" },
+    { "from": "vendor/offline-ai/win32-x64", "to": "offline-ai", "filter": ["manifest.json", "*.gguf", "*.txt", "runtime-static/**", "speech/**"] },
+    { "from": "vendor/offline-tools/win32-x64", "to": "offline-tools", "filter": ["silero/**", "rnnoise/**", "sherpa/**", "scene/**", "!**/__pycache__/**", "!**/*.pyc"] },
+    { "from": "THIRD_PARTY_NOTICES.md", "to": "compliance/THIRD_PARTY_NOTICES.md" },
+    { "from": "MODEL_LICENSES.md", "to": "compliance/MODEL_LICENSES.md" },
+    { "from": "LICENSE_COMPLIANCE.md", "to": "compliance/LICENSE_COMPLIANCE.md" },
+    { "from": "docs/offline-tools.zh-CN.md", "to": "compliance/offline-tools.zh-CN.md" },
+    { "from": "scripts", "to": "compliance/offline-tools-source", "filter": ["offline-*.lock.json", "offline-rnnoise-sources.json", "prepare-offline-*.mjs", "build-offline-rnnoise.mjs", "rnnoise-cli.c", "sherpa-asr.cpp", "scene-worker.py"] },
+    { "from": "electron/native/offline-vad", "to": "compliance/offline-tools-source/offline-vad" }
+  ],
+  "win": { "signAndEditExecutable": false, "artifactName": "Jsox-Recorder-Offline-Tools-${version}-${arch}.${ext}" },
+  "nsis": { "shortcutName": "Jsox Recorder Offline Tools" }
+}

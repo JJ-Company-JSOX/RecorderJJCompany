@@ -6,6 +6,8 @@ export interface SpeechCue extends CaptionCue {
 	uncertain?: boolean;
 	/** Whole-phrase DTW/acoustic bounds, not exact word timing. */
 	alignment?: "dtw-speech";
+	/** Derived from bundled VAD, never from a language-model response. */
+	vadBoundaryVerified?: boolean;
 }
 export interface SpeechTranscript {
 	version: 1;
@@ -73,7 +75,8 @@ export function assertSpeechTranscript(raw: unknown): asserts raw is SpeechTrans
 			(cue.confidence !== undefined &&
 				(!Number.isFinite(cue.confidence) || cue.confidence < 0 || cue.confidence > 1)) ||
 			(cue.uncertain !== undefined && typeof cue.uncertain !== "boolean") ||
-			(cue.alignment !== undefined && cue.alignment !== "dtw-speech")
+			(cue.alignment !== undefined && cue.alignment !== "dtw-speech") ||
+			(cue.vadBoundaryVerified !== undefined && typeof cue.vadBoundaryVerified !== "boolean")
 		)
 			throw Error("Invalid or duplicate speech cue");
 		ids.add(cue.id);
@@ -115,6 +118,8 @@ export function speechCutIssue(cut: SpeechCut, transcript: SpeechTranscript): st
 		return "speech-audio-unverified";
 	if ([...removeCues, ...keepCues].some((cue) => cue.uncertain || (cue.confidence ?? 1) < 0.85))
 		return "speech-asr-uncertain";
+	if ([...removeCues, ...keepCues].some((cue) => cue.vadBoundaryVerified !== true))
+		return "speech-vad-unverified";
 	// An earlier failed take may be removed only if its entire text recurs in the later take.
 	if (Math.max(...removeCues.map((c) => c.endMs)) > Math.min(...keepCues.map((c) => c.startMs)))
 		return "speech-invalid-grounding";

@@ -1,0 +1,150 @@
+[
+	{
+		"path": "AUTHORS",
+		"gitBlob": "7cd8b9be6de90010f6c31b1b3bd2bea8aa64fce7"
+	},
+	{
+		"path": "COPYING",
+		"gitBlob": "59d7d09c80c17e60a972bf730caf6a3e005b17b1"
+	},
+	{
+		"path": "include/rnnoise.h",
+		"gitBlob": "81d8f62341ab39e51da0bd7332b905d79f36b782"
+	},
+	{
+		"path": "src/_kiss_fft_guts.h",
+		"gitBlob": "17392b3e90977b74049049b7fa01a9f8cb0fc093"
+	},
+	{
+		"path": "src/arch.h",
+		"gitBlob": "52de62334b71a7d07fac3daa4ae6c104d63d0718"
+	},
+	{
+		"path": "src/celt_lpc.c",
+		"gitBlob": "750f9a8ae1a0fc803df2553926697ad9bf831faf"
+	},
+	{
+		"path": "src/celt_lpc.h",
+		"gitBlob": "5abd61a0f84533478a27ea08017497361bbd529b"
+	},
+	{
+		"path": "src/common.h",
+		"gitBlob": "f9095ca5e85ed8686f7af5c3e63dd963a726f52b"
+	},
+	{
+		"path": "src/cpu_support.h",
+		"gitBlob": "9de21f3a4b963b64c0d0fcccf4c0e397e01cde31"
+	},
+	{
+		"path": "src/denoise.c",
+		"gitBlob": "b6fc3d4a90e13184e5b94b892796a8288d8260db"
+	},
+	{
+		"path": "src/denoise.h",
+		"gitBlob": "ccfecd9a7e2d6e0b337a93c29a9d1a8acb2b171a"
+	},
+	{
+		"path": "src/dump_features.c",
+		"gitBlob": "dc2d8c3914d8a6939be90c7289249f2337656e02"
+	},
+	{
+		"path": "src/dump_rnnoise_tables.c",
+		"gitBlob": "3eabca6823b0fd2fa8d07ecb5a73b373e8bdd46f"
+	},
+	{
+		"path": "src/kiss_fft.c",
+		"gitBlob": "97c4291756f1c5128fa0842bc38d23e88948825d"
+	},
+	{
+		"path": "src/kiss_fft.h",
+		"gitBlob": "52387f21f9caaeb171559a23f20d0a6e57641c7c"
+	},
+	{
+		"path": "src/nnet.c",
+		"gitBlob": "3cafea6051a858ba316a32478b59255863fb7222"
+	},
+	{
+		"path": "src/nnet.h",
+		"gitBlob": "6b8023bdb03b9dfa49728a3dbe76c1f32bc8fc6d"
+	},
+	{
+		"path": "src/nnet_arch.h",
+		"gitBlob": "dfd5eaadeaf6b8ee00257de58d0c114e32d52aa3"
+	},
+	{
+		"path": "src/nnet_default.c",
+		"gitBlob": "4316f0fba3c5dca1085f46c5c97304ecbfb2e993"
+	},
+	{
+		"path": "src/opus_types.h",
+		"gitBlob": "71808266655a1502105ea4c68f15e8ff0be932e4"
+	},
+	{
+		"path": "src/parse_lpcnet_weights.c",
+		"gitBlob": "bdd50d7ea160a695741addf9126ad69fb646524b"
+	},
+	{
+		"path": "src/pitch.c",
+		"gitBlob": "486a7fc4a70d11ed7e27e7833c7bf533649f4e95"
+	},
+	{
+		"path": "src/pitch.h",
+		"gitBlob": "0a9d5e57f74e338865dd8e0423b760b22ac3ceb0"
+	},
+	{
+		"path": "src/rnn.c",
+		"gitBlob": "b9472384a6751c1496229be2eb42be247839465f"
+	},
+	{
+		"path": "src/rnn.h",
+		"gitBlob": "60a8871e7a89161e57c037cf89e2ecb6035269e3"
+	},
+	{
+		"path": "src/rnnoise_tables.c",
+		"gitBlob": "adc8a28f451274bbd2156c13a3dfa883ac5d0f82"
+	},
+	{
+		"path": "src/vec.h",
+		"gitBlob": "71b7afbb8b0289165155eff2c5956f23b8c605ed"
+	},
+	{
+		"path": "src/vec_avx.h",
+		"gitBlob": "a5040b4596c89fde02d7fce5c2ed96eada1fb5ae"
+	},
+	{
+		"path": "src/vec_neon.h",
+		"gitBlob": "31b736c3937ed000cefd3ab93c7ebcfb8d97ac3d"
+	},
+	{
+		"path": "src/write_weights.c",
+		"gitBlob": "0f492cdc58d9c084e8b49a5ba63991b9fa8abac5"
+	},
+	{
+		"path": "src/x86/dnn_x86.h",
+		"gitBlob": "bf1069867494e2b50662c4653606c91b6bd083d8"
+	},
+	{
+		"path": "src/x86/nnet_avx2.c",
+		"gitBlob": "41037fcc89e2304ee0aa5b46a7814f7f4568f47d"
+	},
+	{
+		"path": "src/x86/nnet_sse4_1.c",
+		"gitBlob": "224926e5a9754a6d28ab98d4fde2a3abea43410d"
+	},
+	{
+		"path": "src/x86/x86_arch_macros.h",
+		"gitBlob": "975b443e9311fe015182b555a581d35b1cb0a936"
+	},
+	{
+		"path": "src/x86/x86_dnn_map.c",
+		"gitBlob": "a16fa147f61867973cc9f3014ec9c637ed661b05"
+	},
+	{
+		"path": "src/x86/x86cpu.c",
+		"gitBlob": "370c909be6dc91488566172577ee5efb6ce7d05e"
+	},
+	{
+		"path": "src/x86/x86cpu.h",
+		"gitBlob": "e214abab547a8f6550163dd15bac5e5131a981db"
+	}
+]

@@ -15,6 +15,8 @@ import { getFfmpegBinaryPath, getFfprobeBinaryPath } from "../ffmpeg/binary";
 import { resolveApprovedLocalMediaPath } from "../project/manager";
 import { getCompanionAudioStartDelayMs } from "../recording/diagnostics";
 import { normalizeVideoSourcePath } from "../utils";
+import { registerOfflineTools } from "./offlineTools";
+import { protectSilenceWithVad } from "../captions/vadProtection";
 
 export function registerAutoEditHandlers() {
 	const bundledRoot = () =>
@@ -34,6 +36,7 @@ export function registerAutoEditHandlers() {
 		}
 	});
 	const running = new Map<number, AbortController>();
+	registerOfflineTools(running);
 	app.once("before-quit", () => {
 		for (const controller of running.values()) controller.abort();
 	});
@@ -93,6 +96,10 @@ export function registerAutoEditHandlers() {
 					candidates,
 				});
 				const cues = boundSpeechCues(recognized.cues, evidence.durationMs);
+				evidence.silentRanges = protectSilenceWithVad(
+					evidence.silentRanges,
+					"vadEvidence" in recognized ? recognized.vadEvidence : null,
+				);
 				if (!cues.length)
 					throw Error(
 						"No usable speech was recognized. Use the local or visual plan for a recording without speech.",

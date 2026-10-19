@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 	companions: vi.fn(),
 	delay: vi.fn(),
 	session: vi.fn(),
+	vad: vi.fn(),
 }));
 vi.mock("node:child_process", () => ({
 	execFile: (...args: unknown[]) => {
@@ -40,6 +41,7 @@ vi.mock("../recording/diagnostics", () => ({
 	getCompanionAudioStartDelayMs: mocks.delay,
 }));
 vi.mock("../utils", () => ({ normalizeVideoSourcePath: (value: string) => value }));
+vi.mock("./vad", () => ({ detectBundledVoiceActivity: mocks.vad }));
 
 import { generateAutoCaptionsFromVideo } from "./generate";
 
@@ -68,6 +70,9 @@ beforeEach(() => {
 		.mockReset()
 		.mockImplementation(async (file: string) => (file.endsWith(".json") ? json : srt));
 	mocks.rm.mockResolvedValue(undefined);
+	mocks.vad
+		.mockReset()
+		.mockResolvedValue({ durationMs: 4000, segments: [{ startMs: 100, endMs: 1400 }] });
 });
 
 const whisperPath = path.resolve("/whisper");
@@ -138,6 +143,30 @@ describe("caption generation pipeline", () => {
 			confidence: 0.7,
 		});
 		expect(result.cues[0]).not.toHaveProperty("words");
+		expect(result.cues[0].vadBoundaryVerified).toBe(true);
+		const extractedWav = mocks.exec.mock.calls[0][1].at(-1);
+		expect(mocks.vad).toHaveBeenCalledWith(extractedWav, undefined);
+	});
+	it("retains captions but disables speech deletion when VAD is missing or fails", async () => {
+		mocks.vad.mockRejectedValue(new Error("missing VAD runtime"));
+		const result = await generateAutoCaptionsFromVideo({ ...options, useDtwAlignment: true });
+		expect(result.cues.length).toBeGreaterThan(0);
+		expect(result.cues.every((cue) => cue.vadBoundaryVerified === false)).toBe(true);
+	});
+	it("propagates VAD cancellation and still cleans the extracted analysis WAV", async () => {
+		const controller = new AbortController();
+		mocks.vad.mockImplementation(async () => {
+			controller.abort();
+			controller.signal.throwIfAborted();
+		});
+		await expect(
+			generateAutoCaptionsFromVideo({
+				...options,
+				useDtwAlignment: true,
+				signal: controller.signal,
+			}),
+		).rejects.toMatchObject({ name: "AbortError" });
+		expect(mocks.rm).toHaveBeenCalledTimes(3);
 	});
 	it("uses the approved candidate set without discovering additional media", async () => {
 		const controller = new AbortController();

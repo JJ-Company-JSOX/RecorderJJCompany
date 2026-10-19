@@ -74,7 +74,19 @@ export function useInitialEditorSource({
 					return;
 				}
 
-				if (!smokeConfig.enabled && devConfig.inputPath) {
+				// An editor returned from recording may reload its original URL. Never let
+				// a stale demo query replace the finalized recording/project in main state.
+				const [currentProject, sessionResult, currentVideo] = await Promise.all([
+					window.electronAPI.loadCurrentProjectFile(),
+					window.electronAPI.getCurrentRecordingSession?.(),
+					window.electronAPI.getCurrentVideoPath(),
+				]);
+				const hasCurrentSource = Boolean(
+					(currentProject.success && currentProject.project) ||
+						(sessionResult?.success && sessionResult.session?.videoPath) ||
+						(currentVideo.success && currentVideo.path),
+				);
+				if (!smokeConfig.enabled && devConfig.inputPath && !hasCurrentSource) {
 					const sourcePath = fromFileUrl(devConfig.inputPath);
 					const webcamPath = devConfig.webcamInputPath
 						? fromFileUrl(devConfig.webcamInputPath)
@@ -147,7 +159,6 @@ export function useInitialEditorSource({
 					return;
 				}
 
-				const currentProject = await window.electronAPI.loadCurrentProjectFile();
 				if (
 					currentProject.success &&
 					currentProject.project &&
@@ -156,7 +167,6 @@ export function useInitialEditorSource({
 					return;
 				}
 
-				const sessionResult = await window.electronAPI.getCurrentRecordingSession?.();
 				if (sessionResult?.success && sessionResult.session?.videoPath) {
 					const sourcePath = fromFileUrl(sessionResult.session.videoPath);
 					const sourceUrl = await resolveVideoUrl(sourcePath);
@@ -179,7 +189,6 @@ export function useInitialEditorSource({
 					return;
 				}
 
-				const currentVideo = await window.electronAPI.getCurrentVideoPath();
 				if (!currentVideo.success || !currentVideo.path) {
 					// An empty session is the normal dashboard launch, not a load failure.
 					project.setProjectBrowserOpen(true);

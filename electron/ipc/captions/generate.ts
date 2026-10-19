@@ -20,6 +20,13 @@ import { mergeCaptionSources } from "./mergeSources";
 import { segmentCuesIntoPhrases } from "./segment";
 import { attachWhisperConfidence, parseWhisperTokenEvidence } from "./confidence";
 import { alignWhisperDtwSpeech } from "./dtwAlignment";
+import { detectBundledVoiceActivity } from "./vad";
+import {
+	hasVadProtectedBoundaries,
+	protectVadAlignedCues,
+	mergeVadEvidence,
+	type VadEvidence,
+} from "./vadProtection";
 import {
 	parseSilenceIntervals,
 	SILENCE_DETECT_MIN_S,
@@ -347,6 +354,7 @@ async function generateCaptionsForSource(options: {
 		// + pauses), backed by ground-truth acoustic silence (ffmpeg `silencedetect`).
 		// Failure here must not block caption generation — fall back to raw.
 		let cuesToReturn = cues;
+		let vadEvidence: VadEvidence | null = null;
 		let measuredSilences: SilenceInterval[] | undefined;
 		try {
 			const silences = await detectSilenceIntervals({
@@ -408,6 +416,19 @@ async function generateCaptionsForSource(options: {
 					).map((fallback) => ({ ...fallback, uncertain: true }));
 				})
 				.map((cue, index) => ({ ...cue, id: `caption-${index + 1}` }));
+			// Use the exact already-approved, delay-corrected WAV used by Whisper.
+			// A missing/failed VAD must retain captions but cannot approve speech cuts.
+			try {
+				const vad = await detectBundledVoiceActivity(wavPath, options.signal);
+				vadEvidence = vad;
+				cuesToReturn = protectVadAlignedCues(cuesToReturn, vad);
+			} catch (error) {
+				rethrowCancellation(error, options.signal);
+				console.warn(
+					"[auto-captions] VAD protection unavailable; automatic speech deletion disabled",
+				);
+				cuesToReturn = cuesToReturn.map((cue) => ({ ...cue, vadBoundaryVerified: false }));
+			}
 		}
 		options.signal?.throwIfAborted();
 		return {
@@ -415,6 +436,7 @@ async function generateCaptionsForSource(options: {
 				? cuesToReturn
 				: attachWhisperConfidence(cuesToReturn, evidence),
 			audioSourceLabel: audioSource.label,
+			vadEvidence,
 		};
 	} finally {
 		await Promise.allSettled([
@@ -449,7 +471,7 @@ export async function generateAutoCaptionsFromVideo(options: {
 	// sidecar replaces embedded system audio to avoid transcribing it twice.
 	const transcribeTrack = async (sources: CaptionAudioCandidate[]) => {
 		try {
-			return (await generateCaptionsForSource({ ...options, candidates: sources })).cues;
+			return await generateCaptionsForSource({ ...options, candidates: sources });
 		} catch (error) {
 			rethrowCancellation(error, options.signal);
 			if (!(error instanceof NoCaptionAudioError)) throw error;
@@ -460,8 +482,20 @@ export async function generateAutoCaptionsFromVideo(options: {
 	const systemCues = await transcribeTrack([...system, ...secondary]);
 	if (micCues === null && systemCues === null)
 		throw new NoCaptionAudioError("No audio could be extracted from the recording.");
+	const vadEvidence = mergeVadEvidence(
+		[micCues, systemCues].flatMap((result) => (result ? [result.vadEvidence] : [])),
+	);
 	return {
-		cues: mergeCaptionSources(micCues ?? [], systemCues ?? []),
+		cues: mergeCaptionSources(micCues?.cues ?? [], systemCues?.cues ?? []).map((cue) => ({
+			...cue,
+			...(options.useDtwAlignment
+				? {
+						vadBoundaryVerified:
+							!!vadEvidence && hasVadProtectedBoundaries(cue, vadEvidence),
+					}
+				: {}),
+		})),
 		audioSourceLabel: "microphone and system audio",
+		vadEvidence,
 	};
 }

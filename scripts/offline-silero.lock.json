@@ -1,0 +1,17 @@
+{
+	"version": 1,
+	"tag": "v6.2.3",
+	"revision": "5cd7945676eb32225748052e2e6a0580e4686a08",
+	"model": {
+		"file": "silero_vad_16k_op15.onnx",
+		"bytes": 1289603,
+		"sha256": "7ed98ddbad84ccac4cd0aeb3099049280713df825c610a8ed34543318f1b2c49",
+		"url": "https://raw.githubusercontent.com/snakers4/silero-vad/5cd7945676eb32225748052e2e6a0580e4686a08/src/silero_vad/data/silero_vad_16k_op15.onnx"
+	},
+	"license": {
+		"file": "MODEL-LICENSE.txt",
+		"bytes": 1075,
+		"sha256": "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b",
+		"url": "https://raw.githubusercontent.com/snakers4/silero-vad/5cd7945676eb32225748052e2e6a0580e4686a08/LICENSE"
+	}
+}

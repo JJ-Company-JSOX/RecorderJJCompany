@@ -1,0 +1,10 @@
+{
+	"sourceRevision": "70f1d256acd4b34a572f999a05c87bf00b67730d",
+	"sourceUrl": "https://github.com/xiph/rnnoise",
+	"modelSha256": "0a8755f8e2d834eff6a54714ecc7d75f9932e845df35f8b59bc52a7cfe6e8b37",
+	"modelUrl": "https://media.xiph.org/rnnoise/models/rnnoise_data-0a8755f8e2d834eff6a54714ecc7d75f9932e845df35f8b59bc52a7cfe6e8b37.tar.gz",
+	"license": "BSD-3-Clause",
+	"sampleRate": 48000,
+	"frameSamples": 480,
+	"latencySamples": 960
+}

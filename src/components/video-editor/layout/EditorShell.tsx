@@ -350,6 +350,15 @@ export function EditorShell(props: Props) {
 						onClose={() => setAutoEditOpen(false)}
 						state={{
 							...timeline,
+							sourceAudioTrackSettingsByClip: Object.fromEntries(
+								timeline.clipRegions.map((clip) => [
+									clip.id,
+									{
+										...timeline.defaultSourceAudioTrackSettings,
+										...timeline.sourceAudioTrackSettingsByClip[clip.id],
+									},
+								]),
+							),
 							additionalVisualSource:
 								appearance.webcam.enabled && appearance.webcam.sourcePath
 									? `${appearance.webcam.sourcePath}|${appearance.webcam.timeOffsetMs}`
@@ -371,14 +380,21 @@ export function EditorShell(props: Props) {
 								}));
 							// New segments inherit per-source audio settings; originals stay available for Undo.
 							timeline.setSourceAudioTrackSettingsByClip((current) => {
-								const updated = { ...current };
+								const updated = {
+									...current,
+									...next.sourceAudioTrackSettingsByClip,
+								};
 								for (const clip of next.clipRegions) {
 									const owner =
 										timeline.clipRegions.find((c) => clip.id === c.id) ??
 										[...timeline.clipRegions]
 											.sort((a, b) => b.id.length - a.id.length)
 											.find((c) => clip.id.startsWith(`${c.id}-auto-`));
-									if (owner && current[owner.id])
+									if (
+										!next.sourceAudioTrackSettingsByClip?.[clip.id] &&
+										owner &&
+										current[owner.id]
+									)
 										updated[clip.id] = current[owner.id];
 								}
 								return updated;

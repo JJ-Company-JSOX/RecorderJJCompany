@@ -1,0 +1,93 @@
+{
+	"version": 1,
+	"runtimeVersion": "1.13.8",
+	"runtime": {
+		"url": "https://registry.npmjs.org/sherpa-onnx-win-x64/-/sherpa-onnx-win-x64-1.13.8.tgz",
+		"bytes": 8894875,
+		"sha256": "fe522f02a5c113c2567a43982107ef41ae517f9a431931e90731e7e4d4341073"
+	},
+	"header": {
+		"url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/sherpa-onnx/c-api/c-api.h",
+		"bytes": 167657,
+		"sha256": "2a1b95084be8fd1deb3228fcad2fd3f7f0258b64582f7402281ec174c7b7f4ce"
+	},
+	"runtimeFiles": [
+		{
+			"path": "sherpa-onnx-c-api.dll",
+			"bytes": 4605952,
+			"sha256": "b0801cd8eeead83213c60b92cc004de6f3ac4cd4a9ac7c388c16b97c590f1e99"
+		},
+		{
+			"path": "onnxruntime.dll",
+			"bytes": 15809848,
+			"sha256": "18370c375f07357fa5874344a9d9ac17e6b6fe1eb18b1dd209d79483b4470257",
+			"source": "onnxRuntime",
+			"archivePath": "runtimes/win-x64/native/onnxruntime.dll"
+		},
+		{
+			"path": "onnxruntime_providers_shared.dll",
+			"bytes": 21856,
+			"sha256": "599629fa643707defe9156140ae5edd73531f221aa97b7585b1c9bb0a93586f8",
+			"source": "onnxRuntime",
+			"archivePath": "runtimes/win-x64/native/onnxruntime_providers_shared.dll"
+		}
+	],
+	"licenses": [
+		{
+			"path": "SHERPA-LICENSE.txt",
+			"url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/LICENSE",
+			"bytes": 11358,
+			"sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+		},
+		{
+			"path": "ORT-LICENSE.txt",
+			"bytes": 1094,
+			"sha256": "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674",
+			"source": "onnxRuntime",
+			"archivePath": "LICENSE",
+			"url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.0/LICENSE"
+		},
+		{
+			"path": "ORT-NOTICES.txt",
+			"bytes": 331175,
+			"sha256": "fb0af774b4d7cffc5b9d046f2aaeade2f37df2f80abf8033c95dfffcc77a8866",
+			"source": "onnxRuntime",
+			"archivePath": "ThirdPartyNotices.txt",
+			"url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.0/ThirdPartyNotices.txt"
+		},
+		{
+			"path": "WHISPER-LICENSE.txt",
+			"url": "https://raw.githubusercontent.com/openai/whisper/v20240930/LICENSE",
+			"bytes": 1063,
+			"sha256": "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d"
+		}
+	],
+	"modelName": "Whisper base multilingual INT8 (sherpa-onnx)",
+	"modelRevision": "bb53ee204431c90d314c1cc08d28d23e5b7927cc",
+	"modelSource": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base",
+	"modelLicense": "MIT (OpenAI Whisper weights); sherpa-onnx conversion Apache-2.0",
+	"modelFiles": [
+		{
+			"path": "base-encoder.int8.onnx",
+			"bytes": 29120534,
+			"sha256": "0b8fb1304b6109976038efff5ace81720e00386f3ff6b54ee8c75291ca0a1e11"
+		},
+		{
+			"path": "base-decoder.int8.onnx",
+			"bytes": 130672026,
+			"sha256": "9759d217388a01b3a4c7c15533201067b48ae819c4daafc8624e64b9409dc02d"
+		},
+		{
+			"path": "base-tokens.txt",
+			"bytes": 816730,
+			"sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126"
+		}
+	],
+	"onnxRuntime": {
+		"version": "1.28.0",
+		"url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.28.0/microsoft.ml.onnxruntime.1.28.0.nupkg",
+		"bytes": 139145017,
+		"sha256": "769d1d3ea8ab6cd69f737c9dd4d4462aa4ad0ccfa106eaf506efc40d7bead5db",
+		"sha512": "2X2D0DH6dEzWfath6I3uzItsPBGxqYlRsPz3OFK7S9Tfk10McWdKGegNjT8KmOAtkSno3yTF9eo43mDvn9salw=="
+	}
+}

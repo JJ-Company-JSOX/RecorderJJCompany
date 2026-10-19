@@ -1,5 +1,24 @@
 # Third-party notices
 
+## Complete offline tools test edition
+
+The separate tools edition adds Silero VAD (MIT), RNNoise (BSD-3-Clause and its
+bundled model notice), sherpa-onnx (Apache-2.0), ONNX Runtime CPU (MIT), Whisper
+base INT8 weights (MIT), PySceneDetect (BSD-3-Clause), embedded Python (PSF),
+OpenCV headless (Apache-2.0 and bundled decoder notices), NumPy (BSD-3-Clause),
+Click (BSD-3-Clause), platformdirs (MIT), tqdm (MPL-2.0/MIT) and colorama
+(BSD-3-Clause). Exact archives/revisions/hashes are pinned in the offline tools
+lock files. Full package and dependency notices remain beside each bundled
+runtime, including Python wheel `.dist-info` directories. No external customer
+Python installation or runtime model download is required.
+
+Microsoft VC++ app-local runtime DLLs are proprietary redistributable components,
+not open source. Their official signed redistributable provenance and file hashes
+are recorded in `scripts/offline-msvc.lock.json`, with MSVC notices in the Sherpa
+and scene bundles. The preparer only extracts those files; it does not install a
+system runtime. Existing application AGPL, FFmpeg and distribution obligations
+still apply. See [tools scope and limitations](docs/offline-tools.zh-CN.md).
+
 ## Offline AI edition
 
 The offline edition additionally distributes Qwen3-VL model weights (Apache-2.0),

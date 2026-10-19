@@ -21,6 +21,7 @@ const transcript = (texts = ["Open the file", "Open the file"]): SpeechTranscrip
 		endMs: i * 2000 + 1200,
 		text,
 		confidence: 0.98,
+		vadBoundaryVerified: true,
 	})),
 });
 
@@ -270,6 +271,15 @@ describe("grounded offline speech model plan", () => {
 		delete t.cues[0].confidence;
 		expect(validate(t).cuts).toMatchObject([{ blocked: "speech-confidence-unverified" }]);
 		t.alignmentVerified = false;
+		expect(validate(t).cuts).toHaveLength(0);
+	});
+	it("never authorizes deletion with missing or failed VAD protection", () => {
+		const t = transcript();
+		delete t.cues[0].vadBoundaryVerified;
+		expect(validate(t).cuts).toHaveLength(0);
+		expect(validate(t).warnings).toContain("speech-vad-unverified");
+		t.cues[0].vadBoundaryVerified = true;
+		t.cues[1].vadBoundaryVerified = false;
 		expect(validate(t).cuts).toHaveLength(0);
 	});
 	it("revalidates keeper chains across model windows and deduplicates overlapping replies", () => {

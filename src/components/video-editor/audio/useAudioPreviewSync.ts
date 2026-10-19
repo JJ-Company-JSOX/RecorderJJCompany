@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildResolvedAudioPlan } from "@/lib/exporter/audioRoutingEngine";
+import {
+	buildResolvedAudioPlan,
+	resolveEnhancedAudioPath,
+} from "@/lib/exporter/audioRoutingEngine";
+import type { SourceAudioTrackSettings } from "./audioTypes";
 import { resolveMediaElementSource } from "@/lib/exporter/localMediaSource";
 import {
 	clampMediaTimeToDuration,
@@ -32,6 +36,7 @@ interface UseAudioPreviewSyncParams {
 	sourceAudioResourceVersion: number;
 	isCurrentClipMuted: boolean;
 	getSourceTrackPreviewGain: (audioPath: string) => number;
+	sourceAudioTrackSettings?: SourceAudioTrackSettings;
 	onSourceFallbackLoadError: (error: unknown) => void;
 }
 
@@ -48,6 +53,7 @@ export function useAudioPreviewSync({
 	sourceAudioResourceVersion,
 	isCurrentClipMuted,
 	getSourceTrackPreviewGain,
+	sourceAudioTrackSettings,
 	onSourceFallbackLoadError,
 }: UseAudioPreviewSyncParams) {
 	const resolvedPlan = useMemo(
@@ -192,7 +198,8 @@ export function useAudioPreviewSync({
 
 		for (const track of resolvedSourceTracks) {
 			const audioPath = track.sourceRef.path;
-			const resourceKey = getAudioResourceVersionKey(audioPath, sourceAudioResourceVersion);
+			const decoderPath = resolveEnhancedAudioPath(audioPath, sourceAudioTrackSettings);
+			const resourceKey = getAudioResourceVersionKey(decoderPath, sourceAudioResourceVersion);
 			let audio = existing.get(audioPath);
 			if (!audio) {
 				audio = new Audio();
@@ -218,7 +225,7 @@ export function useAudioPreviewSync({
 				// rerenders must not cancel the only load for the current finalized sidecar version.
 				void (async () => {
 					try {
-						const resolved = await resolveMediaElementSource(audioPath);
+						const resolved = await resolveMediaElementSource(decoderPath);
 						const latestAudio = existing.get(audioPath);
 
 						if (
@@ -290,6 +297,7 @@ export function useAudioPreviewSync({
 		onSourceFallbackLoadError,
 		resolvedSourceTracks,
 		sourceAudioResourceVersion,
+		sourceAudioTrackSettings,
 		previewVolume,
 	]);
 

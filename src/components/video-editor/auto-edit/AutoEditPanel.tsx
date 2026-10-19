@@ -273,6 +273,25 @@ export function AutoEditPanel({
 			if (run === generation.current) setBusy(null);
 		}
 	};
+	const narrateBundled = async () => {
+		if (!plan) return;
+		const run = ++generation.current;
+		setBusy("narrate");
+		setError("");
+		setNarrationApproved(false);
+		try {
+			const result = await window.electronAPI.narrateAutoEditBundled(plan);
+			if (run !== generation.current) return;
+			if (!result.success || !result.draft) throw new Error(result.error);
+			setNarrationDraft(result.draft);
+			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
 	const review = async () => {
 		if (!plan || !modelInfo || !modelConsent) return;
 		const run = ++generation.current;
@@ -667,6 +686,70 @@ export function AutoEditPanel({
 									</li>
 								))}
 							</ol>
+							<section
+								className="mt-4 space-y-3 rounded-lg border p-3"
+								aria-label={n.title.replace(" \u00b7 experimental", "")}
+							>
+								<h3 className="font-semibold">
+									{n.title.replace(" \u00b7 experimental", "")}
+								</h3>
+								<p className="text-sm">{n.info}</p>
+								<Button
+									disabled={
+										!bundledStatus?.available ||
+										stale ||
+										!!busy ||
+										!plan.suggestions.some((s) => !s.blocked)
+									}
+									onClick={() => void narrateBundled()}
+								>
+									{busy === "narrate" ? n.busy : n.draft}
+								</Button>
+								{narrationDraft &&
+									(narrationDraft.cues.length === 0 ? (
+										<p className="text-sm">{n.empty}</p>
+									) : (
+										<div className="space-y-3">
+											<p className="text-sm">{n.editHint}</p>
+											<ol className="space-y-2">
+												{narrationDraft.cues.map((cue) => (
+													<li key={cue.id} className="space-y-1">
+														<Button
+															variant="ghost"
+															disabled={stale || !!busy}
+															onClick={() => onSeek(cue.startMs / 1000)}
+														>
+															{m.seek}
+														</Button>
+														<textarea
+															aria-label={cue.id}
+															value={narrationEdits[cue.id] ?? cue.text}
+															disabled={stale || !!busy}
+															onChange={(e) => {
+																setNarrationEdits((prev) => ({
+																	...prev,
+																	[cue.id]: e.target.value,
+																}));
+																setNarrationApproved(false);
+															}}
+															className="w-full rounded border p-2 text-sm"
+														/>
+													</li>
+												))}
+											</ol>
+											<label className="flex gap-2">
+												<input
+													type="checkbox"
+													checked={narrationApproved}
+													disabled={stale || !!busy}
+													onChange={(e) => setNarrationApproved(e.target.checked)}
+												/>
+											{n.approve}
+										</label>
+										{narrationApproved && <p className="text-sm">{n.approved}</p>}
+									</div>
+								))}
+							</section>
 							{import.meta.env.DEV && (
 								<details>
 									<summary>{m.ai}</summary>
@@ -753,9 +836,9 @@ export function AutoEditPanel({
 									</Button>
 									<section
 										className="mt-4 space-y-3 rounded border p-3"
-										aria-label={n.title}
+										aria-label={`${n.title} (Ollama)`}
 									>
-										<h3>{n.title}</h3>
+										<h3>{n.title} (Ollama)</h3>
 										<p className="text-sm">{n.info}</p>
 										<Button
 											disabled={
@@ -770,58 +853,6 @@ export function AutoEditPanel({
 										>
 											{busy === "narrate" ? n.busy : n.draft}
 										</Button>
-										{narrationDraft &&
-											(narrationDraft.cues.length === 0 ? (
-												<p className="text-sm">{n.empty}</p>
-											) : (
-												<div className="space-y-3">
-													<p className="text-sm">{n.editHint}</p>
-													<ol className="space-y-2">
-														{narrationDraft.cues.map((cue) => (
-															<li key={cue.id} className="space-y-1">
-																<Button
-																	variant="ghost"
-																	disabled={stale || !!busy}
-																	onClick={() =>
-																		onSeek(cue.startMs / 1000)
-																	}
-																>
-																	{m.seek}
-																</Button>
-																<textarea
-																	aria-label={cue.id}
-																	value={
-																		narrationEdits[cue.id] ?? cue.text
-																	}
-																	disabled={stale || !!busy}
-																	onChange={(e) => {
-																		setNarrationEdits((prev) => ({
-																			...prev,
-																			[cue.id]: e.target.value,
-																		}));
-																		setNarrationApproved(false);
-																	}}
-																	className="w-full rounded border p-2 text-sm"
-																/>
-															</li>
-														))}
-													</ol>
-													<label className="flex gap-2">
-														<input
-															type="checkbox"
-															checked={narrationApproved}
-															disabled={stale || !!busy}
-															onChange={(e) =>
-																setNarrationApproved(e.target.checked)
-															}
-														/>
-														{n.approve}
-													</label>
-													{narrationApproved && (
-														<p className="text-sm">{n.approved}</p>
-													)}
-												</div>
-											))}
 									</section>
 									<section
 										className="mt-4 space-y-3 rounded border p-3"

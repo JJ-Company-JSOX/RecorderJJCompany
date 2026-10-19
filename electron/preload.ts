@@ -220,6 +220,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("auto-edit-review-local", plan, model),
 	narrateAutoEditLocally: (plan: EditPlan, model: string) =>
 		ipcRenderer.invoke("auto-edit-narrate-local", plan, model),
+	narrateAutoEditBundled: (plan: EditPlan) =>
+		ipcRenderer.invoke("auto-edit-narrate-bundled", plan),
 	hudOverlaySetIgnoreMouse: (ignore: boolean) => {
 		ipcRenderer.send("hud-overlay-set-ignore-mouse", ignore);
 	},

@@ -301,6 +301,13 @@ interface Window {
 			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;
 			error?: string;
 		}>;
+		narrateAutoEditBundled: (
+			plan: import("../src/components/video-editor/auto-edit/plan").EditPlan,
+		) => Promise<{
+			success: boolean;
+			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;
+			error?: string;
+		}>;
 		hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
 		hudOverlaySetSourceSelectionActive: (active: boolean) => void;
 		hudOverlayDrag: (phase: "start" | "move" | "end", screenX: number, screenY: number) => void;

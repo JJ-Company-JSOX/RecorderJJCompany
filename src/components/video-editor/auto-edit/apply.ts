@@ -25,11 +25,21 @@ export function applyEditPlan(
 			s.blocked ||
 			conflictFor(s, state) ||
 			!validSpan(s) ||
-			!state.clipRegions.some((c) => s.startMs >= c.startMs && s.endMs <= c.endMs)
+			(s.kind !== "caption" &&
+				!state.clipRegions.some((c) => s.startMs >= c.startMs && s.endMs <= c.endMs))
 		)
 			throw new Error("conflicting-edit");
 		if (s.kind === "speed" && (!s.speed || s.speed < 1 || s.speed > 2))
 			throw new Error("invalid-speed");
+		if (
+			s.kind === "caption" &&
+			(!s.cue ||
+				!validSpan(s.cue) ||
+				!s.cue.text.trim() ||
+				s.cue.startMs !== s.startMs ||
+				s.cue.endMs !== s.endMs)
+		)
+			throw new Error("invalid-caption");
 	}
 	const timing = accepted
 		.filter((s) => s.kind === "trim" || s.kind === "speed")
@@ -75,8 +85,11 @@ export function applyEditPlan(
 		regions.map((r) => ({ ...r, startMs: mapTime(r.startMs), endMs: mapTime(r.endMs) }));
 	const zoomRegions = remap(state.zoomRegions);
 	const annotationRegions = remap(state.annotationRegions);
+	const autoCaptions = [...state.autoCaptions];
 	const idFor = (s: EditSuggestion) => `auto-${plan.id}-${s.id}`;
 	for (const s of accepted) {
+		if (s.kind === "caption" && s.cue && !autoCaptions.some((c) => c.id === s.cue!.id))
+			autoCaptions.push({ ...s.cue, words: s.cue.words?.map((word) => ({ ...word })) });
 		if (s.kind === "zoom" && s.focus && s.depth) {
 			const next = {
 				id: idFor(s),
@@ -86,10 +99,11 @@ export function applyEditPlan(
 				focus: s.focus,
 				mode: "manual" as const,
 			};
+			if (!validSpan(next)) continue;
 			if (zoomRegions.some((r) => overlaps(r, next))) throw new Error("conflicting-edit");
 			zoomRegions.push(next);
 		}
-		if (s.kind === "annotation" && s.text)
+		if (s.kind === "annotation" && s.text && mapTime(s.endMs) > mapTime(s.startMs))
 			annotationRegions.push({
 				id: idFor(s),
 				startMs: mapTime(s.startMs),
@@ -97,9 +111,9 @@ export function applyEditPlan(
 				type: "text",
 				content: s.text,
 				textContent: s.text,
-				position: { x: 50, y: 80 },
+				position: { x: 20, y: 65 },
 				size: { width: 60, height: 15 },
-				style: { ...DEFAULT_ANNOTATION_STYLE },
+				style: { ...DEFAULT_ANNOTATION_STYLE, backgroundColor: "#111827E6" },
 				zIndex: Math.max(0, ...annotationRegions.map((a) => a.zIndex)) + 1,
 				trackIndex: Math.max(-1, ...annotationRegions.map((a) => a.trackIndex ?? 0)) + 1,
 			});
@@ -109,6 +123,7 @@ export function applyEditPlan(
 		clipRegions: packClipSequence(clips),
 		zoomRegions,
 		annotationRegions,
+		autoCaptions,
 		audioRegions: remap(state.audioRegions),
 	};
 }

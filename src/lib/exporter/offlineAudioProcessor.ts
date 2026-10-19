@@ -10,7 +10,10 @@ import {
 	getClipSourceStartMs,
 	getTimelineDurationMs,
 } from "@/components/video-editor/types";
-import { buildResolvedAudioPlan } from "@/lib/exporter/audioRoutingEngine";
+import {
+	buildResolvedAudioPlan,
+	resolveEnhancedAudioPath,
+} from "@/lib/exporter/audioRoutingEngine";
 import { estimateCompanionAudioStartDelaySeconds } from "@/lib/mediaTiming";
 import { AudioMediaProcessor } from "./audioMediaProcessor";
 import {
@@ -92,7 +95,9 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 
 		// Decode embedded source audio separately from companion sidecars.
 		const mainBuffer = resolvedPlan.includeEmbeddedInExport
-			? await this.decodeAudioFromUrl(videoUrl)
+			? await this.decodeAudioFromUrl(
+					resolveEnhancedAudioPath(videoUrl, sourceAudioTrackSettings),
+				)
 			: null;
 		const mainBufferGain = resolveSourceTrackGain(sourceAudioTrackSettings, "mixed");
 		const mainBufferEntry = mainBuffer ? { buffer: mainBuffer, gain: mainBufferGain } : null;
@@ -109,7 +114,9 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 			(resolvedPlan.playbackPaths.length > 0 ? await this.getMediaDurationSec(videoUrl) : 0);
 		for (const audioPath of resolvedPlan.playbackPaths) {
 			if (this.cancelled) throw new Error("Export cancelled");
-			const buffer = await this.decodeAudioFromUrl(audioPath);
+			const buffer = await this.decodeAudioFromUrl(
+				resolveEnhancedAudioPath(audioPath, sourceAudioTrackSettings),
+			);
 			if (!buffer) continue;
 
 			companionEntries.push({

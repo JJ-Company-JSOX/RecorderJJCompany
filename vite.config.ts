@@ -117,6 +117,7 @@ export default defineConfig(({ mode }) => ({
 				"**/.tmp/**",
 				"**/release/**",
 				"**/vendor/offline-ai/**",
+				"**/vendor/offline-tools/**",
 				"**/electron/native/**/build/**",
 			],
 		},

@@ -185,6 +185,21 @@ function settleNativeVideoExportPendingRequests(
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
+	getBundledSpeechStatus: () => ipcRenderer.invoke("auto-edit-speech-status"),
+	getOfflineToolsStatus: () => ipcRenderer.invoke("offline-tools-status"),
+	runOfflineTool: (input: {
+		kind: "scene" | "sherpa" | "rnnoise";
+		videoPath: string;
+		language?: string;
+		track?: "mic" | "mixed";
+	}) => ipcRenderer.invoke("offline-tools-run", input),
+	analyzeCompleteAutoEdit: (input: { videoPath: string; language?: string }) =>
+		ipcRenderer.invoke("auto-edit-complete", input),
+	onCompleteAutoEditProgress: (callback: (stage: string) => void) => {
+		const listener = (_event: unknown, stage: string) => callback(stage);
+		ipcRenderer.on("auto-edit-complete-progress", listener);
+		return () => ipcRenderer.removeListener("auto-edit-complete-progress", listener);
+	},
 	getBundledAiStatus: () => ipcRenderer.invoke("auto-edit-bundled-status"),
 	analyzeAutoEditFrames: (input: { videoPath: string; model: string; count: number }) =>
 		ipcRenderer.invoke("auto-edit-vision", input),

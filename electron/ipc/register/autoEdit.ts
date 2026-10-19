@@ -6,11 +6,17 @@ import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bund
 import { analyzeLocalMedia } from "../autoEdit/media";
 import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
 import { analyzeVideoFrames } from "../autoEdit/vision";
-import { resolveCaptionAudioCandidates } from "../captions/generate";
+import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
+import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
+import type { SpeechTranscript } from "../../../src/components/video-editor/auto-edit/speechTypes";
+import { generateBundledSpeechTranscript, getBundledSpeechStatus } from "../captions/bundledSpeech";
+import { NoCaptionAudioError, resolveCaptionAudioCandidates } from "../captions/generate";
 import { getFfmpegBinaryPath, getFfprobeBinaryPath } from "../ffmpeg/binary";
 import { resolveApprovedLocalMediaPath } from "../project/manager";
 import { getCompanionAudioStartDelayMs } from "../recording/diagnostics";
 import { normalizeVideoSourcePath } from "../utils";
+import { registerOfflineTools } from "./offlineTools";
+import { protectSilenceWithVad } from "../captions/vadProtection";
 
 export function registerAutoEditHandlers() {
 	const bundledRoot = () =>
@@ -30,6 +36,123 @@ export function registerAutoEditHandlers() {
 		}
 	});
 	const running = new Map<number, AbortController>();
+	registerOfflineTools(running);
+	app.once("before-quit", () => {
+		for (const controller of running.values()) controller.abort();
+	});
+	ipcMain.handle("auto-edit-speech-status", () => getBundledSpeechStatus());
+	ipcMain.handle(
+		"auto-edit-complete",
+		async (event, input: { videoPath: string; language?: string }) => {
+			if (running.has(event.sender.id))
+				return { success: false, error: "Analysis already running" };
+			const controller = new AbortController();
+			running.set(event.sender.id, controller);
+			const abort = () => controller.abort();
+			event.sender.once("destroyed", abort);
+			let session: Awaited<ReturnType<typeof startBundledAi>> | undefined;
+			const progress = (stage: string) => {
+				if (!event.sender.isDestroyed())
+					event.sender.send("auto-edit-complete-progress", stage);
+			};
+			try {
+				if (
+					!input ||
+					typeof input.videoPath !== "string" ||
+					(input.language !== undefined && !/^(auto|en|zh|ms)$/.test(input.language))
+				)
+					throw Error("Invalid speech editing request");
+				const normalized = normalizeVideoSourcePath(input.videoPath);
+				const approved = normalized && (await resolveApprovedLocalMediaPath(normalized));
+				if (!approved) throw Error("Select an approved local recording first");
+				const candidates = await resolveCaptionAudioCandidates(approved);
+				const companions = [];
+				for (const candidate of candidates) {
+					if (!(await resolveApprovedLocalMediaPath(candidate.path)))
+						throw Error("Linked audio is not approved");
+					if (candidate.path !== approved)
+						companions.push({
+							path: candidate.path,
+							delayMs: (await getCompanionAudioStartDelayMs(candidate.path)) ?? 0,
+						});
+				}
+				progress("media");
+				const evidence = await analyzeLocalMedia({
+					videoPath: approved,
+					companions,
+					ffmpegPath: getFfmpegBinaryPath(),
+					ffprobePath: getFfprobeBinaryPath(),
+					signal: controller.signal,
+				});
+				if (evidence.durationMs > 600_000)
+					throw Error(
+						"Offline automatic editing currently supports recordings up to 10 minutes",
+					);
+				progress("transcribe");
+				const recognized = await generateBundledSpeechTranscript({
+					videoPath: approved,
+					language: input.language ?? "auto",
+					signal: controller.signal,
+					candidates,
+				});
+				const cues = boundSpeechCues(recognized.cues, evidence.durationMs);
+				evidence.silentRanges = protectSilenceWithVad(
+					evidence.silentRanges,
+					"vadEvidence" in recognized ? recognized.vadEvidence : null,
+				);
+				if (!cues.length)
+					throw Error(
+						"No usable speech was recognized. Use the local or visual plan for a recording without speech.",
+					);
+				controller.signal.throwIfAborted();
+				const transcript: SpeechTranscript = {
+					version: 1,
+					durationMs: evidence.durationMs,
+					audioVerified: evidence.audioVerified,
+					alignmentVerified:
+						evidence.audioVerified &&
+						!candidates.some((c) => c.label === "linked webcam recording"),
+					cues,
+				};
+				progress("understand");
+				session = await startBundledAi(bundledRoot(), controller.signal);
+				// Bounded windows keep the model context small; no transcript is sent off-device.
+				const windows: Awaited<ReturnType<typeof analyzeSpeechWindow>>[] = [];
+				for (const window of speechWindows(transcript)) {
+					controller.signal.throwIfAborted();
+					const result = await analyzeSpeechWindow(window, session.complete);
+					windows.push(result);
+				}
+				progress("vision");
+				const analysis = await analyzeVideoFrames({
+					videoPath: approved,
+					model: BUNDLED_MODEL_ID,
+					count: 4,
+					ffmpegPath: getFfmpegBinaryPath(),
+					ffprobePath: getFfprobeBinaryPath(),
+					signal: controller.signal,
+					bundled: { name: "Qwen3-VL-2B-Instruct Q4_K_M", describe: session.describe },
+				});
+				return {
+					success: true,
+					evidence,
+					speech: mergeSpeechPlans(transcript, windows),
+					analysis,
+				};
+			} catch (error) {
+				return {
+					success: false,
+					error:
+						error instanceof Error ? error.message : "Offline automatic editing failed",
+					errorCode: error instanceof NoCaptionAudioError ? "NO_AUDIO" : undefined,
+				};
+			} finally {
+				await session?.close();
+				running.delete(event.sender.id);
+				event.sender.removeListener("destroyed", abort);
+			}
+		},
+	);
 	ipcMain.handle(
 		"auto-edit-vision",
 		async (event, input: { videoPath: string; model: string; count: number }) => {

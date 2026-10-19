@@ -1,6 +1,51 @@
 import type { AudioRegion } from "@/components/video-editor/types";
 import { SOURCE_AUDIO_NORMALIZE_GAIN } from "@/components/video-editor/audio/audioTypes";
 import { resolveSourceAudioFallbackPaths } from "./sourceAudioFallback";
+import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
+
+export function resolveEnhancedAudioPath(
+	originalPath: string,
+	settings?: SourceAudioTrackSettings,
+): string {
+	const enhancement = settings?.[getSourceTrackIdFromPath(originalPath)]?.voiceEnhancement;
+	let localPath = originalPath;
+	try {
+		const url = new URL(originalPath);
+		if (
+			(url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
+			url.pathname === "/video"
+		)
+			localPath = url.searchParams.get("path") ?? originalPath;
+		else if (url.protocol === "file:")
+			localPath = decodeURIComponent(url.pathname)
+				.replace(/^\/([A-Za-z]:)/, "$1")
+				.replace(/\//g, "\\");
+	} catch {
+		/* plain path */
+	}
+	return enhancement?.enabled &&
+		enhancement.engine === "rnnoise" &&
+		enhancement.originalPath === localPath &&
+		enhancement.audioPath &&
+		enhancement.sampleRate === 48000 &&
+		enhancement.samples > 0
+		? enhancement.audioPath
+		: originalPath;
+}
+
+/** Keep original path identity for gains/delays; only decoder input is replaced. */
+export function getEnhancementAssetPaths(settings: unknown): string[] {
+	if (!settings || typeof settings !== "object") return [];
+	return Object.values(settings).flatMap((value) => {
+		if (!value || typeof value !== "object") return [];
+		const item = (
+			value as { voiceEnhancement?: { audioPath?: unknown; originalPath?: unknown } }
+		).voiceEnhancement;
+		return item && typeof item.audioPath === "string" && typeof item.originalPath === "string"
+			? [item.audioPath, item.originalPath]
+			: [];
+	});
+}
 
 export type SourceTrackId = "mic" | "system" | "mixed";
 export type ResolvedAudioTrackKind = "user" | "system" | "mic" | "mixed" | "embedded";

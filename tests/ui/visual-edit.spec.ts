@@ -51,6 +51,7 @@ test("visual suggestions require image consent, per-item acceptance and support 
 		timeout: 20000,
 	});
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
+	await page.locator("[data-analysis-options] > summary").click();
 	const dialog = page.getByRole("dialog", { name: "Auto edit plan", exact: true });
 	await dialog.getByRole("button", { name: "Generate local plan" }).click();
 	await dialog.getByText("Optional local AI review", { exact: true }).click();

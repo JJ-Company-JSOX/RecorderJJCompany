@@ -218,6 +218,47 @@ interface RendererExportHardwareInfo {
 
 interface Window {
 	electronAPI: {
+		getBundledSpeechStatus: () => Promise<{
+			available: boolean;
+			reason?: string;
+			modelName?: string;
+		}>;
+		getOfflineToolsStatus: () => Promise<{
+			rnnoise: { available: boolean };
+			scene: { available: boolean };
+			sherpa: { available: boolean };
+		}>;
+		runOfflineTool: (input: {
+			kind: "scene" | "sherpa" | "rnnoise";
+			videoPath: string;
+			language?: string;
+			track?: "mic" | "mixed";
+		}) => Promise<
+			| { success: false; error: string }
+			| { success: true; kind: "scene"; analysis: import("./ipc/scene/detect").SceneAnalysis }
+			| {
+					success: true;
+					kind: "sherpa";
+					transcript: Awaited<
+						ReturnType<typeof import("./ipc/sherpa/transcribe").transcribeSherpa>
+					>;
+			  }
+			| {
+					success: true;
+					kind: "rnnoise";
+					track: "mic" | "mixed";
+					asset: import("./ipc/audioEnhancement/rnnoise").VoiceEnhancementAsset;
+			  }
+		>;
+		analyzeCompleteAutoEdit: (input: { videoPath: string; language?: string }) => Promise<{
+			success: boolean;
+			error?: string;
+			errorCode?: "NO_AUDIO";
+			evidence?: import("../src/components/video-editor/auto-edit/plan").MediaEvidence;
+			speech?: import("../src/components/video-editor/auto-edit/speechTypes").SpeechAnalysis;
+			analysis?: import("../src/components/video-editor/auto-edit/vision").VisualAnalysis;
+		}>;
+		onCompleteAutoEditProgress: (callback: (stage: string) => void) => () => void;
 		getBundledAiStatus: () => Promise<
 			import("../src/components/video-editor/auto-edit/bundledTypes").BundledAiStatus
 		>;

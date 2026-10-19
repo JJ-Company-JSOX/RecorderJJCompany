@@ -5,6 +5,15 @@ export type SourceAudioTrackId = "mixed" | "system" | "mic" | (string & {});
 export interface SourceAudioTrackSetting {
 	volume: number;
 	normalize: boolean;
+	/** Optional derived asset; original source is never overwritten. */
+	voiceEnhancement?: {
+		enabled: boolean;
+		engine: "rnnoise";
+		originalPath: string;
+		audioPath: string;
+		sampleRate: 48000;
+		samples: number;
+	};
 }
 
 export type SourceAudioTrackSettings = Record<string, SourceAudioTrackSetting>;

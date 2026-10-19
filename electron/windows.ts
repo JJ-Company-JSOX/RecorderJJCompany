@@ -1,4 +1,4 @@
-import { resolveEditorStartupView } from "./editorStartupView";
+import { resolveEditorStartupView, resolveInitialDemoInput } from "./editorStartupView";
 import { currentProjectPath, currentVideoPath, currentRecordingSession } from "./ipc/state";
 import { isHudInEditorMode } from "./hudEditorMode";
 import fs from "node:fs";
@@ -73,12 +73,16 @@ function getEditorWindowQuery(): Record<string, string> {
 		windowType: "editor",
 	};
 
-	if (process.env.RECORDLY_DEV_OPEN_RECORDING_INPUT) {
-		query.devOpenInput = process.env.RECORDLY_DEV_OPEN_RECORDING_INPUT;
-	}
-	if (process.env.RECORDLY_DEV_OPEN_RECORDING_WEBCAM) {
-		query.devOpenWebcam = process.env.RECORDLY_DEV_OPEN_RECORDING_WEBCAM;
-	}
+	Object.assign(
+		query,
+		resolveInitialDemoInput({
+			projectPath: currentProjectPath,
+			videoPath: currentVideoPath,
+			recordingVideoPath: currentRecordingSession?.videoPath,
+			devInput: process.env.RECORDLY_DEV_OPEN_RECORDING_INPUT,
+			devWebcam: process.env.RECORDLY_DEV_OPEN_RECORDING_WEBCAM,
+		}),
+	);
 
 	if (process.env.RECORDLY_SMOKE_EXPORT === "1") {
 		query.smokeExport = "1";

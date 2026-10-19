@@ -3,6 +3,7 @@ import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import { get as httpsGet } from "node:https";
 import type Electron from "electron";
+import { getBundledSpeechStatus } from "./bundledSpeech";
 import {
 	WHISPER_MODEL_DIR,
 	WHISPER_MODEL_DOWNLOAD_URL,
@@ -22,6 +23,9 @@ export function sendWhisperModelDownloadProgress(
 }
 
 export async function getWhisperSmallModelStatus() {
+	const bundled = await getBundledSpeechStatus();
+	if (bundled.available)
+		return { success: true, exists: true, path: bundled.modelPath, bundled: true };
 	try {
 		await fs.access(WHISPER_SMALL_MODEL_PATH, fsConstants.R_OK);
 		return {
@@ -151,5 +155,6 @@ export async function downloadWhisperSmallModel(
 }
 
 export async function deleteWhisperSmallModel(): Promise<void> {
+	// The packaged model belongs to application resources and is never removed.
 	await fs.rm(WHISPER_SMALL_MODEL_PATH, { force: true });
 }

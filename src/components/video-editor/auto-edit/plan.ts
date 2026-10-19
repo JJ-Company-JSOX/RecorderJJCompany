@@ -35,8 +35,9 @@ export interface EditState {
 }
 export interface EditSuggestion extends Span {
 	id: string;
-	kind: "trim" | "zoom" | "speed" | "annotation";
-	reason: "silent-static" | "click" | "transcript" | "vision";
+	kind: "trim" | "zoom" | "speed" | "annotation" | "caption";
+	reason: "silent-static" | "click" | "transcript" | "vision" | "speech" | "speech-pause";
+	cue?: CaptionCue;
 	focus?: { cx: number; cy: number };
 	depth?: 1 | 2 | 3;
 	speed?: number;
@@ -52,6 +53,7 @@ export interface EditPlan {
 	warnings: string[];
 	reviewer: "rules" | "local-ai";
 	visualAnalysis?: import("./vision").VisualAnalysis;
+	speechAnalysis?: import("./speechTypes").SpeechAnalysis;
 }
 export type Decision = "pending" | "accept" | "reject";
 export const overlaps = (a: Span, b: Span) => a.startMs < b.endMs && b.startMs < a.endMs;

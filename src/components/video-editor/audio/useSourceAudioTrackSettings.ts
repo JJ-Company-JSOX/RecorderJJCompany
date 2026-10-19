@@ -135,6 +135,7 @@ export function useSourceAudioTrackSettings({
 					[selectedClipId]: {
 						...prevClip,
 						[id]: {
+							...prevClip[id],
 							volume: nextVolume,
 							normalize: prevNormalize,
 						},
@@ -159,6 +160,7 @@ export function useSourceAudioTrackSettings({
 					[selectedClipId]: {
 						...prevClip,
 						[id]: {
+							...prevClip[id],
 							volume: prevVolume,
 							normalize,
 						},

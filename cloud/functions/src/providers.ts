@@ -41,6 +41,19 @@ export interface StockSuggestion {
 	durationMs: number;
 	downloadUrl: string;
 }
+interface PexelsVideo {
+	id: string | number;
+	url: string;
+	image: string;
+	duration: number;
+	video_files: Array<{ file_type: string; width: number; link: string }>;
+}
+interface PixabayVideo {
+	id: string | number;
+	pageURL: string;
+	duration: number;
+	videos?: Record<string, { url?: string; thumbnail?: string }>;
+}
 /** Search returns metadata only. Media bytes are downloaded only after a separate approval. */
 export async function searchStock(
 	provider: "pexels" | "pixabay",
@@ -52,7 +65,7 @@ export async function searchStock(
 		const data = await json(`https://api.pexels.com/videos/search?query=${q}&per_page=5`, {
 			Authorization: key,
 		});
-		return (data.videos ?? []).slice(0, 5).flatMap((video) => {
+		return ((data.videos ?? []) as PexelsVideo[]).slice(0, 5).flatMap((video) => {
 			if (!providerPage("pexels", video.url) || !Array.isArray(video.video_files)) return [];
 			const file = video.video_files
 				.filter((f) => f.file_type === "video/mp4" && f.width <= 1920)
@@ -77,7 +90,7 @@ export async function searchStock(
 		`https://pixabay.com/api/videos/?key=${encodeURIComponent(key)}&q=${q}&per_page=5`,
 		{},
 	);
-	return (data.hits ?? []).slice(0, 5).flatMap((video) => {
+	return ((data.hits ?? []) as PixabayVideo[]).slice(0, 5).flatMap((video) => {
 		if (!providerPage("pixabay", video.pageURL)) return [];
 		const file = video.videos?.medium ?? video.videos?.small;
 		if (!file?.url) return [];

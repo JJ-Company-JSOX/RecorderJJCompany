@@ -250,6 +250,30 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 		return {
 			pid: child.pid,
 			close,
+			async complete(instruction: string, question: string, schema: object): Promise<string> {
+				if (instruction.length + question.length > 12_000)
+					throw Error("Speech analysis window is too large");
+				const raw = (await request(
+					port,
+					token,
+					"/v1/chat/completions",
+					{
+						temperature: 0,
+						max_tokens: 768,
+						response_format: { type: "json_object", schema },
+						messages: [
+							{ role: "system", content: instruction },
+							{ role: "user", content: question },
+						],
+					},
+					signal,
+					300_000,
+				)) as { choices?: { message?: { content?: string } }[] };
+				const content = raw.choices?.[0]?.message?.content;
+				if (typeof content !== "string")
+					throw Error("Missing offline speech analysis reply");
+				return content;
+			},
 			async describe(image: Buffer, instruction: string, question: string): Promise<string> {
 				const raw = (await request(
 					port,

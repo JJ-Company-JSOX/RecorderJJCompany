@@ -28,6 +28,7 @@ release/**
 # npx electron-builder --mac --win
 .tmp/
 vendor/offline-ai/
+vendor/offline-tools/
 .history/
 extension-sources/
 *.tsbuildinfo

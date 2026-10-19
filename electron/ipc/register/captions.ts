@@ -1,6 +1,7 @@
 import path from "node:path";
 import { dialog, ipcMain } from "electron";
-import { generateAutoCaptionsFromVideo } from "../captions/generate";
+import { generateAutoCaptionsFromVideo, resolveCaptionAudioCandidates } from "../captions/generate";
+import { generateBundledSpeechTranscript, getBundledSpeechStatus } from "../captions/bundledSpeech";
 import {
 	deleteWhisperSmallModel,
 	downloadWhisperSmallModel,
@@ -8,9 +9,13 @@ import {
 	sendWhisperModelDownloadProgress,
 } from "../captions/whisper";
 import { LEGACY_PROJECT_FILE_EXTENSIONS, PROJECT_FILE_EXTENSION } from "../constants";
-import { hasProjectFileExtension, loadProjectFromPath } from "../project/manager";
+import {
+	hasProjectFileExtension,
+	loadProjectFromPath,
+	resolveApprovedLocalMediaPath,
+} from "../project/manager";
 import { setCurrentProjectPath } from "../state";
-import { approveUserPath, getRecordingsDir } from "../utils";
+import { approveUserPath, getRecordingsDir, normalizeVideoSourcePath } from "../utils";
 
 const VIDEO_FILE_EXTENSIONS = ["webm", "mp4", "mov", "avi", "mkv"];
 const PROJECT_FILE_EXTENSIONS = [PROJECT_FILE_EXTENSION, ...LEGACY_PROJECT_FILE_EXTENSIONS];
@@ -233,7 +238,27 @@ export function registerCaptionHandlers() {
 			},
 		) => {
 			try {
-				const result = await generateAutoCaptionsFromVideo(options);
+				const bundled = await getBundledSpeechStatus();
+				const normalized = normalizeVideoSourcePath(options.videoPath);
+				const approved = normalized && (await resolveApprovedLocalMediaPath(normalized));
+				if (!approved) throw Error("Select an approved local recording first");
+				const candidates = await resolveCaptionAudioCandidates(approved);
+				for (const candidate of candidates)
+					if (!(await resolveApprovedLocalMediaPath(candidate.path)))
+						throw Error("Linked audio is not approved for transcription");
+				const result =
+					bundled.available &&
+					(!options.whisperModelPath || options.whisperModelPath === bundled.modelPath)
+						? await generateBundledSpeechTranscript({
+								videoPath: approved,
+								language: options.language,
+								candidates,
+							})
+						: await generateAutoCaptionsFromVideo({
+								...options,
+								videoPath: approved,
+								candidates,
+							});
 				return {
 					success: true,
 					cues: result.cues,

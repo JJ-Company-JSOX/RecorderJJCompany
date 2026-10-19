@@ -1,17 +1,15 @@
-import { ExportErrorReportButton } from "@/components/feedback/ExportErrorReportButton";
-import { LinkSimple } from "@phosphor-icons/react/dist/csr/LinkSimple";
-import { HardDrive } from "@phosphor-icons/react/dist/csr/HardDrive";
+import { Card, ProgressBar, Tag, TagGroup } from "@heroui/react";
 import { Export } from "@phosphor-icons/react/dist/csr/Export";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CloudShareButton } from "../cloud/CloudShareButton";
-import { Card, TagGroup, Tag } from "@heroui/react";
+import { HardDrive } from "@phosphor-icons/react/dist/csr/HardDrive";
+import { LinkSimple } from "@phosphor-icons/react/dist/csr/LinkSimple";
 import { motion, useReducedMotion } from "motion/react";
-import { ProgressBar } from "@heroui/react";
-
-import { toast } from "@/components/ui/toast";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ExportErrorReportButton } from "@/components/feedback/ExportErrorReportButton";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toast } from "@/components/ui/toast";
 import type { useI18n } from "@/contexts/I18nContext";
+import { CloudShareButton } from "../cloud/CloudShareButton";
 import { ExportSettingsMenu } from "../ExportSettingsMenu";
 import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
@@ -184,7 +182,9 @@ export function EditorExportMenu(props: Props) {
 						className="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 px-4.5"
 					>
 						<Export className="h-4 w-4" />
-						<span className="text-sm font-semibold tracking-tight">Publish</span>
+						<span className="text-sm font-semibold tracking-tight">
+							{t("common.actions.export", "Export")}
+						</span>
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent
@@ -203,7 +203,9 @@ export function EditorExportMenu(props: Props) {
 					>
 						<div ref={contentRef}>
 							<div className="p-5 space-y-3">
-								<h2 className="text-sm font-semibold">Publish</h2>
+								<h2 className="text-sm font-semibold">
+									{t("common.actions.export", "Export")}
+								</h2>
 								<TagGroup
 									aria-label="Publish destination"
 									selectionMode="single"

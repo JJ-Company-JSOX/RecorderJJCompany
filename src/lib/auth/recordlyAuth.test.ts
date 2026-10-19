@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/productFeatures", () => ({ ACCOUNTS_ENABLED: true }));
+
 const emailOtp = vi.hoisted(() => vi.fn(async (_options: unknown) => ({ error: null })));
 const exchange = vi.hoisted(() => vi.fn(async (_code: string) => ({ error: null })));
 const password = vi.hoisted(() => vi.fn());

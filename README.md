@@ -6,6 +6,8 @@ Local editing: [Auto-edit batch review, protected edits and audio checks (简中
 
 Customer offline AI edition: [bundled Windows model/runtime and validation status (简中)](docs/offline-ai-windows.md).
 
+Offline speech auto-edit preview: [customer workflow and reproducible packaged-app test (简中)](docs/offline-speech-windows.md). [Integration audit and staged delivery](docs/ai-integration-report.md) · [Open-source matrix](OPEN_SOURCE_AUDIT.md) · [License review](LICENSE_COMPLIANCE.md).
+
 <p align="center">
   <img width="220" alt="Recordly Logo" src="https://github.com/user-attachments/assets/414b8838-6731-45d4-a815-6e3c0aa1fe52" />
 </p>

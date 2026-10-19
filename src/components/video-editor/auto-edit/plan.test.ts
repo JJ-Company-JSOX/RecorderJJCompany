@@ -38,6 +38,18 @@ const acceptAll = (p: ReturnType<typeof build>): Record<string, Decision> =>
 	Object.fromEntries(p.suggestions.filter((s) => !s.blocked).map((s) => [s.id, "accept"]));
 
 describe("local edit planning", () => {
+	it("keeps generated text boxes inside the recording instead of clipping their right edge", () => {
+		const s = state();
+		s.autoCaptions = [{ id: "c", startMs: 1000, endMs: 2000, text: "Offline video editor" }];
+		const plan = build(s);
+		const next = applyEditPlan(s, source, plan, acceptAll(plan));
+		for (const annotation of next.annotationRegions) {
+			expect(annotation.position.x).toBeGreaterThanOrEqual(0);
+			expect(annotation.position.x + annotation.size.width).toBeLessThanOrEqual(100);
+			expect(annotation.position.y + annotation.size.height).toBeLessThanOrEqual(100);
+		}
+		expect(next.annotationRegions).toHaveLength(1);
+	});
 	it("does not cut an independent webcam track whose frames were not analyzed", () => {
 		const s = { ...state(), additionalVisualSource: "webcam.mp4|0" };
 		const p = build(s);

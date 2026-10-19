@@ -105,8 +105,15 @@ export function parseWhisperJsonCues(content: string): CaptionCuePayload[] {
 					return null;
 				}
 
-				const words = parseWhisperJsonWords(segmentData.tokens);
-				const text = words.length > 0 ? buildCaptionTextFromWords(words) : segmentText;
+				let words = parseWhisperJsonWords(segmentData.tokens);
+				const wordText = buildCaptionTextFromWords(words);
+				// Byte-fallback CJK tokens may individually decode to U+FFFD in the
+				// CLI JSON even when its complete segment text is valid UTF-8. Those
+				// fragments cannot provide reliable word text; retain the intact
+				// segment and timing instead of displaying replacement characters.
+				if (wordText.includes("\uFFFD") && segmentText && !segmentText.includes("\uFFFD"))
+					words = [];
+				const text = words.length > 0 ? wordText : segmentText;
 
 				if (!text) {
 					return null;

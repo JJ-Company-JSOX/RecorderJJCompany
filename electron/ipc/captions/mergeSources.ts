@@ -29,7 +29,7 @@ export function mergeCaptionSources(
 				});
 			}
 			// SRT has no word boundaries: retain its text during the unopposed portions.
-			systemCues.push(...spans.map((span) => ({ ...cue, ...span })));
+			systemCues.push(...spans.map((span) => ({ ...cue, ...span, uncertain: true })));
 			continue;
 		}
 		// Preserve words outside the conflict, rather than dropping a whole paragraph.
@@ -37,11 +37,13 @@ export function mergeCaptionSources(
 		const flush = () => {
 			if (run.length === 0) return;
 			systemCues.push({
+				...cue,
 				id: cue.id,
 				startMs: run[0].startMs,
 				endMs: run[run.length - 1].endMs,
 				text: buildCaptionTextFromWords(run),
 				words: run,
+				uncertain: true,
 			});
 			run = [];
 		};

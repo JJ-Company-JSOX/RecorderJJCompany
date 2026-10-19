@@ -218,6 +218,19 @@ interface RendererExportHardwareInfo {
 
 interface Window {
 	electronAPI: {
+		getBundledSpeechStatus: () => Promise<{
+			available: boolean;
+			reason?: string;
+			modelName?: string;
+		}>;
+		analyzeCompleteAutoEdit: (input: { videoPath: string; language?: string }) => Promise<{
+			success: boolean;
+			error?: string;
+			evidence?: import("../src/components/video-editor/auto-edit/plan").MediaEvidence;
+			speech?: import("../src/components/video-editor/auto-edit/speechTypes").SpeechAnalysis;
+			analysis?: import("../src/components/video-editor/auto-edit/vision").VisualAnalysis;
+		}>;
+		onCompleteAutoEditProgress: (callback: (stage: string) => void) => () => void;
 		getBundledAiStatus: () => Promise<
 			import("../src/components/video-editor/auto-edit/bundledTypes").BundledAiStatus
 		>;

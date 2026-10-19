@@ -9,6 +9,7 @@ import { messages, type PlanLanguage } from "./messages";
 import { baselineFor, buildEditPlan, type Decision, type EditPlan, type EditState } from "./plan";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
+import { addSpeechSuggestions } from "./speechPlan";
 
 export function AutoEditPanel({
 	open,
@@ -48,10 +49,24 @@ export function AutoEditPanel({
 	const [modelConsent, setModelConsent] = useState(false);
 	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
 	const [keepFullFrame, setKeepFullFrame] = useState(true);
+	const [speechReady, setSpeechReady] = useState(false);
+	const [autoApply, setAutoApply] = useState(true);
+	const [speechStage, setSpeechStage] = useState("");
+	const [draftSummary, setDraftSummary] = useState("");
+	const currentState = useRef({ state, source });
+	currentState.current = { state, source };
 	const generation = useRef(0);
 	useEffect(() => {
 		if (!open) return;
 		let active = true;
+		void window.electronAPI
+			.getBundledSpeechStatus?.()
+			.then((status) => {
+				if (active) setSpeechReady(status.available);
+			})
+			.catch(() => {
+				if (active) setSpeechReady(false);
+			});
 		void window.electronAPI
 			.getBundledAiStatus?.()
 			.then((status) => {
@@ -65,6 +80,7 @@ export function AutoEditPanel({
 		};
 	}, [open]);
 	useEffect(() => window.electronAPI.onAutoEditFrameProgress?.(setProgress), []);
+	useEffect(() => window.electronAPI.onCompleteAutoEditProgress?.(setSpeechStage), []);
 	useEffect(() => {
 		if (open) return;
 		generation.current++;
@@ -86,16 +102,24 @@ export function AutoEditPanel({
 			),
 		}));
 	};
-	const analyze = async (withAi = false) => {
+	const analyze = async (withAi = false, withSpeech = false) => {
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
 		setApplied(false);
+		setSpeechStage("");
+		setDraftSummary("");
 		setPlan(null);
 		setDecisions({});
 		try {
 			if (!window.electronAPI.analyzeAutoEdit) throw new Error(m.unavailable);
-			const result = await window.electronAPI.analyzeAutoEdit(source);
+			const complete = withSpeech
+				? await window.electronAPI.analyzeCompleteAutoEdit({
+						videoPath: source,
+						language: "auto",
+					})
+				: undefined;
+			const result = complete ?? (await window.electronAPI.analyzeAutoEdit(source));
 			if (run !== generation.current) return;
 			if (!result.success || !result.evidence) throw new Error(result.error);
 			let next = buildEditPlan({
@@ -105,14 +129,18 @@ export function AutoEditPanel({
 				cursor,
 				id: crypto.randomUUID(),
 			});
+			if (withSpeech && complete?.speech)
+				next = addSpeechSuggestions(next, state, source, complete.speech);
 			if (withAi) {
 				setBusy("vision");
 				setProgress({ completed: 0, total: 4 });
-				const frames = await window.electronAPI.analyzeAutoEditFrames({
-					videoPath: source,
-					model: BUNDLED_MODEL_ID,
-					count: 4,
-				});
+				const frames =
+					complete ??
+					(await window.electronAPI.analyzeAutoEditFrames({
+						videoPath: source,
+						model: BUNDLED_MODEL_ID,
+						count: 4,
+					}));
 				if (run !== generation.current) return;
 				if (!frames.success || !frames.analysis) throw Error(frames.error || m.error);
 				next = addVisualSuggestions(next, state, source, frames.analysis);
@@ -121,6 +149,32 @@ export function AutoEditPanel({
 						...next,
 						suggestions: next.suggestions.filter((s) => s.kind !== "zoom"),
 					};
+			}
+			if (withSpeech && autoApply) {
+				// Screen labels can cover controls; preserve them for the review-first workflow.
+				next = {
+					...next,
+					suggestions: next.suggestions.filter(
+						(s) => !(s.kind === "annotation" && s.reason === "vision"),
+					),
+				};
+				const latest = currentState.current;
+				if (baselineFor(latest.state, latest.source) !== next.baseline)
+					throw Error(m.stale);
+				const choices = Object.fromEntries(
+					next.suggestions
+						.filter((s) => !s.blocked)
+						.map((s) => [s.id, "accept" as const]),
+				);
+				if (Object.keys(choices).length) {
+					onApply(applyEditPlan(latest.state, latest.source, next, choices));
+					const selected = next.suggestions.filter((s) => choices[s.id] === "accept");
+					setDraftSummary(
+						`${m.trim}: ${selected.filter((s) => s.kind === "trim").length} · ${m.caption}: ${selected.filter((s) => s.kind === "caption").length} · ${m.protectedCount}: ${next.suggestions.filter((s) => s.blocked).length}`,
+					);
+					setApplied(true);
+					return;
+				}
 			}
 			setPlan(next);
 		} catch (e) {
@@ -213,6 +267,35 @@ export function AutoEditPanel({
 					<label className="flex items-start gap-2 text-sm">
 						<input
 							type="checkbox"
+							checked={autoApply}
+							disabled={!!busy}
+							onChange={(e) => setAutoApply(e.target.checked)}
+						/>
+						{m.autoDraft}
+					</label>
+					<p className="text-sm">{m.labelReview}</p>
+					<Button
+						disabled={
+							!!busy ||
+							!bundledStatus?.available ||
+							!speechReady ||
+							!source ||
+							!state.clipRegions.length
+						}
+						onClick={() => void analyze(true, true)}
+					>
+						{m.completeEdit}
+					</Button>
+					{!speechReady && <p className="text-sm">{m.speechMissing}</p>}
+					{busy && speechStage && (
+						<p role="status">
+							{m[speechStage as "media" | "transcribe" | "understand" | "vision"] ??
+								speechStage}
+						</p>
+					)}
+					<label className="flex items-start gap-2 text-sm">
+						<input
+							type="checkbox"
 							checked={keepFullFrame}
 							disabled={!!busy}
 							onChange={(event) => setKeepFullFrame(event.target.checked)}
@@ -262,6 +345,8 @@ export function AutoEditPanel({
 				{error && <p role="alert">{error}</p>}
 				{stale && <p role="alert">{m.stale}</p>}
 				{applied && <p role="status">{m.applied}</p>}
+				{applied && draftSummary && <p role="status">{draftSummary}</p>}
+				{applied && draftSummary && <p className="text-sm">{m.speechCaution}</p>}
 				{plan && (
 					<>
 						{plan.warnings.map((warning, i) => (
@@ -269,7 +354,9 @@ export function AutoEditPanel({
 								{m.warning}:{" "}
 								{warning === "vision-sampled-only"
 									? v.warning
-									: (m[warning as keyof typeof m] ?? warning)}
+									: warning.startsWith("speech-")
+										? m.speechCaution
+										: (m[warning as keyof typeof m] ?? warning)}
 							</p>
 						))}
 						{plan.warnings.includes("audio-unverified") && (

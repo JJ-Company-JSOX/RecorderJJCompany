@@ -1,0 +1,21 @@
+// Separate output preserves any open preview and existing user profile.
+{
+  "extends": "./electron-builder.offline.json5",
+  "appId": "com.jsox.recorder.offline.speech.preview",
+  "directories": { "output": "release/offline-speech-test" },
+  "extraFiles": [
+    { "from": "scripts/launch-windows-offline-speech.cmd", "to": "Start-Jsox-Offline-Speech.cmd" }
+  ],
+  "win": {
+    "signAndEditExecutable": false,
+    "artifactName": "Jsox-Recorder-Offline-Speech-${version}-${arch}.${ext}"
+  },
+  "nsis": { "shortcutName": "Jsox Recorder Offline Speech" },
+  "extraResources": [
+    { "from": "vendor/offline-ai/win32-x64/speech", "to": "offline-ai/speech" },
+    { "from": "THIRD_PARTY_NOTICES.md", "to": "compliance/THIRD_PARTY_NOTICES.md" },
+    { "from": "MODEL_LICENSES.md", "to": "compliance/MODEL_LICENSES.md" },
+    { "from": "LICENSE_COMPLIANCE.md", "to": "compliance/LICENSE_COMPLIANCE.md" },
+    { "from": "OPEN_SOURCE_AUDIT.md", "to": "compliance/OPEN_SOURCE_AUDIT.md" }
+  ]
+}

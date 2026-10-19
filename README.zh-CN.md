@@ -6,6 +6,8 @@
 
 顾客无需配置 AI 的目标版本：[模型随包提供的 Windows 离线 AI](docs/offline-ai-windows.md)，本地开发与验证状态见文档。
 
+离线语音自动剪辑预览：[使用与自动验证说明](docs/offline-speech-windows.md)。[集成审计与分阶段计划](docs/ai-integration-report.md) · [开源项目矩阵](OPEN_SOURCE_AUDIT.md) · [许可审查](LICENSE_COMPLIANCE.md)。
+
 <p align="center">
   <img width="220" alt="Recordly logo" src="https://github.com/user-attachments/assets/082bb4b0-5fc5-4e9f-abda-55611fd6aded" />
 </p>

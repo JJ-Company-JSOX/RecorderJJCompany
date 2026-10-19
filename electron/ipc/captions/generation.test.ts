@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import path from "node:path";
 
 const mocks = vi.hoisted(() => ({
 	exec: vi.fn(),
@@ -28,7 +29,10 @@ vi.mock("node:fs/promises", () => ({
 	},
 }));
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
-vi.mock("../ffmpeg/binary", () => ({ getFfmpegBinaryPath: () => "/ffmpeg" }));
+vi.mock("../ffmpeg/binary", () => ({
+	getFfmpegBinaryPath: () => "/ffmpeg",
+	getFfprobeBinaryPath: () => "/ffprobe",
+}));
 vi.mock("../paths/binaries", () => ({ getBundledWhisperExecutableCandidates: () => ["/whisper"] }));
 vi.mock("../project/session", () => ({ resolveRecordingSession: mocks.session }));
 vi.mock("../recording/diagnostics", () => ({
@@ -66,9 +70,153 @@ beforeEach(() => {
 	mocks.rm.mockResolvedValue(undefined);
 });
 
-const whisperCalls = () => mocks.exec.mock.calls.filter(([file]) => file === "/whisper");
+const whisperPath = path.resolve("/whisper");
+const whisperCalls = () => mocks.exec.mock.calls.filter(([file]) => file === whisperPath);
 
 describe("caption generation pipeline", () => {
+	it("does not swallow cancellation during DTW duration probing and cleans its temporary outputs", async () => {
+		const controller = new AbortController();
+		mocks.exec.mockImplementation(async (file: string) => {
+			if (file === "/ffprobe") {
+				controller.abort();
+				throw Object.assign(new Error("Cancelled probe"), { name: "AbortError" });
+			}
+			return { stderr: "" };
+		});
+		await expect(
+			generateAutoCaptionsFromVideo({
+				...options,
+				useDtwAlignment: true,
+				signal: controller.signal,
+			}),
+		).rejects.toMatchObject({ name: "AbortError" });
+		expect(mocks.rm).toHaveBeenCalledTimes(3);
+	});
+	it("enables real DTW only on the bundled path and returns acoustic segment alignment with original token confidence", async () => {
+		mocks.readFile.mockImplementation(async (file: string) =>
+			file.endsWith(".json")
+				? JSON.stringify({
+						transcription: [
+							{
+								offsets: { from: 0, to: 2000 },
+								text: "Hello world.",
+								tokens: [
+									{
+										text: " Hello",
+										offsets: { from: 0, to: 0 },
+										t_dtw: 30,
+										p: 0.8,
+									},
+									{
+										text: " world.",
+										offsets: { from: 0, to: 0 },
+										t_dtw: 90,
+										p: 0.6,
+									},
+								],
+							},
+						],
+					})
+				: srt,
+		);
+		mocks.exec.mockImplementation(async (file: string, args: string[]) =>
+			file === "/ffprobe"
+				? { stdout: JSON.stringify({ format: { duration: "4" } }) }
+				: {
+						stderr: args.some((arg) => arg.startsWith("silencedetect="))
+							? "silence_start: 1.5\nsilence_end: 4\n"
+							: "",
+					},
+		);
+		const result = await generateAutoCaptionsFromVideo({ ...options, useDtwAlignment: true });
+		expect(whisperCalls()[0][1]).toEqual(expect.arrayContaining(["-dtw", "small", "-nfa"]));
+		expect(result.cues[0]).toMatchObject({
+			text: "Hello world.",
+			startMs: 0,
+			endMs: 1580,
+			alignment: "dtw-speech",
+			confidence: 0.7,
+		});
+		expect(result.cues[0]).not.toHaveProperty("words");
+	});
+	it("uses the approved candidate set without discovering additional media", async () => {
+		const controller = new AbortController();
+		await generateAutoCaptionsFromVideo({
+			...options,
+			signal: controller.signal,
+			candidates: [{ path: "/approved.wav", label: "recording" }],
+		});
+		expect(mocks.companions).not.toHaveBeenCalled();
+		expect(mocks.session).not.toHaveBeenCalled();
+		expect(mocks.exec.mock.calls[0][1]).toContain("/approved.wav");
+		for (const call of mocks.exec.mock.calls)
+			expect(call[2]).toEqual(
+				expect.objectContaining({ signal: controller.signal, windowsHide: true }),
+			);
+	});
+
+	it("returns measured Whisper token confidence after phrase segmentation", async () => {
+		mocks.readFile.mockImplementation(async (file: string) =>
+			file.endsWith(".json")
+				? JSON.stringify({
+						transcription: [
+							{
+								offsets: { from: 0, to: 2000 },
+								text: "Hello world.",
+								tokens: [
+									{ text: "Hello", offsets: { from: 0, to: 900 }, p: 0.9 },
+									{ text: " world.", offsets: { from: 900, to: 2000 }, p: 0.7 },
+								],
+							},
+						],
+					})
+				: srt,
+		);
+		const result = await generateAutoCaptionsFromVideo(options);
+		expect(result.cues[0].confidence).toBeCloseTo(0.8);
+	});
+
+	it.each([
+		"extraction",
+		"whisper",
+		"silence",
+	])("cancellation during %s propagates and cleans temporary files", async (stage) => {
+		const controller = new AbortController();
+		mocks.exec.mockImplementation(async (file: string, args: string[]) => {
+			const matches =
+				stage === "extraction"
+					? args.includes("pcm_s16le")
+					: stage === "whisper"
+						? file === whisperPath
+						: args.some((arg) => arg.startsWith("silencedetect="));
+			if (matches || (stage === "silence" && args.includes("-af"))) {
+				controller.abort();
+				throw Object.assign(new Error("unknown argument: -ojf"), { name: "AbortError" });
+			}
+			return { stderr: "" };
+		});
+		await expect(
+			generateAutoCaptionsFromVideo({
+				...options,
+				signal: controller.signal,
+				candidates: [
+					{ path: "/mic.wav", label: "microphone audio sidecar" },
+					{ path: "/second.wav", label: "system audio sidecar" },
+				],
+			}),
+		).rejects.toMatchObject({ name: "AbortError" });
+		expect(mocks.exec.mock.calls.some(([, args]) => args.includes("/second.wav"))).toBe(false);
+		expect(mocks.rm).toHaveBeenCalledTimes(3);
+		if (stage === "whisper") expect(whisperCalls()).toHaveLength(1);
+	});
+
+	it("fails clearly for missing audio instead of synthesizing captions", async () => {
+		mocks.exec.mockRejectedValue(new Error("No audio stream"));
+		await expect(generateAutoCaptionsFromVideo({ ...options, candidates: [] })).rejects.toThrow(
+			"No audio was found",
+		);
+		expect(whisperCalls()).toHaveLength(0);
+	});
 	it("transcribes both sidecars independently, preserving the microphone delay", async () => {
 		mocks.companions.mockResolvedValue([
 			{
@@ -120,7 +268,7 @@ describe("caption generation pipeline", () => {
 
 	it("retries SRT only for a runtime that rejects full JSON", async () => {
 		mocks.exec.mockImplementation(async (file: string, args: string[]) => {
-			if (file === "/whisper" && args.includes("-ojf"))
+			if (file === whisperPath && args.includes("-ojf"))
 				throw new Error("unknown argument: -ojf");
 			return { stderr: "" };
 		});

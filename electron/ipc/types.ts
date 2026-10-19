@@ -216,6 +216,11 @@ export type CaptionCuePayload = {
 	endMs: number;
 	text: string;
 	words?: CaptionWordPayload[];
+	/** Arithmetic mean of real Whisper speech-token probabilities, when complete. */
+	confidence?: number;
+	uncertain?: boolean;
+	/** Estimated sentence range from DTW anchors and measured acoustic silence. */
+	alignment?: "dtw-speech";
 };
 
 export type WhisperJsonToken = {

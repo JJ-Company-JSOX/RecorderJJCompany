@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import {
 	parseVisualResponse,
@@ -68,6 +69,8 @@ export async function analyzeVideoFrames(options: {
 	const durationMs = Math.floor(Number(probe.format?.duration) * 1000);
 	const sampledTimesMs = sampleTimes(durationMs, options.count ?? 8);
 	const observations: VisualAnalysis["observations"] = [];
+	// Per-job, exact-byte reuse only. At most 12 entries; never written to disk or shared.
+	const bundledReplies = options.bundled ? new Map<string, string>() : undefined;
 	for (const timeMs of sampledTimesMs) {
 		options.signal.throwIfAborted();
 		const { stdout } = await exec(
@@ -109,15 +112,25 @@ export async function analyzeVideoFrames(options: {
 		);
 		if (stdout.length < 4 || stdout[0] !== 0xff || stdout[1] !== 0xd8)
 			throw Error("Could not decode a JPEG sample");
+		options.signal.throwIfAborted();
 		const question = `Analyze this sample at ${(timeMs / 1000).toFixed(3)} seconds.`;
+		let bundledContent: string | undefined;
+		if (options.bundled && bundledReplies) {
+			const digest = createHash("sha256").update(stdout).digest("hex");
+			bundledContent = bundledReplies.get(digest);
+			if (bundledContent === undefined) {
+				bundledContent = await options.bundled.describe(
+					stdout,
+					VISUAL_INSTRUCTION,
+					question,
+				);
+				bundledReplies.set(digest, bundledContent);
+			}
+		}
 		const response = options.bundled
 			? {
 					message: {
-						content: await options.bundled.describe(
-							stdout,
-							VISUAL_INSTRUCTION,
-							question,
-						),
+						content: bundledContent,
 					},
 				}
 			: ((await localRequest(
@@ -144,8 +157,10 @@ export async function analyzeVideoFrames(options: {
 				)) as { message?: { content?: string } });
 		if (typeof response.message?.content !== "string")
 			throw Error("Missing visual model reply");
+		options.signal.throwIfAborted();
 		observations.push(parseVisualResponse(JSON.parse(response.message.content), timeMs));
 		options.onProgress?.(observations.length, sampledTimesMs.length, timeMs);
+		options.signal.throwIfAborted();
 	}
 	return {
 		observations,

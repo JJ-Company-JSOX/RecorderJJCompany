@@ -363,6 +363,12 @@ export function EditorShell(props: Props) {
 							timeline.setZoomRegions(next.zoomRegions);
 							timeline.setAnnotationRegions(next.annotationRegions);
 							timeline.setAudioRegions(next.audioRegions);
+							timeline.setAutoCaptions(next.autoCaptions);
+							if (next.autoCaptions.length > timeline.autoCaptions.length)
+								timeline.setAutoCaptionSettings((current) => ({
+									...current,
+									enabled: true,
+								}));
 							// New segments inherit per-source audio settings; originals stay available for Undo.
 							timeline.setSourceAudioTrackSettingsByClip((current) => {
 								const updated = { ...current };

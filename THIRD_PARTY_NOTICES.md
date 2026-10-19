@@ -1,5 +1,16 @@
 # Third-party notices
 
+## Offline AI edition
+
+The offline edition additionally distributes Qwen3-VL model weights (Apache-2.0),
+OpenAI Whisper small multilingual weights (MIT), llama.cpp (MIT) and whisper.cpp
+(MIT). Exact revisions, asset hashes and model notices are recorded in
+[MODEL_LICENSES.md](MODEL_LICENSES.md) and the build lock files under `scripts/`.
+The Windows resource bundles contain the complete model/runtime license texts,
+embedded component notices and LLVM-MinGW toolchain notices. These permissive
+component licenses do not change Recordly's AGPL-3.0 license or the actual shipped
+FFmpeg executable's GPL obligations; see [LICENSE_COMPLIANCE.md](LICENSE_COMPLIANCE.md).
+
 ## Voom
 
 Recordly Share includes code adapted from the Voom project:

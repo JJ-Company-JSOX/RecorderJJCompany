@@ -7,6 +7,8 @@ test("wallpaper tiles add, select and remove custom backgrounds without nested c
 	test.setTimeout(60000);
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");
+	// AI auto edit is the default tab; open Scene first.
+	await page.getByRole("radio", { name: "Scene", exact: true }).click({ timeout: 20000 });
 	const add = page.getByRole("button", { name: "Add wallpaper", exact: true });
 	await expect(add).toBeVisible({ timeout: 20000 });
 	await expect(page.getByRole("button", { name: "Upload Custom", exact: true })).toHaveCount(0);
@@ -53,6 +55,8 @@ test("video wallpapers share the gallery's add and remove controls", async ({ pa
 	test.setTimeout(60000);
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");
+	// AI auto edit is the default tab; open Scene first.
+	await page.getByRole("radio", { name: "Scene", exact: true }).click({ timeout: 20000 });
 	const original = page.locator('aside button[aria-pressed="true"]');
 	await expect(original).toBeVisible({ timeout: 20000 });
 	const originalName = await original.getAttribute("aria-label");

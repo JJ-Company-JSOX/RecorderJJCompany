@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
@@ -25,7 +25,7 @@ import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
 import { wizardMessages } from "./wizardMessages";
 
-export function AutoEditPanel({
+export const AutoEditPanel = memo(function AutoEditPanel({
 	open,
 	state,
 	source,
@@ -1266,4 +1266,4 @@ export function AutoEditPanel({
 			)}
 		</section>
 	);
-}
+});

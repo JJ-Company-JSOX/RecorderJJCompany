@@ -504,7 +504,8 @@ test("Solar navigation selection, circular initials, and Raw sources are consist
 		});
 	});
 	await page.goto("/?windowType=editor");
-	const scene = page.getByRole("radio", { name: "Scene", exact: true });
+	// AI auto edit is the first and default tool tab.
+	const scene = page.getByRole("radio", { name: "AI auto edit", exact: true });
 	const videos = page.getByRole("button", { name: "Clips", exact: true });
 	await expect(page.getByRole("radio", { name: "Clips", exact: true })).toHaveCount(0);
 	await expect(scene).toBeChecked();

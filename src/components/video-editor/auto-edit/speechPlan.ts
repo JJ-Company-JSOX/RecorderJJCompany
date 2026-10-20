@@ -1,4 +1,4 @@
-import { type ClipRegion, getClipSourceStartMs } from "../types";
+import { type ClipRegion, type CursorTelemetryPoint, getClipSourceStartMs } from "../types";
 import {
 	baselineFor,
 	conflictFor,
@@ -6,16 +6,12 @@ import {
 	type EditState,
 	type EditSuggestion,
 	overlaps,
+	type Span,
 	validSpan,
 } from "./plan";
-import {
-	assertSpeechTranscript,
-	type SpeechAnalysis,
-	type SpeechCue,
-	speechCutIssue,
-} from "./speechTypes";
+import { assertSpeechTranscript, type SpeechAnalysis, speechCutIssue } from "./speechTypes";
 
-function projectWholeCue(cue: SpeechCue, clip: ClipRegion) {
+function projectWholeCue(cue: Span, clip: ClipRegion) {
 	const start = getClipSourceStartMs(clip),
 		end = start + (clip.endMs - clip.startMs) * clip.speed;
 	if (cue.startMs < start || cue.endMs > end) return null;
@@ -34,6 +30,7 @@ export function addSpeechSuggestions(
 	state: EditState,
 	source: string,
 	analysis: SpeechAnalysis,
+	context: { cursor?: CursorTelemetryPoint[]; staticRanges?: Span[] } = {},
 ): EditPlan {
 	if (plan.baseline !== baselineFor(state, source)) throw Error("stale-plan");
 	assertSpeechTranscript(analysis?.transcript);
@@ -66,7 +63,7 @@ export function addSpeechSuggestions(
 	const suggestions = plan.suggestions.filter((suggestion) => {
 		if (suggestion.reason === "speech") return false;
 		if (
-			suggestion.reason === "silent-static" &&
+			(suggestion.reason === "silent-static" || suggestion.reason === "silent-moving") &&
 			(suggestion.kind === "trim" || suggestion.kind === "speed") &&
 			projections.some((span) => overlaps(span, suggestion))
 		) {
@@ -155,6 +152,51 @@ export function addSpeechSuggestions(
 					text: `${cue.text} → ${keepCues.map((keep) => keep.text).join(" ")}`,
 				};
 				suggestions.push({ ...next, blocked: issue ?? conflictFor(next, state) });
+			}
+		}
+	}
+	// Pauses between VAD-verified phrases. Padding keeps the cut sounding natural.
+	if (transcript.audioVerified) {
+		const ordered = [...transcript.cues].sort((a, b) => a.startMs - b.startMs);
+		for (let i = 1; i < ordered.length; i++) {
+			const before = ordered[i - 1],
+				after = ordered[i];
+			if (!before.vadBoundaryVerified || !after.vadBoundaryVerified) continue;
+			if (allRemoved.includes(before.id) || allRemoved.includes(after.id)) continue;
+			const gap = { startMs: before.endMs + 300, endMs: after.startMs - 300 };
+			if (gap.endMs - gap.startMs < 700) continue;
+			if (ordered.some((cue) => overlaps(cue, gap))) continue;
+			if (
+				(context.cursor ?? []).some(
+					(point) =>
+						point.interactionType &&
+						point.interactionType !== "move" &&
+						point.timeMs >= gap.startMs - 300 &&
+						point.timeMs <= gap.endMs + 300,
+				)
+			)
+				continue;
+			const frozen = (context.staticRanges ?? []).some(
+				(range) => range.startMs <= gap.startMs && range.endMs >= gap.endMs,
+			);
+			for (const clip of state.clipRegions) {
+				const span = projectWholeCue(gap, clip);
+				if (!span) continue;
+				if (
+					suggestions.some(
+						(existing) =>
+							(existing.kind === "trim" || existing.kind === "speed") &&
+							overlaps(existing, span),
+					)
+				)
+					continue;
+				const next: EditSuggestion = {
+					...span,
+					id: `speech-pause-${clip.id}-${before.id}`,
+					reason: "speech-pause",
+					...(frozen ? { kind: "trim" as const } : { kind: "speed" as const, speed: 2 }),
+				};
+				suggestions.push({ ...next, blocked: conflictFor(next, state) });
 			}
 		}
 	}

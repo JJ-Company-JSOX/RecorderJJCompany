@@ -214,3 +214,35 @@ it("globally rejects cross-window keeper chains, preserves prior captions and re
 	s.clipRegions[0].endMs--;
 	expect(() => addSpeechSuggestions(stale, s, source, a)).toThrow("stale-plan");
 });
+
+const pauses = (plan: EditPlan) => plan.suggestions.filter((s) => s.reason === "speech-pause");
+const noCuts = (t: SpeechTranscript): SpeechAnalysis => validateSpeechPlan({ edits: [] }, t);
+
+it("cuts a long pause between phrases on a frozen screen, keeping 300 ms each side", () => {
+	const s = state();
+	const p = addSpeechSuggestions(base(s), s, source, noCuts(transcript()), {
+		staticRanges: [{ startMs: 0, endMs: 10000 }],
+	});
+	expect(pauses(p)).toMatchObject([{ kind: "trim", startMs: 2300, endMs: 3700 }]);
+	expect(pauses(p)[0].blocked).toBeUndefined();
+});
+
+it("speeds up, rather than cuts, a pause while the screen is still changing", () => {
+	const s = state();
+	const p = addSpeechSuggestions(base(s), s, source, noCuts(transcript()));
+	expect(pauses(p)).toMatchObject([{ kind: "speed", speed: 2, startMs: 2300, endMs: 3700 }]);
+});
+
+it("keeps pauses that contain a click, short pauses and unverified boundaries", () => {
+	const s = state();
+	const clicked = addSpeechSuggestions(base(s), s, source, noCuts(transcript()), {
+		cursor: [{ timeMs: 3000, cx: 0.5, cy: 0.5, interactionType: "click" }],
+	});
+	expect(pauses(clicked)).toHaveLength(0);
+	const short = transcript();
+	short.cues[1] = { ...short.cues[1], startMs: 3000, endMs: 4000 };
+	expect(pauses(addSpeechSuggestions(base(s), s, source, noCuts(short)))).toHaveLength(0);
+	const unverified = transcript();
+	unverified.cues[1] = { ...unverified.cues[1], vadBoundaryVerified: false };
+	expect(pauses(addSpeechSuggestions(base(s), s, source, noCuts(unverified)))).toHaveLength(0);
+});

@@ -63,7 +63,7 @@ export function AutoEditPanel({
 	const [narrationAudioReady, setNarrationAudioReady] = useState(false);
 	const [ttsStatus, setTtsStatus] = useState<{ available: boolean } | null>(null);
 	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
-	const [keepFullFrame, setKeepFullFrame] = useState(true);
+	const [keepFullFrame, setKeepFullFrame] = useState(false);
 	const [speechReady, setSpeechReady] = useState<boolean | null>(null);
 	const [autoApply, setAutoApply] = useState(true);
 	const [speechStage, setSpeechStage] = useState("");
@@ -189,16 +189,19 @@ export function AutoEditPanel({
 				id: crypto.randomUUID(),
 			});
 			if (withSpeech && complete?.speech)
-				next = addSpeechSuggestions(next, state, source, complete.speech);
+				next = addSpeechSuggestions(next, state, source, complete.speech, {
+					cursor,
+					staticRanges: result.evidence.staticRanges,
+				});
 			if (withAi) {
 				setBusy("vision");
-				setProgress({ completed: 0, total: 4 });
+				setProgress({ completed: 0, total: 8 });
 				const frames =
 					complete ??
 					(await window.electronAPI.analyzeAutoEditFrames({
 						videoPath: source,
 						model: BUNDLED_MODEL_ID,
-						count: 4,
+						count: 8,
 					}));
 				if (run !== generation.current) return;
 				if (!frames.success || !frames.analysis) throw Error(frames.error || m.error);

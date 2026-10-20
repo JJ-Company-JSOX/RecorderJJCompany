@@ -47,7 +47,7 @@ export const messages = {
 		acceptRemaining: "Accept remaining suggestions",
 		rejectRemaining: "Reject remaining suggestions",
 		allProtected:
-			"All suggestions overlap existing edits. There is nothing new to apply; you can close this panel and keep editing. Existing edits have been preserved.",
+			"This video was already edited here (it has zooms or cuts), so every new suggestion lands on an existing edit and was skipped to avoid doubling it. Nothing was changed. To run AI edit again from scratch, close this panel, undo the earlier edits (Ctrl+Z), then start again.",
 		audioHelp:
 			"For future recordings, enable microphone or system audio and check playback. Missing recorded sound cannot be recovered here. No AI model or JSON download is needed for this local plan.",
 		reject: "Reject",
@@ -139,7 +139,7 @@ export const messages = {
 		acceptRemaining: "接受剩余建议",
 		rejectRemaining: "拒绝剩余建议",
 		allProtected:
-			"全部建议都与已有编辑重叠，没有新的修改可应用。可以关闭此面板继续编辑，已有编辑已保留。",
+			"这个视频之前已经剪过（已经有放大或剪切），新的建议都落在已有修改上，为了不重复修改就全部跳过了，视频没有改变。想从头重新自动剪辑：先关掉这个窗口，用撤销（Ctrl+Z）退回之前的修改，再重新开始。",
 		audioHelp:
 			"下次录制请启用麦克风或系统声音，并回放确认。这里无法恢复未录下的声音。生成此本地方案无需安装 AI 模型或下载 JSON。",
 		reject: "拒绝",
@@ -233,7 +233,7 @@ export const messages = {
 		acceptRemaining: "Terima cadangan selebihnya",
 		rejectRemaining: "Tolak cadangan selebihnya",
 		allProtected:
-			"Semua cadangan bertindih dengan suntingan sedia ada. Tiada perubahan baharu untuk digunakan; tutup panel ini untuk terus menyunting. Suntingan sedia ada dikekalkan.",
+			"Video ini sudah disunting di sini (sudah ada zum atau potongan), jadi setiap cadangan baharu jatuh pada suntingan sedia ada dan dilangkau supaya tidak berganda. Tiada apa diubah. Untuk menjalankan suntingan AI semula dari awal, tutup panel ini, buat asal suntingan terdahulu (Ctrl+Z), kemudian mula semula.",
 		audioHelp:
 			"Untuk rakaman seterusnya, aktifkan mikrofon atau audio sistem dan semak main balik. Bunyi yang tidak dirakam tidak dapat dipulihkan di sini. Pelan setempat ini tidak memerlukan model AI atau muat turun JSON.",
 		reject: "Tolak",

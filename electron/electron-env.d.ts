@@ -301,9 +301,21 @@ interface Window {
 			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;
 			error?: string;
 		}>;
+		translateAutoEditSubtitles: (
+			lines: Array<{ id: string; text: string }>,
+			target: "zh" | "en" | "ms",
+		) => Promise<{
+			success: boolean;
+			lines?: Array<{ id: string; text: string }>;
+			error?: string;
+		}>;
 		narrateAutoEditBundled: (
 			plan: import("../src/components/video-editor/auto-edit/plan").EditPlan,
 			language?: "zh" | "en" | "ms",
+			screen?: {
+				videoPath: string;
+				frames: Array<{ id: string; timeMs: number; focus?: { cx: number; cy: number } }>;
+			},
 		) => Promise<{
 			success: boolean;
 			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;

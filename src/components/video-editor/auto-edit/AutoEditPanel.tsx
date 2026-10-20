@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useI18n } from "@/contexts/I18nContext";
-import type { AudioRegion, CursorTelemetryPoint } from "../types";
+import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
 import { applyEditPlan } from "./apply";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
+import { guideMessages } from "./guideMessages";
 import { interfaceMessages } from "./interfaceMessages";
 import { messages, type PlanLanguage } from "./messages";
 import type { NarrationDraft } from "./narration";
-import { guideMessages } from "./guideMessages";
-import { wizardMessages } from "./wizardMessages";
+import { narrationCaptions } from "./narrationCaptions";
 import { narrationMessages } from "./narrationMessages";
+import { OfflineToolsPanel } from "./OfflineToolsPanel";
 import {
 	baselineFor,
 	buildEditPlan,
@@ -20,9 +21,10 @@ import {
 	type EditSuggestion,
 } from "./plan";
 import { addSpeechSuggestions } from "./speechPlan";
+import { buildTextCutPlan, textLines } from "./textCuts";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
-import { OfflineToolsPanel } from "./OfflineToolsPanel";
+import { wizardMessages } from "./wizardMessages";
 
 export function AutoEditPanel({
 	open,
@@ -54,10 +56,9 @@ export function AutoEditPanel({
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
 	const [busy, setBusy] = useState<
-		"analysis" | "review" | "narrate" | "synthesize" | "vision" | "tools" | null
+		"analysis" | "review" | "narrate" | "synthesize" | "vision" | "tools" | "translate" | null
 	>(null);
 	const [error, setError] = useState("");
-	const [missingAudio, setMissingAudio] = useState(false);
 	const [silentFallback, setSilentFallback] = useState(false);
 	const [applied, setApplied] = useState(false);
 	const [model, setModel] = useState("");
@@ -95,6 +96,10 @@ export function AutoEditPanel({
 	} | null>(null);
 	const [undone, setUndone] = useState(false);
 	const [voiceOpen, setVoiceOpen] = useState(false);
+	const [textOpen, setTextOpen] = useState(false);
+	const [textDeleted, setTextDeleted] = useState<string[]>([]);
+	const [translateTarget, setTranslateTarget] = useState<PlanLanguage>("en");
+	const [translated, setTranslated] = useState(0);
 	const [showProtected, setShowProtected] = useState(false);
 	const resultAnchor = useRef<HTMLDivElement>(null);
 	const progressAnchor = useRef<HTMLDivElement>(null);
@@ -210,6 +215,7 @@ export function AutoEditPanel({
 		});
 		// The editor may normalize the applied state, so record its baseline once it arrives.
 		setUndoState({ before: latest.state, afterBaseline: null });
+		setTranslated(0);
 		setUndone(false);
 		setPlan(null);
 		setDecisions({});
@@ -227,6 +233,7 @@ export function AutoEditPanel({
 				reason: "click" as const,
 				startMs: z.startMs,
 				endMs: z.endMs,
+				focus: z.focus,
 			})),
 			...s.clipRegions
 				.filter((c) => c.speed > 1)
@@ -251,7 +258,6 @@ export function AutoEditPanel({
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
-		setMissingAudio(false);
 		setSilentFallback(fromSilentVideo);
 		setApplied(false);
 		setSpeechStage("");
@@ -275,14 +281,9 @@ export function AutoEditPanel({
 				: undefined;
 			if (complete?.errorCode === "NO_AUDIO") {
 				if (run !== generation.current) return;
-				// A silent recording can still be edited from the picture; zooms are the main edit there.
-				if (bundledStatus?.available) {
-					setKeepFullFrame(false);
-					return analyze(true, false, true, main);
-				}
-				setMissingAudio(true);
-				setError(ui.noAudio);
-				return;
+				// A silent recording is edited from the picture: frozen parts, idle parts and clicks.
+				setKeepFullFrame(false);
+				return analyze(!!bundledStatus?.available, false, true, main);
 			}
 			const result = complete ?? (await window.electronAPI.analyzeAutoEdit(source));
 			if (run !== generation.current) return;
@@ -380,13 +381,28 @@ export function AutoEditPanel({
 		const run = ++generation.current;
 		setBusy("narrate");
 		setError("");
+		setProgress({ completed: 0, total: 0 });
 		setNarrationApproved(false);
 		setNarrationAudioReady(false);
 		try {
 			const draftLanguage = language;
+			const { clipRegions } = currentState.current.state;
+			// The AI looks at the source frame just after each zoom or sped-up part begins.
+			const frames = voicePlan.suggestions.map((s) => ({
+				id: s.id,
+				timeMs: Math.max(
+					0,
+					mapTimelineTimeToSourceTime(
+						s.startMs + Math.min(500, (s.endMs - s.startMs) / 2),
+						clipRegions,
+					),
+				),
+				...(s.focus ? { focus: s.focus } : {}),
+			}));
 			const result = await window.electronAPI.narrateAutoEditBundled(
 				voicePlan,
 				draftLanguage,
+				{ videoPath: source, frames },
 			);
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
@@ -433,7 +449,15 @@ export function AutoEditPanel({
 					trackIndex,
 				});
 			}
-			onApply({ ...latestState, audioRegions: [...latestState.audioRegions, ...regions] });
+			onApply({
+				...latestState,
+				audioRegions: [...latestState.audioRegions, ...regions],
+				// Silent recordings have no subtitles; the approved narration lines become them.
+				autoCaptions: [
+					...latestState.autoCaptions,
+					...narrationCaptions(latestState, regions, cues),
+				],
+			});
 			setNarrationAudioReady(true);
 		} catch (e) {
 			if (run === generation.current)
@@ -466,16 +490,79 @@ export function AutoEditPanel({
 	};
 	const stepIndex = voiceOpen
 		? 3
-		: applied || plan
+		: applied || plan || textOpen
 			? 2
 			: busy === "analysis" || busy === "vision"
 				? 1
 				: 0;
-	const showStart = !plan && !applied && !voiceOpen && busy !== "analysis" && busy !== "vision";
+	const showStart =
+		!plan && !applied && !voiceOpen && !textOpen && busy !== "analysis" && busy !== "vision";
+	const lines = textLines(state);
+	const openTextEdit = () => {
+		setTextDeleted([]);
+		setVoiceOpen(false);
+		setTextOpen(true);
+	};
+	const cutText = () => {
+		const next = buildTextCutPlan(state, source, textDeleted, crypto.randomUUID());
+		const choices: Record<string, Decision> = Object.fromEntries(
+			next.suggestions.filter((s) => !s.blocked).map((s) => [s.id, "accept"]),
+		);
+		if (!Object.keys(choices).length) return;
+		try {
+			applyNow(next, choices);
+			setSilentFallback(false);
+			setTextOpen(false);
+		} catch (e) {
+			setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		}
+	};
 	const canUndoRun =
 		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
 	const voiceActions = narrationPlan(state).suggestions.length;
 	const protectedCount = plan ? plan.suggestions.length - available.length : 0;
+	const translateText = async () => {
+		const before = currentState.current.state;
+		const lines = before.autoCaptions
+			.filter((c) => c.text.trim() && c.text.length <= 300)
+			.map((c) => ({ id: c.id, text: c.text }));
+		if (!lines.length || !window.electronAPI.translateAutoEditSubtitles) return;
+		const run = ++generation.current;
+		setBusy("translate");
+		setError("");
+		setProgress({ completed: 0, total: 0 });
+		try {
+			const result = await window.electronAPI.translateAutoEditSubtitles(
+				lines,
+				translateTarget,
+			);
+			if (run !== generation.current) return;
+			if (!result.success || !result.lines) throw new Error(result.error);
+			const byId = new Map(result.lines.map((l) => [l.id, l.text]));
+			const latest = currentState.current.state;
+			if (baselineFor(latest, source) !== baselineFor(before, source)) throw Error(m.stale);
+			// Word timings belong to the original words, so translated lines show as whole lines.
+			onApply({
+				...latest,
+				autoCaptions: latest.autoCaptions.map((c) => {
+					const text = byId.get(c.id);
+					return text ? { id: c.id, startMs: c.startMs, endMs: c.endMs, text } : c;
+				}),
+			});
+			setUndoState({ before, afterBaseline: null });
+			setUndone(false);
+			setSummary(null);
+			setSilentFallback(false);
+			setTranslated(textLines(latest).filter((l) => byId.has(l.id)).length);
+			setTextOpen(false);
+			setApplied(true);
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
 	const startOver = () => {
 		generation.current++;
 		setPlan(null);
@@ -483,6 +570,8 @@ export function AutoEditPanel({
 		setApplied(false);
 		setSummary(null);
 		setVoiceOpen(false);
+		setTextOpen(false);
+		setTranslated(0);
 		setShowProtected(false);
 		setSilentFallback(false);
 		setError("");
@@ -620,6 +709,16 @@ export function AutoEditPanel({
 							<p className="text-center text-xs text-muted-foreground">
 								{ui.actionHelp}
 							</p>
+							{lines.length > 0 && (
+								<Button
+									variant="secondary"
+									className="w-full"
+									disabled={!!busy}
+									onClick={openTextEdit}
+								>
+									{w.textEntry}
+								</Button>
+							)}
 							{speechReady === false && <p className="text-sm">{m.speechMissing}</p>}
 							{bundledStatus && !bundledStatus.available && (
 								<p className="text-sm">{m.offlineMissing}</p>
@@ -633,15 +732,6 @@ export function AutoEditPanel({
 							className="space-y-3 rounded-lg border border-danger/30 bg-background p-3 text-sm"
 						>
 							<p>{error}</p>
-							{missingAudio && (
-								<Button
-									variant="secondary"
-									disabled={!!busy || !bundledStatus?.available}
-									onClick={() => void analyze(true, false, true)}
-								>
-									{ui.visualAlternative}
-								</Button>
-							)}
 						</div>
 					)}
 					{(busy === "analysis" || busy === "vision" || busy === "review") && (
@@ -775,7 +865,7 @@ export function AutoEditPanel({
 					)}
 					<div ref={resultAnchor} />
 					{stale && <p role="alert">{m.stale}</p>}
-					{applied && !voiceOpen && (
+					{applied && !voiceOpen && !textOpen && (
 						<section
 							className="space-y-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4"
 							role="status"
@@ -819,6 +909,11 @@ export function AutoEditPanel({
 								</p>
 							)}
 							{silentFallback && <p className="text-sm">{ui.silentFallback}</p>}
+							{translated > 0 && !undone && (
+								<p className="text-sm font-medium">
+									{w.translated.replace("{n}", String(translated))}
+								</p>
+							)}
 							{undone ? (
 								<p className="text-sm font-medium">{w.undone}</p>
 							) : (
@@ -828,6 +923,11 @@ export function AutoEditPanel({
 								{!undone && bundledStatus?.available && voiceActions > 0 && (
 									<Button onClick={() => setVoiceOpen(true)}>
 										{w.voiceNext}
+									</Button>
+								)}
+								{lines.length > 0 && (
+									<Button variant="secondary" onClick={openTextEdit}>
+										{w.textEntry}
 									</Button>
 								)}
 								{canUndoRun && undoState && (
@@ -846,6 +946,121 @@ export function AutoEditPanel({
 								</Button>
 							</div>
 							<p className="text-xs text-muted-foreground">{m.speechCaution}</p>
+						</section>
+					)}
+					{textOpen && (
+						<section
+							className="space-y-4 rounded-xl border p-4"
+							data-text-edit
+							aria-label={w.textEdit}
+						>
+							<div>
+								<h3 className="text-base font-semibold">{w.textEdit}</h3>
+								<p className="text-sm text-muted-foreground">{w.textEditHelp}</p>
+							</div>
+							<ul className="max-h-[50vh] space-y-1 overflow-y-auto">
+								{lines.map((line) => {
+									const locked = !!buildTextCutPlan(
+										state,
+										source,
+										[line.id],
+										"check",
+									).suggestions[0]?.blocked;
+									const chosen = textDeleted.includes(line.id);
+									return (
+										<li
+											key={line.id}
+											className={`flex items-start gap-3 rounded-lg px-2 py-1.5 ${chosen ? "bg-danger/5" : ""}`}
+										>
+											<input
+												type="checkbox"
+												className="mt-1"
+												aria-label={line.text}
+												checked={chosen}
+												disabled={locked}
+												onChange={(e) =>
+													setTextDeleted((current) =>
+														e.target.checked
+															? [...current, line.id]
+															: current.filter(
+																	(id) => id !== line.id,
+																),
+													)
+												}
+											/>
+											<button
+												type="button"
+												className="mt-0.5 shrink-0 font-mono text-xs text-primary"
+												onClick={() => onSeek(line.startMs / 1000)}
+											>
+												{Math.floor(line.startMs / 60000)}:
+												{String(
+													Math.floor((line.startMs % 60000) / 1000),
+												).padStart(2, "0")}
+											</button>
+											<span className="text-sm">
+												<span
+													className={
+														chosen
+															? "text-muted-foreground line-through"
+															: ""
+													}
+												>
+													{line.text}
+												</span>
+												{locked && (
+													<span className="block text-xs text-muted-foreground">
+														{w.textEditLocked}
+													</span>
+												)}
+											</span>
+										</li>
+									);
+								})}
+							</ul>
+							<div className="flex flex-wrap gap-2">
+								<Button disabled={!textDeleted.length || !!busy} onClick={cutText}>
+									{w.textEditCut.replace("{n}", String(textDeleted.length))}
+								</Button>
+								<Button variant="ghost" onClick={() => setTextOpen(false)}>
+									{w.textEditBack}
+								</Button>
+							</div>
+							<div
+								className="space-y-2 border-t border-separator pt-4"
+								data-translate-subtitles
+							>
+								<h4 className="text-sm font-semibold">{w.translateTitle}</h4>
+								<p className="text-xs text-muted-foreground">{w.translateHelp}</p>
+								<div className="flex flex-wrap items-center gap-2">
+									<label className="flex items-center gap-2 text-sm">
+										{w.translateTo}
+										<select
+											value={translateTarget}
+											onChange={(e) =>
+												setTranslateTarget(e.target.value as PlanLanguage)
+											}
+											className="rounded-lg border border-separator bg-background px-2 py-1.5 text-sm text-foreground"
+										>
+											<option value="zh">中文</option>
+											<option value="en">English</option>
+											<option value="ms">Bahasa Melayu</option>
+										</select>
+									</label>
+									<Button
+										variant="secondary"
+										disabled={!!busy || !bundledStatus?.available}
+										onClick={() => void translateText()}
+									>
+										{busy === "translate"
+											? `${w.translating}${progress.total ? ` ${progress.completed}/${progress.total}` : ""}`
+											: w.translateRun}
+									</Button>
+								</div>
+								{bundledStatus && !bundledStatus.available && (
+									<p className="text-xs">{m.offlineMissing}</p>
+								)}
+							</div>
 						</section>
 					)}
 					{voiceOpen && (
@@ -869,7 +1084,11 @@ export function AutoEditPanel({
 									disabled={!bundledStatus?.available || !!busy}
 									onClick={() => void narrateBundled()}
 								>
-									{busy === "narrate" ? n.busy : n.draft}
+									{busy === "narrate"
+										? progress.total && progress.completed < progress.total
+											? `${n.looking} ${progress.completed}/${progress.total}`
+											: n.busy
+										: n.draft}
 								</Button>
 							)}
 							{narrationDraft &&

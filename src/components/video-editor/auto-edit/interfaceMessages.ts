@@ -1,11 +1,8 @@
 export const interfaceMessages = {
 	en: {
 		title: "AI auto edit",
-		noAudio:
-			"No audio was found. Speech editing was not applied; your video is unchanged. Enable the microphone for narration or system audio for computer sounds, then record again. Existing audio cannot be recovered from a silent video.",
-		visualAlternative: "Review a visual-only plan instead",
 		silentFallback:
-			"No audio was found, so this plan was built from the picture only (pauses, clicks and zooms). Nothing was recovered or invented for the missing sound. You can still draft and generate AI narration below.",
+			"No sound was found, so this edit was built from the picture only: frozen parts are cut, idle parts are sped up and clicks are zoomed. Nothing was invented for the missing sound. Next, AI voice-over can add a voice and subtitles.",
 		noChanges:
 			"Analysis finished. No safe automatic edits were found, so your video is unchanged. If “Zoom in where I click” is off, no zooms are added.",
 		language: "Interface language",
@@ -46,11 +43,8 @@ export const interfaceMessages = {
 	},
 	zh: {
 		title: "AI 自动剪辑",
-		noAudio:
-			"没有找到音轨，未执行语音剪辑，视频保持不变。需要讲解请开启麦克风，需要电脑声音请开启系统声音，再重新录制。无法从无声视频恢复当时的声音。",
-		visualAlternative: "改为审阅画面分析建议",
 		silentFallback:
-			"没有检测到声音，所以这份方案只根据画面生成（停顿、点击和缩放），不会恢复或编造原本的声音。你仍然可以在下方生成 AI 解说稿和配音。",
+			"没有检测到声音，所以这次只根据画面剪辑：画面不动的地方剪掉，没有操作的地方加速，点击的地方放大，不会编造原本的声音。下一步可以用 AI 配音，同时自动加上字幕。",
 		noChanges:
 			"分析已完成，没有找到可安全自动修改的内容，视频保持不变。如果关掉了“在我点击的地方自动放大”，也不会添加放大效果。",
 		language: "界面语言",
@@ -88,11 +82,8 @@ export const interfaceMessages = {
 	},
 	ms: {
 		title: "Suntingan automatik AI",
-		noAudio:
-			"Tiada audio ditemui. Suntingan pertuturan tidak digunakan; video tidak berubah. Aktifkan mikrofon untuk narasi atau audio sistem untuk bunyi komputer, kemudian rakam semula. Audio asal tidak boleh dipulihkan daripada video tanpa suara.",
-		visualAlternative: "Semak pelan visual sahaja",
 		silentFallback:
-			"Tiada audio ditemui, jadi pelan ini dibina daripada gambar sahaja (jeda, klik dan zum). Tiada bunyi dipulihkan atau direka. Anda masih boleh mendraf dan menjana naratif AI di bawah.",
+			"Tiada bunyi ditemui, jadi suntingan ini dibina daripada gambar sahaja: bahagian beku dipotong, bahagian tanpa aktiviti dipercepat dan klik dizum. Tiada bunyi direka. Seterusnya, suara AI boleh menambah suara dan sari kata.",
 		noChanges:
 			"Analisis selesai. Tiada suntingan automatik yang selamat ditemui; video tidak berubah. Jika “Zum di tempat saya klik” dimatikan, tiada zum ditambah.",
 		language: "Bahasa antara muka",

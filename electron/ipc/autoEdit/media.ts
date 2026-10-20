@@ -81,7 +81,8 @@ export async function analyzeLocalMedia(options: {
 		"0:v:0",
 		"-an",
 		"-vf",
-		"setpts=PTS-STARTPTS,freezedetect=n=0:d=1.5",
+		// -60 dB tolerates encoder noise (keyframes never decode bit-identical) but not real changes.
+		"setpts=PTS-STARTPTS,freezedetect=n=-60dB:d=1.5",
 		"-filter_threads",
 		"1",
 		"-f",
@@ -143,11 +144,14 @@ export async function analyzeLocalMedia(options: {
 			silentRanges = intersectRanges(silentRanges, ranges);
 		}
 	}
+	// No audio stream anywhere (video or linked mic/system files): the whole recording is silent.
+	const noAudio = tracks === 0 && warnings.length === 0;
 	return {
 		durationMs,
 		staticRanges,
-		silentRanges: tracks ? silentRanges : [],
-		audioVerified: tracks > 0 && warnings.length === 0,
+		silentRanges: tracks || noAudio ? silentRanges : [],
+		audioVerified: warnings.length === 0,
+		...(noAudio ? { noAudio } : {}),
 		warnings,
 	};
 }

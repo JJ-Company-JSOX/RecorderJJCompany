@@ -18,6 +18,8 @@ export interface MediaEvidence {
 	staticRanges: Span[];
 	silentRanges: Span[];
 	audioVerified: boolean;
+	/** The recording and its linked audio files contain no audio stream at all. */
+	noAudio?: boolean;
 	warnings: string[];
 }
 export interface EditState {
@@ -111,6 +113,10 @@ export function conflictFor(s: EditSuggestion, state: EditState): ConflictReason
 	if (s.kind === "trim" || s.kind === "speed") {
 		if (state.additionalVisualSource) return "webcam-alignment-unverified";
 		if (state.speedRegions.length) return "legacy-speed";
+		// A sentence the user deleted from the subtitles is cut even under a zoom, label or
+		// sped-up clip; only added audio (voice-over, music) would drift out of sync.
+		if (s.kind === "trim" && s.reason === "transcript")
+			return state.audioRegions.some((r) => overlaps(s, r)) ? "existing-edit" : undefined;
 		if (
 			[...state.zoomRegions, ...state.annotationRegions, ...state.audioRegions].some((r) =>
 				overlaps(s, r),
@@ -138,6 +144,24 @@ export function subtractRanges(from: Span[], remove: Span[]): Span[] {
 		);
 	}
 	return pieces.sort((x, y) => x.startMs - y.startMs);
+}
+
+/** Pointer travel (fractions of the screen) above which a frozen picture is still "showing". */
+const POINTER_TRAVEL = 0.05;
+export function cursorTravel(cursor: CursorTelemetryPoint[], range: Span): number {
+	const points = cursor
+		.filter(
+			(p) =>
+				p.timeMs >= range.startMs &&
+				p.timeMs <= range.endMs &&
+				Number.isFinite(p.cx) &&
+				Number.isFinite(p.cy),
+		)
+		.sort((a, b) => a.timeMs - b.timeMs);
+	let total = 0;
+	for (let i = 1; i < points.length; i++)
+		total += Math.hypot(points[i].cx - points[i - 1].cx, points[i].cy - points[i - 1].cy);
+	return total;
 }
 
 /** Evidence is in source coordinates; authored clips may be reordered, repeated or sped up. */
@@ -194,7 +218,8 @@ export function buildEditPlan(input: {
 					continue;
 				const padded = project({ startMs: range.startMs + 400, endMs: range.endMs - 400 });
 				if (padded.endMs - padded.startMs < (moving ? 1500 : 1000)) continue;
-				if (moving) {
+				// A still page with a moving pointer may be showing something: speed it up, never cut.
+				if (moving || cursorTravel(cursor, range) > POINTER_TRAVEL) {
 					add({ ...padded, kind: "speed", reason: "silent-moving", speed: 2 });
 					continue;
 				}

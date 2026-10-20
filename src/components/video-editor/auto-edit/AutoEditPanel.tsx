@@ -21,6 +21,7 @@ import {
 	type EditSuggestion,
 } from "./plan";
 import { addSpeechSuggestions } from "./speechPlan";
+import { buildTextCutPlan, textLines } from "./textCuts";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
 import { wizardMessages } from "./wizardMessages";
@@ -95,6 +96,8 @@ export function AutoEditPanel({
 	} | null>(null);
 	const [undone, setUndone] = useState(false);
 	const [voiceOpen, setVoiceOpen] = useState(false);
+	const [textOpen, setTextOpen] = useState(false);
+	const [textDeleted, setTextDeleted] = useState<string[]>([]);
 	const [showProtected, setShowProtected] = useState(false);
 	const resultAnchor = useRef<HTMLDivElement>(null);
 	const progressAnchor = useRef<HTMLDivElement>(null);
@@ -484,12 +487,34 @@ export function AutoEditPanel({
 	};
 	const stepIndex = voiceOpen
 		? 3
-		: applied || plan
+		: applied || plan || textOpen
 			? 2
 			: busy === "analysis" || busy === "vision"
 				? 1
 				: 0;
-	const showStart = !plan && !applied && !voiceOpen && busy !== "analysis" && busy !== "vision";
+	const showStart =
+		!plan && !applied && !voiceOpen && !textOpen && busy !== "analysis" && busy !== "vision";
+	const lines = textLines(state);
+	const openTextEdit = () => {
+		setTextDeleted([]);
+		setApplied(false);
+		setVoiceOpen(false);
+		setTextOpen(true);
+	};
+	const cutText = () => {
+		const next = buildTextCutPlan(state, source, textDeleted, crypto.randomUUID());
+		const choices: Record<string, Decision> = Object.fromEntries(
+			next.suggestions.filter((s) => !s.blocked).map((s) => [s.id, "accept"]),
+		);
+		if (!Object.keys(choices).length) return;
+		try {
+			applyNow(next, choices);
+			setSilentFallback(false);
+			setTextOpen(false);
+		} catch (e) {
+			setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		}
+	};
 	const canUndoRun =
 		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
 	const voiceActions = narrationPlan(state).suggestions.length;
@@ -501,6 +526,7 @@ export function AutoEditPanel({
 		setApplied(false);
 		setSummary(null);
 		setVoiceOpen(false);
+		setTextOpen(false);
 		setShowProtected(false);
 		setSilentFallback(false);
 		setError("");
@@ -638,6 +664,16 @@ export function AutoEditPanel({
 							<p className="text-center text-xs text-muted-foreground">
 								{ui.actionHelp}
 							</p>
+							{lines.length > 0 && (
+								<Button
+									variant="secondary"
+									className="w-full"
+									disabled={!!busy}
+									onClick={openTextEdit}
+								>
+									{w.textEdit}
+								</Button>
+							)}
 							{speechReady === false && <p className="text-sm">{m.speechMissing}</p>}
 							{bundledStatus && !bundledStatus.available && (
 								<p className="text-sm">{m.offlineMissing}</p>
@@ -839,6 +875,11 @@ export function AutoEditPanel({
 										{w.voiceNext}
 									</Button>
 								)}
+								{!undone && lines.length > 0 && (
+									<Button variant="secondary" onClick={openTextEdit}>
+										{w.textEdit}
+									</Button>
+								)}
 								{canUndoRun && undoState && (
 									<Button
 										variant="secondary"
@@ -855,6 +896,86 @@ export function AutoEditPanel({
 								</Button>
 							</div>
 							<p className="text-xs text-muted-foreground">{m.speechCaution}</p>
+						</section>
+					)}
+					{textOpen && (
+						<section
+							className="space-y-4 rounded-xl border p-4"
+							data-text-edit
+							aria-label={w.textEdit}
+						>
+							<div>
+								<h3 className="text-base font-semibold">{w.textEdit}</h3>
+								<p className="text-sm text-muted-foreground">{w.textEditHelp}</p>
+							</div>
+							<ul className="max-h-[50vh] space-y-1 overflow-y-auto">
+								{lines.map((line) => {
+									const locked = !!buildTextCutPlan(
+										state,
+										source,
+										[line.id],
+										"check",
+									).suggestions[0]?.blocked;
+									const chosen = textDeleted.includes(line.id);
+									return (
+										<li
+											key={line.id}
+											className={`flex items-start gap-3 rounded-lg px-2 py-1.5 ${chosen ? "bg-danger/5" : ""}`}
+										>
+											<input
+												type="checkbox"
+												className="mt-1"
+												aria-label={line.text}
+												checked={chosen}
+												disabled={locked}
+												onChange={(e) =>
+													setTextDeleted((current) =>
+														e.target.checked
+															? [...current, line.id]
+															: current.filter(
+																	(id) => id !== line.id,
+																),
+													)
+												}
+											/>
+											<button
+												type="button"
+												className="mt-0.5 shrink-0 font-mono text-xs text-primary"
+												onClick={() => onSeek(line.startMs / 1000)}
+											>
+												{Math.floor(line.startMs / 60000)}:
+												{String(
+													Math.floor((line.startMs % 60000) / 1000),
+												).padStart(2, "0")}
+											</button>
+											<span className="text-sm">
+												<span
+													className={
+														chosen
+															? "text-muted-foreground line-through"
+															: ""
+													}
+												>
+													{line.text}
+												</span>
+												{locked && (
+													<span className="block text-xs text-muted-foreground">
+														{w.textEditLocked}
+													</span>
+												)}
+											</span>
+										</li>
+									);
+								})}
+							</ul>
+							<div className="flex flex-wrap gap-2">
+								<Button disabled={!textDeleted.length || !!busy} onClick={cutText}>
+									{w.textEditCut.replace("{n}", String(textDeleted.length))}
+								</Button>
+								<Button variant="ghost" onClick={() => setTextOpen(false)}>
+									{w.textEditBack}
+								</Button>
+							</div>
 						</section>
 					)}
 					{voiceOpen && (

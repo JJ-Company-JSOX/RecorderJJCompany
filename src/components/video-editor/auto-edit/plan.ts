@@ -113,6 +113,10 @@ export function conflictFor(s: EditSuggestion, state: EditState): ConflictReason
 	if (s.kind === "trim" || s.kind === "speed") {
 		if (state.additionalVisualSource) return "webcam-alignment-unverified";
 		if (state.speedRegions.length) return "legacy-speed";
+		// A sentence the user deleted from the subtitles is cut even under a zoom, label or
+		// sped-up clip; only added audio (voice-over, music) would drift out of sync.
+		if (s.kind === "trim" && s.reason === "transcript")
+			return state.audioRegions.some((r) => overlaps(s, r)) ? "existing-edit" : undefined;
 		if (
 			[...state.zoomRegions, ...state.annotationRegions, ...state.audioRegions].some((r) =>
 				overlaps(s, r),

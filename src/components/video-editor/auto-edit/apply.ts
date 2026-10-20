@@ -83,8 +83,11 @@ export function applyEditPlan(
 	if (!clips.length) throw new Error("empty-timeline");
 	const remap = <T extends { startMs: number; endMs: number }>(regions: T[]) =>
 		regions.map((r) => ({ ...r, startMs: mapTime(r.startMs), endMs: mapTime(r.endMs) }));
-	const zoomRegions = remap(state.zoomRegions);
-	const annotationRegions = remap(state.annotationRegions);
+	// Only subtitle-line cuts may run over zooms and labels; drop any they squeeze to nothing.
+	const visible = <T extends { startMs: number; endMs: number }>(regions: T[]) =>
+		regions.filter((r) => r.endMs - r.startMs >= 100);
+	const zoomRegions = visible(remap(state.zoomRegions));
+	const annotationRegions = visible(remap(state.annotationRegions));
 	const autoCaptions = [...state.autoCaptions];
 	const idFor = (s: EditSuggestion) => `auto-${plan.id}-${s.id}`;
 	for (const s of accepted) {

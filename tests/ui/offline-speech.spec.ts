@@ -227,6 +227,32 @@ test("one click automatically applies grounded subtitles and trim in one undoabl
 	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
 });
 
+test("deleting a subtitle line cuts that part of the video and can be undone", async ({ page }) => {
+	const panel = await setup(page);
+	await panel
+		.getByRole("button", { name: "Automatically edit speech and video", exact: true })
+		.click();
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(1);
+	await panel.getByRole("button", { name: "Edit by subtitles", exact: true }).click();
+	const list = panel.locator("[data-text-edit]");
+	await expect(list.getByText("Open file", { exact: true })).toBeVisible();
+	await expect(list.getByRole("button", { name: "Cut 0 selected sentences" })).toBeDisabled();
+	await list.getByRole("checkbox", { name: "Open file" }).check();
+	await list.getByRole("button", { name: "Cut 1 selected sentences" }).click();
+	await expect(panel.locator("[data-draft-result]")).toBeVisible();
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
+	const end = Number(
+		await page.locator('[data-variant="clip"]').last().getAttribute("data-end-ms"),
+	);
+	expect(end).toBeLessThan(4200);
+	await panel.getByRole("button", { name: "Undo these changes" }).click();
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(1);
+	await expect(page.locator('[data-variant="clip"]').last()).toHaveAttribute(
+		"data-end-ms",
+		"5000",
+	);
+});
+
 test("cancel ignores a late completed model reply without applying any edits", async ({ page }) => {
 	await page.setViewportSize({ width: 1024, height: 640 });
 	const panel = await setup(page, { speechAvailable: true, deferred: true });

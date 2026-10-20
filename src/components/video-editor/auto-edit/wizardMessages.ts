@@ -37,6 +37,13 @@ export const wizardMessages = {
 			en: "The English voice is not installed in this version.",
 			ms: "There is no built-in Malay voice yet. You can still draft the Malay script, then record it yourself.",
 		},
+		textEdit: "Edit by subtitles",
+		textEditHelp:
+			"Tick the sentences you do not want, and their part of the video is cut. Click a time to preview it first. You can undo afterwards.",
+		textEditCut: "Cut {n} selected sentences",
+		textEditBack: "Back",
+		textEditLocked:
+			"AI voice-over plays here. Remove that voice-over first to cut this sentence.",
 		reviewTitle: "Check each change",
 		reviewHelp: "Choose Accept or Reject for each change, then press Apply at the bottom.",
 		showProtected: "{n} more were left unchanged. Show why",
@@ -79,6 +86,12 @@ export const wizardMessages = {
 			en: "这个版本没有安装英文配音。",
 			ms: "暂时还没有内置的马来文配音。可以先生成马来文解说稿，再自己录音。",
 		},
+		textEdit: "按字幕剪辑",
+		textEditHelp:
+			"勾选不要的句子，视频里对应的那一段就会被剪掉。可以先点时间预览，剪完也能撤销。",
+		textEditCut: "剪掉选中的 {n} 句",
+		textEditBack: "返回",
+		textEditLocked: "这一句上面有 AI 配音，要先删掉那段配音才能剪。",
 		reviewTitle: "逐条确认修改",
 		reviewHelp: "每一处选“接受”或“拒绝”，然后点最下面的“应用”。",
 		showProtected: "另有 {n} 处没改，查看原因",
@@ -122,6 +135,13 @@ export const wizardMessages = {
 			en: "Suara Inggeris tidak dipasang dalam versi ini.",
 			ms: "Belum ada suara Melayu terbina dalam. Anda masih boleh mendraf skrip Melayu, kemudian merakamnya sendiri.",
 		},
+		textEdit: "Sunting ikut sari kata",
+		textEditHelp:
+			"Tandakan ayat yang anda tidak mahu, dan bahagian video itu akan dipotong. Klik masa untuk pratonton dahulu. Anda boleh buat asal selepas itu.",
+		textEditCut: "Potong {n} ayat dipilih",
+		textEditBack: "Kembali",
+		textEditLocked:
+			"Suara AI dimainkan di sini. Buang suara itu dahulu untuk memotong ayat ini.",
 		reviewTitle: "Semak setiap perubahan",
 		reviewHelp: "Pilih Terima atau Tolak untuk setiap perubahan, kemudian tekan Guna di bawah.",
 		showProtected: "{n} lagi tidak diubah. Tunjukkan sebabnya",

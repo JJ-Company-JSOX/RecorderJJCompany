@@ -151,17 +151,22 @@ test("after applying, AI voice-over drafts, waits for approval and adds an audio
 			};
 		};
 		window.electronAPI.cancelAutoEditAnalysis = async () => undefined;
-		window.electronAPI.narrateAutoEditBundled = async (plan) => ({
-			success: true,
-			draft: {
-				cues: plan.suggestions.map((s) => ({
-					id: s.id,
-					startMs: s.startMs,
-					endMs: s.endMs,
-					text: "这里放大显示刚才点击的按钮。",
-				})),
-			},
-		});
+		window.electronAPI.narrateAutoEditBundled = async (plan, _language, screen) => {
+			document.documentElement.dataset.narrationFrames = JSON.stringify(
+				screen?.frames.map((f) => ({ id: f.id, focused: !!f.focus })),
+			);
+			return {
+				success: true,
+				draft: {
+					cues: plan.suggestions.map((s) => ({
+						id: s.id,
+						startMs: s.startMs,
+						endMs: s.endMs,
+						text: "这里放大显示刚才点击的按钮。",
+					})),
+				},
+			};
+		};
 		window.electronAPI.getBundledTtsStatus = async () => ({
 			available: true,
 			voices: { zh: true, en: true, ms: false },
@@ -192,6 +197,11 @@ test("after applying, AI voice-over drafts, waits for approval and adds an audio
 	await panel.getByRole("button", { name: "下一步：加 AI 配音" }).click();
 	await panel.getByRole("button", { name: "生成解说稿草稿" }).click();
 	await expect(panel.locator("textarea")).toHaveCount(1);
+	// The AI is shown the zoomed spot of the recording before it writes the line.
+	await expect(page.locator("html")).toHaveAttribute(
+		"data-narration-frames",
+		JSON.stringify([{ id: "zoom-1", focused: true }]),
+	);
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await page.screenshot({ path: "test-results/wizard-voice-draft-zh.png" });
 	await panel.getByRole("checkbox", { name: /我已逐句审阅/ }).check();

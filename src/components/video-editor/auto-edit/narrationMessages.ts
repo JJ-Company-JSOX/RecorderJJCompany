@@ -1,7 +1,8 @@
 export const narrationMessages = {
 	en: {
 		title: "AI narration draft · experimental",
-		info: "Sends only action metadata (kind, reason and timing — never transcript text, captions or file paths) for each suggestion to the AI model on this computer. The model drafts a narration line per action; it does not describe on-screen content it was never shown. Review and edit every line before approving.",
+		info: "The AI on this computer looks at the screen at each zoom or sped-up part, then drafts one narration line for it. Nothing leaves this computer, and transcript text, subtitles and file paths are never sent to the model. The AI can misread the screen, so review and edit every line before approving.",
+		looking: "AI is looking at the screen",
 		draft: "Draft narration",
 		busy: "Drafting narration",
 		empty: "No unblocked suggestions to narrate yet. Generate or accept a plan first.",
@@ -16,7 +17,8 @@ export const narrationMessages = {
 	},
 	zh: {
 		title: "AI 解说稿草稿 · 实验版",
-		info: "只向本机的 AI 模型发送每条建议的操作元数据（类型、原因、时间——绝不发送转录文字、字幕或文件路径）。模型按每个操作写一句解说,不会描述它从未看到过的画面内容。应用前请逐句审阅、可编辑。",
+		info: "本机的 AI 会先看每一处放大或加速时的画面，再为它写一句解说。所有内容都不会离开这台电脑，也不会把转录文字、字幕或文件路径发给模型。AI 可能看错画面，确认前请逐句检查、修改。",
+		looking: "AI 正在看画面",
 		draft: "生成解说稿草稿",
 		busy: "正在生成解说稿",
 		empty: "暂时没有未被保护的建议可以配解说词,请先生成或采纳一份方案。",
@@ -30,7 +32,8 @@ export const narrationMessages = {
 	},
 	ms: {
 		title: "Draf naratif AI · eksperimen",
-		info: "Hanya menghantar metadata tindakan (jenis, sebab dan masa — bukan transkrip, sari kata atau laluan fail) bagi setiap cadangan kepada model AI pada komputer ini. Model mendraf satu baris naratif setiap tindakan; ia tidak menerangkan kandungan skrin yang tidak pernah ditunjukkan kepadanya. Semak dan sunting setiap baris sebelum meluluskan.",
+		info: "AI pada komputer ini melihat skrin pada setiap zum atau bahagian dipercepat, kemudian mendraf satu baris naratif untuknya. Tiada apa meninggalkan komputer ini, dan transkrip, sari kata serta laluan fail tidak pernah dihantar kepada model. AI boleh tersalah baca skrin, jadi semak dan sunting setiap baris sebelum meluluskan.",
+		looking: "AI sedang melihat skrin",
 		draft: "Draf naratif",
 		busy: "Mendraf naratif",
 		empty: "Tiada cadangan tidak dilindungi untuk dinaratifkan lagi. Jana atau terima pelan dahulu.",

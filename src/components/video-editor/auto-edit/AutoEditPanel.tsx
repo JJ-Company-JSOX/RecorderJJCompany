@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useI18n } from "@/contexts/I18nContext";
-import type { AudioRegion, CursorTelemetryPoint } from "../types";
+import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
 import { applyEditPlan } from "./apply";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { guideMessages } from "./guideMessages";
@@ -227,6 +227,7 @@ export function AutoEditPanel({
 				reason: "click" as const,
 				startMs: z.startMs,
 				endMs: z.endMs,
+				focus: z.focus,
 			})),
 			...s.clipRegions
 				.filter((c) => c.speed > 1)
@@ -374,13 +375,28 @@ export function AutoEditPanel({
 		const run = ++generation.current;
 		setBusy("narrate");
 		setError("");
+		setProgress({ completed: 0, total: 0 });
 		setNarrationApproved(false);
 		setNarrationAudioReady(false);
 		try {
 			const draftLanguage = language;
+			const { clipRegions } = currentState.current.state;
+			// The AI looks at the source frame just after each zoom or sped-up part begins.
+			const frames = voicePlan.suggestions.map((s) => ({
+				id: s.id,
+				timeMs: Math.max(
+					0,
+					mapTimelineTimeToSourceTime(
+						s.startMs + Math.min(500, (s.endMs - s.startMs) / 2),
+						clipRegions,
+					),
+				),
+				...(s.focus ? { focus: s.focus } : {}),
+			}));
 			const result = await window.electronAPI.narrateAutoEditBundled(
 				voicePlan,
 				draftLanguage,
+				{ videoPath: source, frames },
 			);
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
@@ -862,7 +878,11 @@ export function AutoEditPanel({
 									disabled={!bundledStatus?.available || !!busy}
 									onClick={() => void narrateBundled()}
 								>
-									{busy === "narrate" ? n.busy : n.draft}
+									{busy === "narrate"
+										? progress.total && progress.completed < progress.total
+											? `${n.looking} ${progress.completed}/${progress.total}`
+											: n.busy
+										: n.draft}
 								</Button>
 							)}
 							{narrationDraft &&

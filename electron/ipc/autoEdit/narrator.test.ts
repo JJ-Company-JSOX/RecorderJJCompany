@@ -155,6 +155,27 @@ describe("bundled offline narration draft (reuses the AI edition's own model ses
 		expect(question).not.toContain("/local/user.mp4");
 		expect(question).not.toContain("baseline");
 	});
+	it("adds what the vision pass read on screen, only for the matching action", async () => {
+		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
+		await generateBundledNarration(
+			plan(),
+			complete,
+			"en",
+			new Map([["rule-1", "Settings page, Save button in the middle"]]),
+		);
+		const [instruction, question] = complete.mock.calls[0];
+		expect(instruction).toContain('"screen" note');
+		expect(JSON.parse(question)).toEqual([
+			expect.objectContaining({
+				id: "rule-1",
+				screen: "Settings page, Save button in the middle",
+			}),
+		]);
+		complete.mockClear();
+		await generateBundledNarration(plan(), complete, "en");
+		expect(complete.mock.calls[0][0]).not.toContain('"screen" note');
+		expect(complete.mock.calls[0][1]).not.toContain("screen");
+	});
 	it("asks for Mandarin lines, the only language the bundled voice can read", async () => {
 		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
 		await generateBundledNarration(plan(), complete);

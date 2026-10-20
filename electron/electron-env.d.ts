@@ -304,6 +304,10 @@ interface Window {
 		narrateAutoEditBundled: (
 			plan: import("../src/components/video-editor/auto-edit/plan").EditPlan,
 			language?: "zh" | "en" | "ms",
+			screen?: {
+				videoPath: string;
+				frames: Array<{ id: string; timeMs: number; focus?: { cx: number; cy: number } }>;
+			},
 		) => Promise<{
 			success: boolean;
 			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;

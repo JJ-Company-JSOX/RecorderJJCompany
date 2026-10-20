@@ -247,6 +247,43 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 			if (Date.now() >= deadline) throw Error("Offline AI startup timed out");
 			await new Promise((resolve) => setTimeout(resolve, 200));
 		}
+		/** Asks the vision model one question about one JPEG, with a JSON-schema reply. */
+		const look = async (
+			image: Buffer,
+			instruction: string,
+			question: string,
+			schema: object,
+		): Promise<string> => {
+			const raw = (await request(
+				port,
+				token,
+				"/v1/chat/completions",
+				{
+					temperature: 0,
+					max_tokens: 256,
+					response_format: { type: "json_object", schema },
+					messages: [
+						{ role: "system", content: instruction },
+						{
+							role: "user",
+							content: [
+								{ type: "text", text: question },
+								{
+									type: "image_url",
+									image_url: {
+										url: `data:image/jpeg;base64,${image.toString("base64")}`,
+									},
+								},
+							],
+						},
+					],
+				},
+				signal,
+			)) as { choices?: { message?: { content?: string } }[] };
+			const content = raw.choices?.[0]?.message?.content;
+			if (typeof content !== "string") throw Error("Missing offline AI reply");
+			return content;
+		};
 		return {
 			pid: child.pid,
 			close,
@@ -274,65 +311,37 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 					throw Error("Missing offline speech analysis reply");
 				return content;
 			},
-			async describe(image: Buffer, instruction: string, question: string): Promise<string> {
-				const raw = (await request(
-					port,
-					token,
-					"/v1/chat/completions",
+			describe(image: Buffer, instruction: string, question: string): Promise<string> {
+				return look(
+					image,
+					`${instruction} Caption must be ONE exact short contiguous phrase visible in the image (one to four words, at most 40 characters), or empty if uncertain. Copy a label, never describe the scene. For a button labelled Save, caption is "Save", never "a Save button". Keep rationale brief.`,
+					question,
 					{
-						temperature: 0,
-						max_tokens: 256,
-						response_format: {
-							type: "json_object",
-							schema: {
-								type: "object",
-								additionalProperties: false,
-								properties: {
-									focus: {
-										anyOf: [
-											{ type: "null" },
-											{
-												type: "object",
-												additionalProperties: false,
-												properties: {
-													cx: { type: "number", minimum: 0, maximum: 1 },
-													cy: { type: "number", minimum: 0, maximum: 1 },
-												},
-												required: ["cx", "cy"],
-											},
-										],
-									},
-									caption: { type: "string", maxLength: 40 },
-									rationale: { type: "string", maxLength: 80 },
-								},
-								required: ["focus", "caption", "rationale"],
-							},
-						},
-						messages: [
-							{
-								role: "system",
-								content: `${instruction} Caption must be ONE exact short contiguous phrase visible in the image (one to four words, at most 40 characters), or empty if uncertain. Copy a label, never describe the scene. For a button labelled Save, caption is "Save", never "a Save button". Keep rationale brief.`,
-							},
-							{
-								role: "user",
-								content: [
-									{ type: "text", text: question },
+						type: "object",
+						additionalProperties: false,
+						properties: {
+							focus: {
+								anyOf: [
+									{ type: "null" },
 									{
-										type: "image_url",
-										image_url: {
-											url: `data:image/jpeg;base64,${image.toString("base64")}`,
+										type: "object",
+										additionalProperties: false,
+										properties: {
+											cx: { type: "number", minimum: 0, maximum: 1 },
+											cy: { type: "number", minimum: 0, maximum: 1 },
 										},
+										required: ["cx", "cy"],
 									},
 								],
 							},
-						],
+							caption: { type: "string", maxLength: 40 },
+							rationale: { type: "string", maxLength: 80 },
+						},
+						required: ["focus", "caption", "rationale"],
 					},
-					signal,
-				)) as { choices?: { message?: { content?: string } }[] };
-				const content = raw.choices?.[0]?.message?.content;
-				if (typeof content !== "string") throw Error("Missing offline AI reply");
-				return content;
+				);
 			},
+			look,
 		};
 	} catch (error) {
 		await close();

@@ -220,8 +220,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("auto-edit-review-local", plan, model),
 	narrateAutoEditLocally: (plan: EditPlan, model: string) =>
 		ipcRenderer.invoke("auto-edit-narrate-local", plan, model),
-	narrateAutoEditBundled: (plan: EditPlan, language?: "zh" | "en" | "ms") =>
-		ipcRenderer.invoke("auto-edit-narrate-bundled", plan, language),
+	narrateAutoEditBundled: (
+		plan: EditPlan,
+		language?: "zh" | "en" | "ms",
+		screen?: {
+			videoPath: string;
+			frames: Array<{ id: string; timeMs: number; focus?: { cx: number; cy: number } }>;
+		},
+	) => ipcRenderer.invoke("auto-edit-narrate-bundled", plan, language, screen),
 	getBundledTtsStatus: () => ipcRenderer.invoke("auto-edit-tts-status"),
 	synthesizeAutoEditNarration: (
 		cues: Array<{ id: string; text: string }>,

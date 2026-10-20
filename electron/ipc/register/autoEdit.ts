@@ -4,6 +4,11 @@ import { BUNDLED_MODEL_ID } from "../../../src/components/video-editor/auto-edit
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
 import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bundled";
 import { analyzeLocalMedia } from "../autoEdit/media";
+import {
+	describeNarrationFrames,
+	isNarrationFrame,
+	type NarrationFrame,
+} from "../autoEdit/narrationFrames";
 import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
 import {
 	generateBundledNarration,
@@ -301,7 +306,12 @@ export function registerAutoEditHandlers() {
 	});
 	ipcMain.handle(
 		"auto-edit-narrate-bundled",
-		async (event, plan: EditPlan, language?: string) => {
+		async (
+			event,
+			plan: EditPlan,
+			language?: string,
+			screen?: { videoPath: string; frames: NarrationFrame[] },
+		) => {
 			if (running.has(event.sender.id))
 				return { success: false, error: "Analysis already running" };
 			const controller = new AbortController();
@@ -317,13 +327,45 @@ export function registerAutoEditHandlers() {
 					plan.suggestions.length > 5000
 				)
 					throw new Error("Invalid plan");
+				if (
+					screen !== undefined &&
+					(!screen ||
+						typeof screen.videoPath !== "string" ||
+						!Array.isArray(screen.frames) ||
+						screen.frames.length > 5000 ||
+						!screen.frames.every(isNarrationFrame))
+				)
+					throw new Error("Invalid narration frames");
+				const normalized = screen && normalizeVideoSourcePath(screen.videoPath);
+				const approved = normalized && (await resolveApprovedLocalMediaPath(normalized));
+				if (screen && !approved)
+					throw new Error("Select an approved local recording first");
 				session = await startBundledAi(bundledRoot(), controller.signal);
+				// Look at the screen at each narrated moment first, so lines can name what is shown.
+				const screens =
+					screen && approved
+						? await describeNarrationFrames({
+								videoPath: approved,
+								ffmpegPath: getFfmpegBinaryPath(),
+								frames: screen.frames,
+								look: session.look,
+								signal: controller.signal,
+								onProgress: (completed, total) => {
+									if (!event.sender.isDestroyed())
+										event.sender.send("auto-edit-vision-progress", {
+											completed,
+											total,
+										});
+								},
+							})
+						: undefined;
 				return {
 					success: true,
 					draft: await generateBundledNarration(
 						plan,
 						session.complete,
 						isNarrationLanguage(language) ? language : "zh",
+						screens,
 					),
 				};
 			} catch (error) {

@@ -13,6 +13,8 @@ import {
 } from "../recording/diagnostics";
 import { normalizeVideoSourcePath } from "../utils";
 import { type CaptionAudioCandidate, getCaptionCompanionAudioCandidates } from "./audioCandidates";
+import { AudioExtractionError, NoCaptionAudioError, type AudioSourceAttempt } from "./audioErrors";
+export { NoCaptionAudioError } from "./audioErrors";
 import { shouldRetryWhisperWithoutJson } from "./parser";
 import { readWhisperCaptionOutput } from "./output";
 import { isMissingWindowsWhisperRuntimeDependency } from "./runtimeErrors";
@@ -35,8 +37,6 @@ import {
 } from "./silence";
 
 const execFileAsync = promisify(execFile);
-
-export class NoCaptionAudioError extends Error {}
 
 function rethrowCancellation(error: unknown, signal?: AbortSignal) {
 	signal?.throwIfAborted();
@@ -172,18 +172,14 @@ export async function extractCaptionAudioSource(options: {
 	options.signal?.throwIfAborted();
 	const candidates =
 		options.candidates ?? (await resolveCaptionAudioCandidates(options.videoPath));
-	const attemptedCandidates: Array<{
-		path: string;
-		label: string;
-		readable: boolean;
-		extractedAudio: boolean;
-		error?: string;
-	}> = [];
+	const attemptedCandidates: AudioSourceAttempt[] = [];
 
 	for (const candidate of candidates) {
 		options.signal?.throwIfAborted();
+		let readable = false;
 		try {
 			await ensureReadableFile(candidate.path);
+			readable = true;
 			const delayMs = candidate.label.endsWith("audio sidecar")
 				? ((await getCompanionAudioStartDelayMs(candidate.path)) ?? 0)
 				: 0;
@@ -212,15 +208,52 @@ export async function extractCaptionAudioSource(options: {
 					signal: options.signal,
 				},
 			);
-			attemptedCandidates.push({ ...candidate, readable: true, extractedAudio: true });
 			return candidate;
 		} catch (error) {
 			rethrowCancellation(error, options.signal);
+			let outcome: AudioSourceAttempt["outcome"] = "unreadable";
+			if (readable) {
+				try {
+					// Only probe after extraction fails: successful transcription has no extra process.
+					const { stdout } = await execFileAsync(
+						getFfprobeBinaryPath(),
+						[
+							"-v",
+							"error",
+							"-select_streams",
+							"a:0",
+							"-show_entries",
+							"stream=index",
+							"-of",
+							"json",
+							candidate.path,
+						],
+						{
+							timeout: 15000,
+							maxBuffer: 1024 * 1024,
+							windowsHide: true,
+							signal: options.signal,
+						},
+					);
+					options.signal?.throwIfAborted();
+					const probe: unknown = JSON.parse(stdout);
+					if (
+						!probe ||
+						typeof probe !== "object" ||
+						!("streams" in probe) ||
+						!Array.isArray(probe.streams)
+					)
+						throw Error("Invalid audio stream probe");
+					outcome = probe.streams.length === 0 ? "no-audio" : "extraction-failed";
+				} catch (probeError) {
+					rethrowCancellation(probeError, options.signal);
+					outcome = "probe-failed";
+				}
+			}
 			attemptedCandidates.push({
-				...candidate,
-				readable: true,
-				extractedAudio: false,
-				error: error instanceof Error ? error.message : String(error),
+				label: candidate.label,
+				readable,
+				outcome,
 			});
 		}
 	}
@@ -229,10 +262,14 @@ export async function extractCaptionAudioSource(options: {
 		"[auto-captions] No audio source candidate could be extracted:",
 		attemptedCandidates,
 	);
+	options.signal?.throwIfAborted();
 
-	throw new NoCaptionAudioError(
-		"No audio was found to transcribe in the saved recording file. Captions need an audio track. If this recording should have contained sound, the recording was saved without an audio stream.",
-	);
+	if (
+		attemptedCandidates.length &&
+		attemptedCandidates.every((attempt) => attempt.outcome === "no-audio")
+	)
+		throw new NoCaptionAudioError(undefined, attemptedCandidates);
+	throw new AudioExtractionError(attemptedCandidates);
 }
 
 export async function detectSilenceIntervals(options: {
@@ -469,19 +506,21 @@ export async function generateAutoCaptionsFromVideo(options: {
 	}
 	// Decode independently so simultaneous voices do not confuse recognition. The
 	// sidecar replaces embedded system audio to avoid transcribing it twice.
+	const absentAttempts: AudioSourceAttempt[] = [];
 	const transcribeTrack = async (sources: CaptionAudioCandidate[]) => {
 		try {
 			return await generateCaptionsForSource({ ...options, candidates: sources });
 		} catch (error) {
 			rethrowCancellation(error, options.signal);
 			if (!(error instanceof NoCaptionAudioError)) throw error;
+			absentAttempts.push(...error.attempts);
 			return null;
 		}
 	};
 	const micCues = await transcribeTrack(microphone);
 	const systemCues = await transcribeTrack([...system, ...secondary]);
 	if (micCues === null && systemCues === null)
-		throw new NoCaptionAudioError("No audio could be extracted from the recording.");
+		throw new NoCaptionAudioError(undefined, absentAttempts);
 	const vadEvidence = mergeVadEvidence(
 		[micCues, systemCues].flatMap((result) => (result ? [result.vadEvidence] : [])),
 	);
@@ -495,7 +534,10 @@ export async function generateAutoCaptionsFromVideo(options: {
 					}
 				: {}),
 		})),
-		audioSourceLabel: "microphone and system audio",
+		audioSourceLabel:
+			micCues && systemCues
+				? "microphone and system audio"
+				: (micCues?.audioSourceLabel ?? systemCues?.audioSourceLabel ?? "recording"),
 		vadEvidence,
 	};
 }

@@ -546,6 +546,20 @@ export function registerRecordingHandlers(
 						setWindowsMicAudioPath(null);
 					}
 
+					await writeWindowsRecordingDiagnostics(outputPath, {
+						phase: "start",
+						outputPath,
+						systemAudioPath,
+						microphonePath,
+						requestedAudio: {
+							systemAudio: options?.capturesSystemAudio === true,
+							microphone: options?.capturesMicrophone === true,
+						},
+						details: {
+							browserMicrophoneFallbackRequested: browserMicFallbackRequested,
+						},
+					});
+
 					recordNativeCaptureDiagnostics({
 						backend: "windows-wgc",
 						phase: "start",

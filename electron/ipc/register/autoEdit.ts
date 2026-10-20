@@ -10,7 +10,12 @@ import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
 import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
 import type { SpeechTranscript } from "../../../src/components/video-editor/auto-edit/speechTypes";
 import { generateBundledSpeechTranscript, getBundledSpeechStatus } from "../captions/bundledSpeech";
-import { NoCaptionAudioError, resolveCaptionAudioCandidates } from "../captions/generate";
+import { resolveCaptionAudioCandidates } from "../captions/generate";
+import {
+	AudioExtractionError,
+	NoCaptionAudioError,
+	NoUsableSpeechError,
+} from "../captions/audioErrors";
 import { getFfmpegBinaryPath, getFfprobeBinaryPath } from "../ffmpeg/binary";
 import { resolveApprovedLocalMediaPath } from "../project/manager";
 import { getCompanionAudioStartDelayMs } from "../recording/diagnostics";
@@ -100,10 +105,7 @@ export function registerAutoEditHandlers() {
 					evidence.silentRanges,
 					"vadEvidence" in recognized ? recognized.vadEvidence : null,
 				);
-				if (!cues.length)
-					throw Error(
-						"No usable speech was recognized. Use the local or visual plan for a recording without speech.",
-					);
+				if (!cues.length) throw new NoUsableSpeechError();
 				controller.signal.throwIfAborted();
 				const transcript: SpeechTranscript = {
 					version: 1,
@@ -144,7 +146,17 @@ export function registerAutoEditHandlers() {
 					success: false,
 					error:
 						error instanceof Error ? error.message : "Offline automatic editing failed",
-					errorCode: error instanceof NoCaptionAudioError ? "NO_AUDIO" : undefined,
+					errorCode:
+						error instanceof NoCaptionAudioError ||
+						error instanceof AudioExtractionError ||
+						error instanceof NoUsableSpeechError
+							? error.code
+							: undefined,
+					audioDiagnostics:
+						error instanceof NoCaptionAudioError ||
+						error instanceof AudioExtractionError
+							? error.attempts
+							: undefined,
 				};
 			} finally {
 				await session?.close();

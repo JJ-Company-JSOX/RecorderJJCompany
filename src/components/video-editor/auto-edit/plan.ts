@@ -57,6 +57,23 @@ export interface EditPlan {
 }
 export type Decision = "pending" | "accept" | "reject";
 export const overlaps = (a: Span, b: Span) => a.startMs < b.endMs && b.startMs < a.endMs;
+export const AUTO_ANNOTATION_LAYOUT = {
+	position: { x: 20, y: 65 },
+	size: { width: 60, height: 15 },
+};
+
+function annotationTouchesDraft(region: AnnotationRegion) {
+	const { position, size } = region;
+	if (!position || !size || ![position.x, position.y, size.width, size.height].every(Number.isFinite) || size.width <= 0 || size.height <= 0)
+		return true;
+	// Preserve a gap around authored graphics. Unknown bounds remain protected.
+	const draft = AUTO_ANNOTATION_LAYOUT;
+	const gap = 2;
+	return position.x < draft.position.x + draft.size.width + gap &&
+		draft.position.x < position.x + size.width + gap &&
+		position.y < draft.position.y + draft.size.height + gap &&
+		draft.position.y < position.y + size.height + gap;
+}
 export const validSpan = (s: Span) =>
 	Number.isFinite(s.startMs) && Number.isFinite(s.endMs) && s.startMs >= 0 && s.endMs > s.startMs;
 export const baselineFor = (state: EditState, source: string) =>
@@ -99,8 +116,15 @@ export function conflictFor(s: EditSuggestion, state: EditState): string | undef
 		if (state.clipRegions.some((c) => overlaps(s, c) && c.speed !== 1)) return "existing-speed";
 	}
 	if (s.kind === "zoom" && state.zoomRegions.some((r) => overlaps(s, r))) return "existing-zoom";
-	if (s.kind === "annotation" && state.annotationRegions.some((r) => overlaps(s, r)))
-		return "existing-annotation";
+	if (s.kind === "annotation") {
+		const existing = state.annotationRegions.filter((region) => overlaps(s, region));
+		const normalize = (value: string) => value.replace(/\s+/gu, " ").trim();
+		if (s.text?.trim() && existing.some((region) => region.type === "text" &&
+			region.startMs <= s.startMs && region.endMs >= s.endMs &&
+			normalize(region.textContent ?? region.content) === normalize(s.text!)))
+			return "already-applied";
+		if (existing.some(annotationTouchesDraft)) return "existing-annotation";
+	}
 	return undefined;
 }
 

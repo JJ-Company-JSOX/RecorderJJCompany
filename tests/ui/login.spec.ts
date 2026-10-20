@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { ACCOUNTS_ENABLED } from "../../src/lib/productFeatures";
 import { installDesktopBridge } from "./bridge";
 import { completeSupabaseSignIn } from "./auth";
+
+// Every case in this file exercises Supabase accounts. The offline default is
+// covered independently by local-without-account.spec.ts.
+test.skip(!ACCOUNTS_ENABLED, "Supabase account workflows are deferred in the offline desktop preview.");
 
 test("sign-in offers only providers enabled in Supabase", async ({ page }) => {
 	await installDesktopBridge(page, "preview.mp4", { signedIn: false });

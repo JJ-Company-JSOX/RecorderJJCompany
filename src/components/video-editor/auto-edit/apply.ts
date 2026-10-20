@@ -1,6 +1,7 @@
 import { packClipSequence } from "../clipSequence";
 import { type ClipRegion, DEFAULT_ANNOTATION_STYLE, getClipSourceStartMs } from "../types";
 import {
+	AUTO_ANNOTATION_LAYOUT,
 	baselineFor,
 	conflictFor,
 	type Decision,
@@ -111,8 +112,8 @@ export function applyEditPlan(
 				type: "text",
 				content: s.text,
 				textContent: s.text,
-				position: { x: 20, y: 65 },
-				size: { width: 60, height: 15 },
+				position: { ...AUTO_ANNOTATION_LAYOUT.position },
+				size: { ...AUTO_ANNOTATION_LAYOUT.size },
 				style: { ...DEFAULT_ANNOTATION_STYLE, backgroundColor: "#111827E6" },
 				zIndex: Math.max(0, ...annotationRegions.map((a) => a.zIndex)) + 1,
 				trackIndex: Math.max(-1, ...annotationRegions.map((a) => a.trackIndex ?? 0)) + 1,

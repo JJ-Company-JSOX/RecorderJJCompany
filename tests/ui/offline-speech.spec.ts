@@ -372,6 +372,38 @@ test("missing audio is visible on small screens and offers visual review without
 	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
 });
 
+for (const scenario of [
+	{ code: "AUDIO_EXTRACTION_FAILED" as const, message: "could not be read", visual: false },
+	{ code: "NO_USABLE_SPEECH" as const, message: "no usable speech was recognized", visual: true },
+]) {
+	test(`explains ${scenario.code} without claiming audio is absent or applying edits`, async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1024, height: 640 });
+		const panel = await setup(page);
+		await page.evaluate((code) => {
+			window.electronAPI.analyzeCompleteAutoEdit = async () => ({
+				success: false,
+				errorCode: code,
+				error: "Technical path /private/recording.mp4",
+			});
+		}, scenario.code);
+		await panel
+			.getByRole("button", { name: "Automatically edit speech and video", exact: true })
+			.click();
+		const alert = panel.getByRole("alert");
+		await expect(alert).toContainText(scenario.message);
+		await expect(alert).not.toContainText("No audio was found");
+		await expect(alert).not.toContainText("/private");
+		await expect(alert).toBeInViewport();
+		await expect(
+			panel.getByRole("button", { name: "Review a visual-only plan instead" }),
+		).toHaveCount(scenario.visual ? 1 : 0);
+		await expect(panel.locator("[data-draft-result]")).toHaveCount(0);
+		await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
+	});
+}
+
 test("small screens keep the main workflow and footer usable in Chinese and English", async ({
 	page,
 }) => {

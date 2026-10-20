@@ -38,6 +38,27 @@ export type VideoStreamDurationProbe = {
 	frameRate: number | null;
 };
 
+export type RecordingAudioRequest = {
+	systemAudio: boolean;
+	microphone: boolean;
+};
+
+type FfprobeStream = {
+	codec_type?: unknown;
+	duration?: unknown;
+	nb_frames?: unknown;
+	nb_read_frames?: unknown;
+	avg_frame_rate?: unknown;
+	r_frame_rate?: unknown;
+};
+
+export type RecordingMediaProbe = {
+	containerDurationSeconds: number | null;
+	audioStreamCount: number | null;
+	hasAudioStream: boolean | null;
+	videoStream: VideoStreamDurationProbe | null;
+};
+
 export type RecordingDiagnosticsSnapshot = {
 	backend: NativeCaptureDiagnostics["backend"];
 	phase:
@@ -51,6 +72,7 @@ export type RecordingDiagnosticsSnapshot = {
 	outputPath?: string | null;
 	systemAudioPath?: string | null;
 	microphonePath?: string | null;
+	requestedAudio?: RecordingAudioRequest;
 	processOutput?: string;
 	error?: string;
 	details?: Record<string, unknown>;
@@ -64,7 +86,10 @@ type RecordingDiagnosticsLog = {
 	diagnosticsPath: string;
 	events: unknown[];
 	latest?: unknown;
+	requestedAudio?: RecordingAudioRequest;
 };
+
+const diagnosticsWrites = new Map<string, Promise<string>>();
 
 export function recordNativeCaptureDiagnostics(
 	diagnostics: Omit<NativeCaptureDiagnostics, "timestamp">,
@@ -237,17 +262,9 @@ function parseFrameRate(value: unknown) {
 	return numerator / denominator;
 }
 
-export function parseFfprobeVideoStreamDuration(output: string): VideoStreamDurationProbe | null {
-	const parsed = JSON.parse(output) as {
-		streams?: Array<{
-			duration?: unknown;
-			nb_frames?: unknown;
-			nb_read_frames?: unknown;
-			avg_frame_rate?: unknown;
-			r_frame_rate?: unknown;
-		}>;
-	};
-	const stream = parsed.streams?.[0];
+function getVideoStreamDuration(
+	stream: FfprobeStream | undefined,
+): VideoStreamDurationProbe | null {
 	if (!stream) {
 		return null;
 	}
@@ -264,6 +281,58 @@ export function parseFfprobeVideoStreamDuration(output: string): VideoStreamDura
 		frameCount,
 		frameRate,
 	};
+}
+
+export function parseFfprobeVideoStreamDuration(output: string): VideoStreamDurationProbe | null {
+	const parsed = JSON.parse(output) as { streams?: FfprobeStream[] };
+	return getVideoStreamDuration(parsed.streams?.[0]);
+}
+
+/** Header evidence only: an audio stream can still contain silence or invalid samples. */
+export function parseFfprobeRecordingMedia(output: string): RecordingMediaProbe {
+	const parsed = JSON.parse(output) as {
+		streams?: FfprobeStream[];
+		format?: { duration?: unknown };
+	};
+	const streams = Array.isArray(parsed.streams) ? parsed.streams : null;
+	const streamTypesKnown =
+		streams !== null &&
+		streams.length > 0 &&
+		streams.every((stream) => stream && typeof stream.codec_type === "string");
+	const audioStreamCount = streamTypesKnown
+		? streams.filter((stream) => stream.codec_type === "audio").length
+		: null;
+	return {
+		containerDurationSeconds: parsePositiveNumber(parsed.format?.duration),
+		audioStreamCount,
+		hasAudioStream: audioStreamCount === null ? null : audioStreamCount > 0,
+		videoStream: getVideoStreamDuration(
+			streams?.find((stream) => stream?.codec_type === "video"),
+		),
+	};
+}
+
+async function probeRecordingMedia(filePath: string): Promise<RecordingMediaProbe | null> {
+	try {
+		const result = await execFileAsync(
+			getFfprobeBinaryPath(),
+			[
+				"-v",
+				"error",
+				"-show_entries",
+				"format=duration:stream=codec_type,duration,nb_frames,nb_read_frames,avg_frame_rate,r_frame_rate",
+				"-of",
+				"json",
+				filePath,
+			],
+			{ timeout: 5000, maxBuffer: 2 * 1024 * 1024, windowsHide: true },
+		);
+		const stdout = typeof result === "string" ? result : result.stdout;
+		return parseFfprobeRecordingMedia(stdout);
+	} catch {
+		// Missing/unreadable metadata must not be reported as a confirmed absent audio stream.
+		return null;
+	}
 }
 
 export async function probeVideoStreamDuration(
@@ -314,7 +383,7 @@ function truncateDiagnosticsText(value: string | undefined, maxLength = 12000) {
 	return `${value.slice(-maxLength)}\n[recordly: truncated to last ${maxLength} chars]`;
 }
 
-async function describeMediaFile(filePath: string | null | undefined) {
+async function describeMediaFile(filePath: string | null | undefined, includeVideoStream = false) {
 	if (!filePath) {
 		return null;
 	}
@@ -328,11 +397,15 @@ async function describeMediaFile(filePath: string | null | undefined) {
 			};
 		}
 
+		const probe = await probeRecordingMedia(filePath);
 		return {
 			path: filePath,
 			exists: true,
 			sizeBytes: stat.size,
-			containerDurationSeconds: await probeMediaDurationSeconds(filePath),
+			containerDurationSeconds: probe?.containerDurationSeconds ?? null,
+			audioStreamCount: probe?.audioStreamCount ?? null,
+			hasAudioStream: probe?.hasAudioStream ?? null,
+			...(includeVideoStream ? { stream: probe?.videoStream ?? null } : {}),
 		};
 	} catch {
 		return {
@@ -343,15 +416,7 @@ async function describeMediaFile(filePath: string | null | undefined) {
 }
 
 async function describeVideoFile(filePath: string | null | undefined) {
-	const media = await describeMediaFile(filePath);
-	if (!media?.exists || !filePath) {
-		return media;
-	}
-
-	return {
-		...media,
-		stream: await probeVideoStreamDuration(filePath),
-	};
+	return describeMediaFile(filePath, true);
 }
 
 async function describeAudioFile(filePath: string | null | undefined) {
@@ -367,7 +432,7 @@ async function describeAudioFile(filePath: string | null | undefined) {
 	};
 }
 
-export async function writeRecordingDiagnosticsSnapshot(
+async function appendRecordingDiagnosticsSnapshot(
 	videoPath: string,
 	snapshot: RecordingDiagnosticsSnapshot,
 ) {
@@ -385,9 +450,11 @@ export async function writeRecordingDiagnosticsSnapshot(
 		// First diagnostics event for this recording.
 	}
 
+	const requestedAudio = snapshot.requestedAudio ?? existing?.requestedAudio;
 	const event = {
 		timestamp: now,
 		...snapshot,
+		...(requestedAudio ? { requestedAudio } : {}),
 		processOutput: truncateDiagnosticsText(snapshot.processOutput),
 		media: {
 			video: await describeVideoFile(videoPath),
@@ -406,11 +473,31 @@ export async function writeRecordingDiagnosticsSnapshot(
 	log.updatedAt = now;
 	log.videoPath = videoPath;
 	log.diagnosticsPath = diagnosticsPath;
+	if (requestedAudio) log.requestedAudio = requestedAudio;
 	log.events.push(event);
 	log.latest = event;
 
 	await fs.writeFile(diagnosticsPath, JSON.stringify(log, null, 2), "utf8");
 	return diagnosticsPath;
+}
+
+export function writeRecordingDiagnosticsSnapshot(
+	videoPath: string,
+	snapshot: RecordingDiagnosticsSnapshot,
+) {
+	// Browser microphone persistence and native muxing run concurrently. Preserve both
+	// events and the original request rather than racing their read/modify/write cycles.
+	const previous = diagnosticsWrites.get(videoPath);
+	const write = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(() =>
+		appendRecordingDiagnosticsSnapshot(videoPath, snapshot),
+	);
+	diagnosticsWrites.set(videoPath, write);
+	void write
+		.finally(() => {
+			if (diagnosticsWrites.get(videoPath) === write) diagnosticsWrites.delete(videoPath);
+		})
+		.catch(() => undefined);
+	return write;
 }
 
 export async function getUsableCompanionAudioCandidates(

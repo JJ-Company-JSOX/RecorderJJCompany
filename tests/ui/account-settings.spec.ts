@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { ACCOUNTS_ENABLED } from "../../src/lib/productFeatures";
 import { installDesktopBridge } from "./bridge";
 
 async function openAccountSettings(page: Page) {
@@ -10,6 +11,7 @@ async function openAccountSettings(page: Page) {
 test("account settings save the Supabase profile and share it with the dashboard", async ({
 	page,
 }) => {
+	test.skip(!ACCOUNTS_ENABLED, "Account settings are deferred in the offline desktop preview.");
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");
 	let account = await openAccountSettings(page);
@@ -56,6 +58,7 @@ test("account settings save the Supabase profile and share it with the dashboard
 test("email changes use a PKCE confirmation and retain the current email until confirmed", async ({
 	page,
 }) => {
+	test.skip(!ACCOUNTS_ENABLED, "Account settings are deferred in the offline desktop preview.");
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");
 	const account = await openAccountSettings(page);
@@ -92,6 +95,7 @@ test("email changes use a PKCE confirmation and retain the current email until c
 });
 
 test("account update errors preserve the session and allow retry", async ({ page }) => {
+	test.skip(!ACCOUNTS_ENABLED, "Account settings are deferred in the offline desktop preview.");
 	await installDesktopBridge(page);
 	let failed = false;
 	await page.route("https://auth.recordly.test/auth/v1/user**", async (route) => {
@@ -120,6 +124,7 @@ test("account update errors preserve the session and allow retry", async ({ page
 test("signing out from Settings clears the session and brings back required sign-in", async ({
 	page,
 }) => {
+	test.skip(!ACCOUNTS_ENABLED, "Account settings are deferred in the offline desktop preview.");
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");
 	const account = await openAccountSettings(page);
@@ -131,9 +136,7 @@ test("signing out from Settings clears the session and brings back required sign
 	await expect(page.locator('[data-onboarding-state="login"]')).toBeVisible();
 });
 
-test("Settings refreshes macOS permissions and opens the permissions carousel", async ({
-	page,
-}) => {
+test("Settings refreshes macOS permissions and opens local permission setup", async ({ page }) => {
 	await installDesktopBridge(page);
 	await page.addInitScript(() => {
 		window.electronAPI.getScreenRecordingPermissionStatus = async () => ({
@@ -145,6 +148,14 @@ test("Settings refreshes macOS permissions and opens the permissions carousel", 
 			trusted: document.documentElement.dataset.allowed === "true",
 			prompted: false,
 		});
+		window.electronAPI.openScreenRecordingPreferences = async () => {
+			document.documentElement.dataset.screenPreferencesOpened = "true";
+			return { success: true };
+		};
+		window.electronAPI.openAccessibilityPreferences = async () => {
+			document.documentElement.dataset.accessibilityPreferencesOpened = "true";
+			return { success: true };
+		};
 	});
 	await page.goto("/?windowType=editor");
 	await page.getByRole("radio", { name: "Settings", exact: true }).click();
@@ -156,8 +167,28 @@ test("Settings refreshes macOS permissions and opens the permissions carousel", 
 	});
 	await permissions.getByRole("button", { name: "Check again", exact: true }).click();
 	await expect(permissions.getByText("Allowed", { exact: true })).toHaveCount(2);
+	await page.evaluate(() => {
+		document.documentElement.dataset.allowed = "false";
+	});
 	await permissions.getByRole("button", { name: "Review permissions", exact: true }).click();
-	const tour = page.getByRole("dialog", { name: "Welcome to Recordly" });
-	await expect(tour).toHaveAttribute("data-onboarding-state", "permissions");
+	const tour = page.getByRole("dialog", { name: "Recording permissions", exact: true });
+	await expect(tour.getByRole("heading", { name: "Allow Recordly to record" })).toBeVisible();
+	await expect(tour.getByRole("button", { name: "Start recording", exact: true })).toBeDisabled();
+	await tour.getByRole("button", { name: "Allow Screen Recording", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-screen-preferences-opened", "true");
+	await tour.getByRole("button", { name: "Allow Accessibility", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute(
+		"data-accessibility-preferences-opened",
+		"true",
+	);
+	await expect(tour.getByRole("button", { name: "Start recording", exact: true })).toBeDisabled();
+	await page.evaluate(() => {
+		document.documentElement.dataset.allowed = "true";
+		window.dispatchEvent(new Event("focus"));
+	});
+	await expect(tour.getByText("Allowed", { exact: true })).toHaveCount(2);
 	await expect(tour.getByRole("button", { name: "Start recording", exact: true })).toBeEnabled();
+	await tour.getByRole("button", { name: "Start recording", exact: true }).click();
+	await expect(tour).not.toBeVisible();
+	await expect(page.locator("html")).toHaveAttribute("data-hud-opened", "true");
 });

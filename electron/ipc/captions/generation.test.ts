@@ -240,10 +240,16 @@ describe("caption generation pipeline", () => {
 	});
 
 	it("fails clearly for missing audio instead of synthesizing captions", async () => {
-		mocks.exec.mockRejectedValue(new Error("No audio stream"));
-		await expect(generateAutoCaptionsFromVideo({ ...options, candidates: [] })).rejects.toThrow(
-			"No audio was found",
-		);
+		mocks.exec.mockImplementation(async (file: string) => {
+			if (file === "/ffprobe") return { stdout: JSON.stringify({ streams: [] }) };
+			throw Error("No audio stream");
+		});
+		await expect(
+			generateAutoCaptionsFromVideo({
+				...options,
+				candidates: [{ path: "/video.mp4", label: "recording" }],
+			}),
+		).rejects.toThrow("No audio was found");
 		expect(whisperCalls()).toHaveLength(0);
 	});
 	it("transcribes both sidecars independently, preserving the microphone delay", async () => {
@@ -267,7 +273,7 @@ describe("caption generation pipeline", () => {
 		);
 	});
 
-	it("falls back to embedded audio when the microphone cannot be extracted", async () => {
+	it("falls back to embedded audio when the microphone is confirmed to have no audio stream", async () => {
 		mocks.companions.mockResolvedValue([
 			{
 				platform: "mac",
@@ -276,11 +282,33 @@ describe("caption generation pipeline", () => {
 				usablePaths: ["/video.mic.wav"],
 			},
 		]);
-		mocks.exec.mockImplementation(async (_file: string, args: string[]) => {
+		mocks.exec.mockImplementation(async (file: string, args: string[]) => {
+			if (file === "/ffprobe") return { stdout: JSON.stringify({ streams: [] }) };
 			if (args.includes("/video.mic.wav")) throw new Error("unreadable microphone");
 			return { stderr: "" };
 		});
-		expect((await generateAutoCaptionsFromVideo(options)).cues[0].text).toBe("Hello world.");
+		const result = await generateAutoCaptionsFromVideo(options);
+		expect(result.cues[0].text).toBe("Hello world.");
+		expect(result.audioSourceLabel).toBe("recording");
+	});
+	it("does not silently drop a broken microphone from a combined speech analysis", async () => {
+		mocks.companions.mockResolvedValue([
+			{
+				platform: "win",
+				micPath: "/video.mic.wav",
+				systemPath: "/video.system.wav",
+				usablePaths: ["/video.mic.wav"],
+			},
+		]);
+		mocks.exec.mockImplementation(async (file: string, args: string[]) => {
+			if (file === "/ffprobe") return { stdout: JSON.stringify({ streams: [{ index: 0 }] }) };
+			if (args.includes("/video.mic.wav")) throw Error("decoder failed");
+			return { stderr: "" };
+		});
+		await expect(generateAutoCaptionsFromVideo(options)).rejects.toMatchObject({
+			code: "AUDIO_EXTRACTION_FAILED",
+		});
+		expect(whisperCalls()).toHaveLength(0);
 	});
 
 	it("extracts mono audio, transcribes, segments word timings and cleans up", async () => {

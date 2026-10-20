@@ -41,7 +41,7 @@ export function AutoEditPanel({
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
 	const [busy, setBusy] = useState<"analysis" | "review" | "vision" | "tools" | null>(null);
 	const [error, setError] = useState("");
-	const [missingAudio, setMissingAudio] = useState(false);
+	const [visualFallback, setVisualFallback] = useState(false);
 	const [applied, setApplied] = useState(false);
 	const [model, setModel] = useState("");
 	const [modelInfo, setModelInfo] = useState<{
@@ -57,6 +57,7 @@ export function AutoEditPanel({
 	const [autoApply, setAutoApply] = useState(true);
 	const [speechStage, setSpeechStage] = useState("");
 	const [draftSummary, setDraftSummary] = useState("");
+	const [appliedPreviewMs, setAppliedPreviewMs] = useState<number | null>(null);
 	const resultAnchor = useRef<HTMLDivElement>(null);
 	const progressAnchor = useRef<HTMLDivElement>(null);
 	const errorAnchor = useRef<HTMLDivElement>(null);
@@ -111,6 +112,24 @@ export function AutoEditPanel({
 	const ready = bundledStatus?.available && speechReady;
 	const stages = ["media", "transcribe", "understand", "vision"] as const;
 	const activeStage = stages.indexOf(speechStage as (typeof stages)[number]);
+	const commitPlan = (draft: EditPlan, choices: Record<string, Decision>) => {
+		const latest = currentState.current;
+		const next = applyEditPlan(latest.state, latest.source, draft, choices);
+		const previousIds = new Set(latest.state.annotationRegions.map((region) => region.id));
+		const firstText = next.annotationRegions.find(
+			(region) => region.type === "text" && !previousIds.has(region.id),
+		);
+		onApply(next);
+		const selected = draft.suggestions.filter((s) => choices[s.id] === "accept");
+		setDraftSummary(
+			`${m.trim}: ${selected.filter((s) => s.kind === "trim").length} · ${m.caption}: ${selected.filter((s) => s.kind === "caption").length} · ${m.annotation}: ${selected.filter((s) => s.kind === "annotation").length} · ${m.protectedCount}: ${draft.suggestions.filter((s) => s.blocked).length}`,
+		);
+		setAppliedPreviewMs(firstText ? (firstText.startMs + firstText.endMs) / 2 : null);
+		setPlan(null);
+		setDecisions({});
+		setApplied(true);
+		setError("");
+	};
 	const decideRemaining = (choice: "accept" | "reject") => {
 		if (!plan || stale || busy) return;
 		setDecisions((current) => ({
@@ -126,10 +145,11 @@ export function AutoEditPanel({
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
-		setMissingAudio(false);
+		setVisualFallback(false);
 		setApplied(false);
 		setSpeechStage("");
 		setDraftSummary("");
+		setAppliedPreviewMs(null);
 		setPlan(null);
 		setDecisions({});
 		try {
@@ -140,10 +160,16 @@ export function AutoEditPanel({
 						language: "auto",
 					})
 				: undefined;
-			if (complete?.errorCode === "NO_AUDIO") {
+			if (complete?.errorCode) {
 				if (run !== generation.current) return;
-				setMissingAudio(true);
-				setError(ui.noAudio);
+				setVisualFallback(complete.errorCode !== "AUDIO_EXTRACTION_FAILED");
+				setError(
+					complete.errorCode === "NO_AUDIO"
+						? ui.noAudio
+						: complete.errorCode === "NO_USABLE_SPEECH"
+							? ui.noUsableSpeech
+							: ui.audioExtractionFailed,
+				);
 				return;
 			}
 			const result = complete ?? (await window.electronAPI.analyzeAutoEdit(source));
@@ -194,12 +220,7 @@ export function AutoEditPanel({
 						.map((s) => [s.id, "accept" as const]),
 				);
 				if (Object.keys(choices).length) {
-					onApply(applyEditPlan(latest.state, latest.source, next, choices));
-					const selected = next.suggestions.filter((s) => choices[s.id] === "accept");
-					setDraftSummary(
-						`${m.trim}: ${selected.filter((s) => s.kind === "trim").length} · ${m.caption}: ${selected.filter((s) => s.kind === "caption").length} · ${m.protectedCount}: ${next.suggestions.filter((s) => s.blocked).length}`,
-					);
-					setApplied(true);
+					commitPlan(next, choices);
 					return;
 				}
 			}
@@ -370,7 +391,7 @@ export function AutoEditPanel({
 								className="space-y-3 rounded-lg border border-danger/30 bg-background p-3 text-sm"
 							>
 								<p>{error}</p>
-								{missingAudio && (
+								{visualFallback && (
 									<Button
 										variant="secondary"
 										disabled={!!busy || !bundledStatus?.available}
@@ -500,6 +521,12 @@ export function AutoEditPanel({
 							<h3 className="font-semibold">{ui.result}</h3>
 							<p className="text-sm">{m.applied}</p>
 							{draftSummary && <p className="text-sm font-medium">{draftSummary}</p>}
+							{appliedPreviewMs !== null && (
+								<Button onClick={() => {
+									onSeek(appliedPreviewMs / 1000);
+									onClose();
+								}}>{ui.previewApplied}</Button>
+							)}
 							<p className="text-sm">{ui.next}</p>
 							<p className="text-xs text-muted-foreground">{m.speechCaution}</p>
 						</section>
@@ -538,6 +565,18 @@ export function AutoEditPanel({
 							)}
 							{available.length > 0 ? (
 								<>
+									<p className="text-sm">{ui.applyHelp}</p>
+									<Button
+										disabled={stale || !!busy || !available.some((s) => decisions[s.id] !== "reject")}
+										onClick={() => {
+											try {
+												const choices = Object.fromEntries(available.map((s) => [s.id, decisions[s.id] === "reject" ? "reject" as const : "accept" as const]));
+												commitPlan(plan, choices);
+											} catch (e) {
+												setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+											}
+										}}
+									>{ui.applyAvailable}</Button>
 									<p className="text-sm">{m.decisionHint}</p>
 									<div className="flex flex-wrap gap-2">
 										<Button
@@ -598,7 +637,7 @@ export function AutoEditPanel({
 											{m.seek}
 										</Button>
 										{s.blocked ? (
-											<p>{m.blocked}</p>
+											<p>{s.blocked === "already-applied" ? ui.alreadyApplied : s.blocked === "existing-annotation" ? ui.annotationConflict : s.blocked === "existing-zoom" ? ui.zoomConflict : m.blocked}</p>
 										) : (
 											<fieldset
 												disabled={stale || !!busy}
@@ -806,11 +845,7 @@ export function AutoEditPanel({
 							}
 							onClick={() => {
 								try {
-									onApply(applyEditPlan(state, source, plan, decisions));
-									setPlan(null);
-									setDecisions({});
-									setApplied(true);
-									setError("");
+									commitPlan(plan, decisions);
 								} catch (e) {
 									setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
 								}

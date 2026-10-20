@@ -305,11 +305,13 @@ describe("getCompanionAudioFallbackPaths", () => {
 						JSON.stringify({
 							streams: [
 								{
+									codec_type: args.at(-1) === micPath ? "audio" : "video",
 									duration: "18.000000",
 									nb_read_frames: "540",
 									avg_frame_rate: "30/1",
 								},
 							],
+							format: { duration: "18.000000" },
 						}),
 						"",
 					);
@@ -351,7 +353,100 @@ describe("getCompanionAudioFallbackPaths", () => {
 			exists: true,
 			containerDurationSeconds: 18,
 			startDelayMs: 125,
+			audioStreamCount: 1,
+			hasAudioStream: true,
 		});
+		expect(diagnostics.latest.media.video.hasAudioStream).toBe(false);
+		// One structured header probe per existing media file supplies duration and streams.
+		expect(execFileMock).toHaveBeenCalledTimes(2);
+		expect(execFileMock.mock.calls.every(([file]) => file === "ffprobe")).toBe(true);
+	});
+
+	it("distinguishes confirmed audio, video-only media, and incomplete stream metadata", async () => {
+		const { parseFfprobeRecordingMedia } = await import("./diagnostics");
+		expect(
+			parseFfprobeRecordingMedia(
+				JSON.stringify({
+					streams: [{ codec_type: "video" }, { codec_type: "audio" }],
+					format: { duration: "12.5" },
+				}),
+			),
+		).toMatchObject({
+			hasAudioStream: true,
+			audioStreamCount: 1,
+			containerDurationSeconds: 12.5,
+		});
+		expect(
+			parseFfprobeRecordingMedia(JSON.stringify({ streams: [{ codec_type: "video" }] })),
+		).toMatchObject({ hasAudioStream: false, audioStreamCount: 0 });
+		for (const incomplete of [{}, { streams: [] }, { streams: [{}] }]) {
+			expect(parseFfprobeRecordingMedia(JSON.stringify(incomplete))).toMatchObject({
+				hasAudioStream: null,
+				audioStreamCount: null,
+			});
+		}
+	});
+
+	it("records unknown audio rather than no audio when a media probe fails", async () => {
+		const videoPath = path.join(tempRoot, "unreadable.mp4");
+		await fs.writeFile(videoPath, "video");
+		execFileMock.mockImplementation(
+			(
+				_file: string,
+				_args: string[],
+				_options: Record<string, unknown>,
+				callback: ExecFileCallback,
+			) => callback(new Error("ffprobe failed"), "", ""),
+		);
+		const { writeRecordingDiagnosticsSnapshot } = await import("./diagnostics");
+		const diagnosticsPath = await writeRecordingDiagnosticsSnapshot(videoPath, {
+			backend: "windows-wgc",
+			phase: "stop",
+		});
+		const diagnostics = JSON.parse(await fs.readFile(diagnosticsPath, "utf8"));
+		expect(diagnostics.latest.media.video).toMatchObject({
+			exists: true,
+			containerDurationSeconds: null,
+			hasAudioStream: null,
+			audioStreamCount: null,
+			stream: null,
+		});
+	});
+
+	it.each([
+		{ systemAudio: false, microphone: false },
+		{ systemAudio: false, microphone: true },
+		{ systemAudio: true, microphone: false },
+		{ systemAudio: true, microphone: true },
+	])("retains the original audio request across concurrent finalization events: %j", async (requestedAudio) => {
+		const videoPath = path.join(tempRoot, "recording-request.mp4");
+		const { writeRecordingDiagnosticsSnapshot } = await import("./diagnostics");
+		const diagnosticsPath = await writeRecordingDiagnosticsSnapshot(videoPath, {
+			backend: "windows-wgc",
+			phase: "start",
+			requestedAudio,
+		});
+		await Promise.all([
+			writeRecordingDiagnosticsSnapshot(videoPath, {
+				backend: "windows-wgc",
+				phase: "mux-complete",
+			}),
+			writeRecordingDiagnosticsSnapshot(videoPath, {
+				backend: "browser-store",
+				phase: "mic-sidecar",
+			}),
+		]);
+		const diagnostics = JSON.parse(await fs.readFile(diagnosticsPath, "utf8"));
+		expect(diagnostics.requestedAudio).toEqual(requestedAudio);
+		expect(diagnostics.events).toHaveLength(3);
+		expect(diagnostics.events.map((event: { phase: string }) => event.phase)).toEqual([
+			"start",
+			"mux-complete",
+			"mic-sidecar",
+		]);
+		expect(diagnostics.latest.requestedAudio).toEqual(requestedAudio);
+		// Requested flags are independent of whether an output/sidecar was actually saved.
+		expect(diagnostics.latest.media.video.exists).toBe(false);
 	});
 
 	it("ignores invalid sidecar timing metadata values", async () => {

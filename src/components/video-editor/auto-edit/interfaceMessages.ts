@@ -1,9 +1,19 @@
 export const interfaceMessages = {
 	en: {
 		title: "AI auto edit",
+		applyAvailable: "Apply available suggestions automatically",
+		applyHelp: "Adds the available suggestions to your timeline in one Undo step. Rejected suggestions and existing edits are preserved. Export to include the result in your video.",
+		alreadyApplied: "This text is already on the timeline for this moment. It will not be added twice.",
+		annotationConflict: "Existing artwork or text occupies this area. Move it or adjust its timing, then generate a new plan.",
+		zoomConflict: "A zoom already exists at this moment. Your zoom is preserved.",
+		previewApplied: "Show the added text in the video",
 		noAudio:
 			"No audio was found. Speech editing was not applied; your video is unchanged. Enable the microphone for narration or system audio for computer sounds, then record again. Existing audio cannot be recovered from a silent video.",
 		visualAlternative: "Review a visual-only plan instead",
+		audioExtractionFailed:
+			"The recording audio could not be read. No edits were applied. Check that the original video and linked audio files are available, then try again.",
+		noUsableSpeech:
+			"Audio was read, but no usable speech was recognized. Your video is unchanged. Check the sound or review a visual-only plan instead.",
 		noChanges:
 			"Analysis finished. No safe automatic edits were found, so your video is unchanged. Keeping the whole frame also disables automatic zooms.",
 		language: "Interface language",
@@ -44,9 +54,19 @@ export const interfaceMessages = {
 	},
 	zh: {
 		title: "AI 自动剪辑",
+		applyAvailable: "一键自动应用可用建议",
+		applyHelp: "将可用建议直接加入时间线，一次撤销即可恢复。保留已拒绝的建议和已有编辑，导出后效果会写入视频。",
+		alreadyApplied: "这段时间已有相同文字，不会重复添加。可以返回编辑器播放检查。",
+		annotationConflict: "这个位置已有文字或图形。请调整其位置或时间，再重新生成建议；原标注会保留。",
+		zoomConflict: "这段时间已有缩放效果，已保留你的设置。",
+		previewApplied: "在视频中查看新增文字",
 		noAudio:
 			"没有找到音轨，未执行语音剪辑，视频保持不变。需要讲解请开启麦克风，需要电脑声音请开启系统声音，再重新录制。无法从无声视频恢复当时的声音。",
 		visualAlternative: "改为审阅画面分析建议",
+		audioExtractionFailed:
+			"无法读取录屏中的声音，未执行任何修改。请检查原视频和关联音频文件是否可用，再重试。",
+		noUsableSpeech:
+			"已读取音频，但没有识别到可用的讲话，视频保持不变。请检查声音，或改为审阅画面分析建议。",
 		noChanges:
 			"分析已完成，没有找到可安全自动修改的内容，视频保持不变。勾选保持全画面时，也不会自动添加放大效果。",
 		language: "界面语言",
@@ -84,9 +104,19 @@ export const interfaceMessages = {
 	},
 	ms: {
 		title: "Suntingan automatik AI",
+		applyAvailable: "Gunakan cadangan tersedia secara automatik",
+		applyHelp: "Tambah cadangan tersedia ke garis masa dengan satu langkah Buat Asal. Cadangan ditolak dan suntingan sedia ada dikekalkan. Eksport untuk menyertakan hasil dalam video.",
+		alreadyApplied: "Teks ini sudah ada pada masa ini. Ia tidak akan ditambah dua kali.",
+		annotationConflict: "Teks atau grafik sedia ada menggunakan kawasan ini. Laraskan kedudukan atau masanya, kemudian jana pelan baharu.",
+		zoomConflict: "Zum sudah ada pada masa ini. Tetapan anda dikekalkan.",
+		previewApplied: "Lihat teks baharu dalam video",
 		noAudio:
 			"Tiada audio ditemui. Suntingan pertuturan tidak digunakan; video tidak berubah. Aktifkan mikrofon untuk narasi atau audio sistem untuk bunyi komputer, kemudian rakam semula. Audio asal tidak boleh dipulihkan daripada video tanpa suara.",
 		visualAlternative: "Semak pelan visual sahaja",
+		audioExtractionFailed:
+			"Audio rakaman tidak dapat dibaca. Tiada suntingan digunakan. Pastikan video asal dan fail audio berkaitan tersedia, kemudian cuba lagi.",
+		noUsableSpeech:
+			"Audio telah dibaca, tetapi tiada pertuturan yang boleh digunakan dikenal pasti. Video tidak berubah. Semak bunyi atau semak pelan visual sahaja.",
 		noChanges:
 			"Analisis selesai. Tiada suntingan automatik yang selamat ditemui; video tidak berubah. Pilihan bingkai penuh turut mematikan zum automatik.",
 		language: "Bahasa antara muka",

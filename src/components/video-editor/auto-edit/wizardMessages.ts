@@ -20,9 +20,10 @@ export const wizardMessages = {
 		undone: "Changes undone. Your video is back as it was.",
 		startOver: "Start over",
 		voiceNext: "Next: add AI voice-over",
+		voiceEntry: "Add AI voice-over and subtitles",
 		voiceTitle: "AI voice-over",
 		voiceIntro:
-			"AI writes one short line for each zoom or sped-up part, you check the words, then a voice reads them and the lines are added as subtitles. The script and voice use the language chosen at the top right. Best for recordings where you did not speak.",
+			"AI looks at the screen at each zoom, click or sped-up part (or every few seconds if there are none) and writes one short line, you check the words, then a voice reads them and the lines are added as subtitles. The script and voice use the language chosen at the top right. Best for recordings where you did not speak.",
 		voiceNothing:
 			"There are no zooms or sped-up parts to describe yet. Add some first, or skip this step.",
 		voiceDone: "Finish",
@@ -53,7 +54,8 @@ export const wizardMessages = {
 		translating: "Translating",
 		translated: "{n} subtitles translated.",
 		reviewTitle: "Check each change",
-		reviewHelp: "Accept a change to see it right away; Reject takes it back. Press Done at the bottom when finished.",
+		reviewHelp:
+			"Accept a change to see it right away; Reject takes it back. Press Done at the bottom when finished.",
 		showProtected: "{n} more were left unchanged. Show why",
 		hideProtected: "Hide unchanged items",
 	},
@@ -78,9 +80,10 @@ export const wizardMessages = {
 		undone: "已撤销，视频恢复成原来的样子。",
 		startOver: "重新开始",
 		voiceNext: "下一步：加 AI 配音",
+		voiceEntry: "加 AI 配音和字幕",
 		voiceTitle: "AI 配音",
 		voiceIntro:
-			"AI 会给每一处放大或加速写一句简短解说，你检查文字后，再用声音读出来，同时把这些句子加成字幕。解说稿和声音都使用右上角选的语言。适合录制时没有讲话的视频。",
+			"AI 会看每一处放大、点击或加速时的画面（如果都没有，就每隔几秒看一次），写一句简短解说，你检查文字后，再用声音读出来，同时把这些句子加成字幕。解说稿和声音都使用右上角选的语言。适合录制时没有讲话的视频。",
 		voiceNothing: "现在还没有放大或加速的地方可以解说。可以先加一些，或者跳过这一步。",
 		voiceDone: "完成",
 		voicePrivacy: "隐私说明",
@@ -133,9 +136,10 @@ export const wizardMessages = {
 		undone: "Perubahan dibuat asal. Video anda kembali seperti asal.",
 		startOver: "Mula semula",
 		voiceNext: "Seterusnya: tambah suara AI",
+		voiceEntry: "Tambah suara AI dan sari kata",
 		voiceTitle: "Suara AI",
 		voiceIntro:
-			"AI menulis satu baris pendek untuk setiap zum atau bahagian dipercepat, anda semak perkataannya, kemudian suara membacanya dan baris itu ditambah sebagai sari kata. Skrip dan suara menggunakan bahasa yang dipilih di penjuru kanan atas. Sesuai untuk rakaman tanpa percakapan.",
+			"AI melihat skrin pada setiap zum, klik atau bahagian dipercepat (atau setiap beberapa saat jika tiada) dan menulis satu baris pendek, anda semak perkataannya, kemudian suara membacanya dan baris itu ditambah sebagai sari kata. Skrip dan suara menggunakan bahasa yang dipilih di penjuru kanan atas. Sesuai untuk rakaman tanpa percakapan.",
 		voiceNothing:
 			"Belum ada zum atau bahagian dipercepat untuk diterangkan. Tambah dahulu, atau langkau langkah ini.",
 		voiceDone: "Selesai",
@@ -166,7 +170,8 @@ export const wizardMessages = {
 		translating: "Sedang menterjemah",
 		translated: "{n} sari kata diterjemah.",
 		reviewTitle: "Semak setiap perubahan",
-		reviewHelp: "Terima untuk melihatnya serta-merta; Tolak menariknya balik. Tekan Selesai di bawah apabila siap.",
+		reviewHelp:
+			"Terima untuk melihatnya serta-merta; Tolak menariknya balik. Tekan Selesai di bawah apabila siap.",
 		showProtected: "{n} lagi tidak diubah. Tunjukkan sebabnya",
 		hideProtected: "Sembunyikan item yang tidak diubah",
 	},

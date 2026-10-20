@@ -5,7 +5,8 @@ import type { EditPlan } from "../../../src/components/video-editor/auto-edit/pl
 import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bundled";
 import { analyzeLocalMedia } from "../autoEdit/media";
 import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
-import { LocalNarrationGenerator } from "../autoEdit/narrator";
+import { generateBundledNarration, LocalNarrationGenerator } from "../autoEdit/narrator";
+import { getBundledTtsStatus, synthesizeBundledNarration } from "../autoEdit/tts";
 import { analyzeVideoFrames } from "../autoEdit/vision";
 import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
 import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
@@ -283,7 +284,10 @@ export function registerAutoEditHandlers() {
 				plan.suggestions.length > 5000
 			)
 				throw new Error("Invalid plan");
-			return { success: true, draft: await new LocalNarrationGenerator().generate(plan, model) };
+			return {
+				success: true,
+				draft: await new LocalNarrationGenerator().generate(plan, model),
+			};
 		} catch (error) {
 			return {
 				success: false,
@@ -291,4 +295,63 @@ export function registerAutoEditHandlers() {
 			};
 		}
 	});
+	ipcMain.handle("auto-edit-narrate-bundled", async (event, plan: EditPlan) => {
+		if (running.has(event.sender.id))
+			return { success: false, error: "Analysis already running" };
+		const controller = new AbortController();
+		running.set(event.sender.id, controller);
+		const abort = () => controller.abort();
+		event.sender.once("destroyed", abort);
+		let session: Awaited<ReturnType<typeof startBundledAi>> | undefined;
+		try {
+			if (
+				!plan ||
+				plan.version !== 1 ||
+				!Array.isArray(plan.suggestions) ||
+				plan.suggestions.length > 5000
+			)
+				throw new Error("Invalid plan");
+			session = await startBundledAi(bundledRoot(), controller.signal);
+			return { success: true, draft: await generateBundledNarration(plan, session.complete) };
+		} catch (error) {
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : "Bundled narration draft failed",
+			};
+		} finally {
+			await session?.close();
+			running.delete(event.sender.id);
+			event.sender.removeListener("destroyed", abort);
+		}
+	});
+	ipcMain.handle("auto-edit-tts-status", () => getBundledTtsStatus());
+	ipcMain.handle(
+		"auto-edit-narrate-synthesize",
+		async (event, cues: Array<{ id: string; text: string }>) => {
+			if (running.has(event.sender.id))
+				return { success: false, error: "Analysis already running" };
+			const controller = new AbortController();
+			running.set(event.sender.id, controller);
+			const abort = () => controller.abort();
+			event.sender.once("destroyed", abort);
+			try {
+				if (!Array.isArray(cues) || !cues.length || cues.length > 200)
+					throw new Error("Invalid narration cues");
+				const clips = await synthesizeBundledNarration({
+					cues,
+					outputDirectory: path.join(app.getPath("userData"), "narration-audio"),
+					signal: controller.signal,
+				});
+				return { success: true, clips };
+			} catch (error) {
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : "Narration synthesis failed",
+				};
+			} finally {
+				running.delete(event.sender.id);
+				event.sender.removeListener("destroyed", abort);
+			}
+		},
+	);
 }

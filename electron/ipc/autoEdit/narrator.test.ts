@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
-import { LocalNarrationGenerator } from "./narrator";
+import { generateBundledNarration, LocalNarrationGenerator } from "./narrator";
 
 const mock = vi.hoisted(() => ({
 	requests: [] as { hostname: string; port: number; path: string; body: string }[],
@@ -121,5 +121,44 @@ describe("local-only narration draft (mock service, no inference claim)", () => 
 			new LocalNarrationGenerator().generate(plan(), "model:cloud"),
 		).rejects.toThrow();
 		expect(mock.requests).toHaveLength(0);
+	});
+});
+
+describe("bundled offline narration draft (reuses the AI edition's own model session)", () => {
+	it("drafts a narration cue per unblocked suggestion via the given complete() call", async () => {
+		const complete = vi.fn(async () =>
+			JSON.stringify({ cues: [{ id: "rule-1", text: "Clicking here to zoom in on the detail." }] }),
+		);
+		const draft = await generateBundledNarration(plan(), complete);
+		expect(draft.cues).toEqual([
+			{ id: "rule-1", startMs: 1000, endMs: 2000, text: "Clicking here to zoom in on the detail." },
+		]);
+		expect(complete).toHaveBeenCalledOnce();
+	});
+	it("never sends suggestion text, transcript content or file paths through complete()", async () => {
+		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
+		await generateBundledNarration(plan(), complete);
+		const [, question] = complete.mock.calls[0];
+		expect(question).not.toContain("PRIVATE_TRANSCRIPT");
+		expect(question).not.toContain("/local/user.mp4");
+		expect(question).not.toContain("baseline");
+	});
+	it("returns no cues and never calls complete() when every suggestion is blocked", async () => {
+		const blocked = plan();
+		blocked.suggestions[0].blocked = "existing-zoom";
+		const complete = vi.fn();
+		const draft = await generateBundledNarration(blocked, complete);
+		expect(draft.cues).toEqual([]);
+		expect(complete).not.toHaveBeenCalled();
+	});
+	it("rejects a cue id the plan never offered", async () => {
+		const complete = vi.fn(async () =>
+			JSON.stringify({ cues: [{ id: "unknown-id", text: "Made up." }] }),
+		);
+		await expect(generateBundledNarration(plan(), complete)).rejects.toThrow();
+	});
+	it("rejects empty or missing cue text", async () => {
+		const complete = vi.fn(async () => JSON.stringify({ cues: [{ id: "rule-1", text: "" }] }));
+		await expect(generateBundledNarration(plan(), complete)).rejects.toThrow();
 	});
 });

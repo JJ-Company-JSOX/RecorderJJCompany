@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useI18n } from "@/contexts/I18nContext";
-import type { CursorTelemetryPoint } from "../types";
+import type { AudioRegion, CursorTelemetryPoint } from "../types";
 import { applyEditPlan } from "./apply";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { interfaceMessages } from "./interfaceMessages";
@@ -42,11 +42,12 @@ export function AutoEditPanel({
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
-	const [busy, setBusy] = useState<"analysis" | "review" | "narrate" | "vision" | "tools" | null>(
-		null,
-	);
+	const [busy, setBusy] = useState<
+		"analysis" | "review" | "narrate" | "synthesize" | "vision" | "tools" | null
+	>(null);
 	const [error, setError] = useState("");
 	const [missingAudio, setMissingAudio] = useState(false);
+	const [silentFallback, setSilentFallback] = useState(false);
 	const [applied, setApplied] = useState(false);
 	const [model, setModel] = useState("");
 	const [modelInfo, setModelInfo] = useState<{
@@ -59,6 +60,8 @@ export function AutoEditPanel({
 	const [narrationDraft, setNarrationDraft] = useState<NarrationDraft | null>(null);
 	const [narrationEdits, setNarrationEdits] = useState<Record<string, string>>({});
 	const [narrationApproved, setNarrationApproved] = useState(false);
+	const [narrationAudioReady, setNarrationAudioReady] = useState(false);
+	const [ttsStatus, setTtsStatus] = useState<{ available: boolean } | null>(null);
 	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
 	const [keepFullFrame, setKeepFullFrame] = useState(true);
 	const [speechReady, setSpeechReady] = useState<boolean | null>(null);
@@ -100,6 +103,14 @@ export function AutoEditPanel({
 			.catch(() => {
 				if (active) setBundledStatus(null);
 			});
+		void window.electronAPI
+			.getBundledTtsStatus?.()
+			.then((status) => {
+				if (active) setTtsStatus(status);
+			})
+			.catch(() => {
+				if (active) setTtsStatus(null);
+			});
 		return () => {
 			active = false;
 		};
@@ -130,11 +141,12 @@ export function AutoEditPanel({
 			),
 		}));
 	};
-	const analyze = async (withAi = false, withSpeech = false) => {
+	const analyze = async (withAi = false, withSpeech = false, fromSilentVideo = false) => {
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
 		setMissingAudio(false);
+		setSilentFallback(fromSilentVideo);
 		setApplied(false);
 		setSpeechStage("");
 		setDraftSummary("");
@@ -143,6 +155,7 @@ export function AutoEditPanel({
 		setNarrationDraft(null);
 		setNarrationEdits({});
 		setNarrationApproved(false);
+		setNarrationAudioReady(false);
 		try {
 			if (!window.electronAPI.analyzeAutoEdit) throw new Error(m.unavailable);
 			const complete = withSpeech
@@ -153,6 +166,11 @@ export function AutoEditPanel({
 				: undefined;
 			if (complete?.errorCode === "NO_AUDIO") {
 				if (run !== generation.current) return;
+				// A silent recording can still be edited from the picture; zooms are the main edit there.
+				if (bundledStatus?.available) {
+					setKeepFullFrame(false);
+					return analyze(true, false, true);
+				}
 				setMissingAudio(true);
 				setError(ui.noAudio);
 				return;
@@ -182,7 +200,7 @@ export function AutoEditPanel({
 				if (run !== generation.current) return;
 				if (!frames.success || !frames.analysis) throw Error(frames.error || m.error);
 				next = addVisualSuggestions(next, state, source, frames.analysis);
-				if (keepFullFrame)
+				if (keepFullFrame && !fromSilentVideo)
 					next = {
 						...next,
 						suggestions: next.suggestions.filter((s) => s.kind !== "zoom"),
@@ -260,12 +278,72 @@ export function AutoEditPanel({
 		setBusy("narrate");
 		setError("");
 		setNarrationApproved(false);
+		setNarrationAudioReady(false);
 		try {
 			const result = await window.electronAPI.narrateAutoEditLocally(plan, model);
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
 			setNarrationDraft(result.draft);
 			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
+	const narrateBundled = async () => {
+		if (!plan) return;
+		const run = ++generation.current;
+		setBusy("narrate");
+		setError("");
+		setNarrationApproved(false);
+		setNarrationAudioReady(false);
+		try {
+			const result = await window.electronAPI.narrateAutoEditBundled(plan);
+			if (run !== generation.current) return;
+			if (!result.success || !result.draft) throw new Error(result.error);
+			setNarrationDraft(result.draft);
+			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
+	const synthesizeNarration = async () => {
+		if (!narrationDraft || !narrationApproved) return;
+		const run = ++generation.current;
+		setBusy("synthesize");
+		setError("");
+		try {
+			const cues = narrationDraft.cues.map((cue) => ({
+				id: cue.id,
+				text: narrationEdits[cue.id] ?? cue.text,
+			}));
+			const result = await window.electronAPI.synthesizeAutoEditNarration(cues);
+			if (run !== generation.current) return;
+			if (!result.success || !result.clips) throw new Error(result.error);
+			const { state: latestState } = currentState.current;
+			const trackIndex =
+				Math.max(-1, ...latestState.audioRegions.map((r) => r.trackIndex ?? 0)) + 1;
+			const regions: AudioRegion[] = [];
+			for (const clip of result.clips) {
+				const cue = narrationDraft.cues.find((c) => c.id === clip.id);
+				if (!cue) continue;
+				regions.push({
+					id: `narration-${clip.id}`,
+					startMs: cue.startMs,
+					endMs: cue.startMs + clip.durationMs,
+					audioPath: clip.audioPath,
+					volume: 1,
+					normalize: false,
+					trackIndex,
+				});
+			}
+			onApply({ ...latestState, audioRegions: [...latestState.audioRegions, ...regions] });
+			setNarrationAudioReady(true);
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -287,6 +365,7 @@ export function AutoEditPanel({
 			setNarrationDraft(null);
 			setNarrationEdits({});
 			setNarrationApproved(false);
+			setNarrationAudioReady(false);
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -407,7 +486,7 @@ export function AutoEditPanel({
 									<Button
 										variant="secondary"
 										disabled={!!busy || !bundledStatus?.available}
-										onClick={() => void analyze(true)}
+										onClick={() => void analyze(true, false, true)}
 									>
 										{ui.visualAlternative}
 									</Button>
@@ -539,6 +618,11 @@ export function AutoEditPanel({
 					)}
 					{plan && (
 						<>
+							{silentFallback && (
+								<p role="status" className="rounded-lg border p-3 text-sm">
+									{ui.silentFallback}
+								</p>
+							)}
 							{!available.length && (
 								<p
 									role="status"
@@ -667,6 +751,94 @@ export function AutoEditPanel({
 									</li>
 								))}
 							</ol>
+							<section
+								className="mt-4 space-y-3 rounded-lg border p-3"
+								aria-label={n.title.replace(" \u00b7 experimental", "")}
+							>
+								<h3 className="font-semibold">
+									{n.title.replace(" \u00b7 experimental", "")}
+								</h3>
+								<p className="text-sm">{n.info}</p>
+								<Button
+									disabled={
+										!bundledStatus?.available ||
+										stale ||
+										!!busy ||
+										!plan.suggestions.some((s) => !s.blocked)
+									}
+									onClick={() => void narrateBundled()}
+								>
+									{busy === "narrate" ? n.busy : n.draft}
+								</Button>
+								{narrationDraft &&
+									(narrationDraft.cues.length === 0 ? (
+										<p className="text-sm">{n.empty}</p>
+									) : (
+										<div className="space-y-3">
+											<p className="text-sm">{n.editHint}</p>
+											<ol className="space-y-2">
+												{narrationDraft.cues.map((cue) => (
+													<li key={cue.id} className="space-y-1">
+														<Button
+															variant="ghost"
+															disabled={stale || !!busy}
+															onClick={() =>
+																onSeek(cue.startMs / 1000)
+															}
+														>
+															{m.seek}
+														</Button>
+														<textarea
+															aria-label={cue.id}
+															value={
+																narrationEdits[cue.id] ?? cue.text
+															}
+															disabled={stale || !!busy}
+															onChange={(e) => {
+																setNarrationEdits((prev) => ({
+																	...prev,
+																	[cue.id]: e.target.value,
+																}));
+																setNarrationApproved(false);
+																setNarrationAudioReady(false);
+															}}
+															className="w-full rounded border p-2 text-sm"
+														/>
+													</li>
+												))}
+											</ol>
+											<label className="flex gap-2">
+												<input
+													type="checkbox"
+													checked={narrationApproved}
+													disabled={stale || !!busy}
+													onChange={(e) =>
+														setNarrationApproved(e.target.checked)
+													}
+												/>
+												{n.approve}
+											</label>
+											{narrationApproved && (
+												<p className="text-sm">{n.approved}</p>
+											)}
+											{narrationApproved && (
+												<Button
+													disabled={
+														!ttsStatus?.available || stale || !!busy
+													}
+													onClick={() => void synthesizeNarration()}
+												>
+													{busy === "synthesize"
+														? n.synthesizing
+														: n.generateAudio}
+												</Button>
+											)}
+											{narrationAudioReady && (
+												<p className="text-sm">{n.audioReady}</p>
+											)}
+										</div>
+									))}
+							</section>
 							{import.meta.env.DEV && (
 								<details>
 									<summary>{m.ai}</summary>
@@ -753,9 +925,9 @@ export function AutoEditPanel({
 									</Button>
 									<section
 										className="mt-4 space-y-3 rounded border p-3"
-										aria-label={n.title}
+										aria-label={`${n.title} (Ollama)`}
 									>
-										<h3>{n.title}</h3>
+										<h3>{n.title} (Ollama)</h3>
 										<p className="text-sm">{n.info}</p>
 										<Button
 											disabled={
@@ -770,58 +942,6 @@ export function AutoEditPanel({
 										>
 											{busy === "narrate" ? n.busy : n.draft}
 										</Button>
-										{narrationDraft &&
-											(narrationDraft.cues.length === 0 ? (
-												<p className="text-sm">{n.empty}</p>
-											) : (
-												<div className="space-y-3">
-													<p className="text-sm">{n.editHint}</p>
-													<ol className="space-y-2">
-														{narrationDraft.cues.map((cue) => (
-															<li key={cue.id} className="space-y-1">
-																<Button
-																	variant="ghost"
-																	disabled={stale || !!busy}
-																	onClick={() =>
-																		onSeek(cue.startMs / 1000)
-																	}
-																>
-																	{m.seek}
-																</Button>
-																<textarea
-																	aria-label={cue.id}
-																	value={
-																		narrationEdits[cue.id] ?? cue.text
-																	}
-																	disabled={stale || !!busy}
-																	onChange={(e) => {
-																		setNarrationEdits((prev) => ({
-																			...prev,
-																			[cue.id]: e.target.value,
-																		}));
-																		setNarrationApproved(false);
-																	}}
-																	className="w-full rounded border p-2 text-sm"
-																/>
-															</li>
-														))}
-													</ol>
-													<label className="flex gap-2">
-														<input
-															type="checkbox"
-															checked={narrationApproved}
-															disabled={stale || !!busy}
-															onChange={(e) =>
-																setNarrationApproved(e.target.checked)
-															}
-														/>
-														{n.approve}
-													</label>
-													{narrationApproved && (
-														<p className="text-sm">{n.approved}</p>
-													)}
-												</div>
-											))}
 									</section>
 									<section
 										className="mt-4 space-y-3 rounded border p-3"
@@ -917,6 +1037,7 @@ export function AutoEditPanel({
 									setNarrationDraft(null);
 									setNarrationEdits({});
 									setNarrationApproved(false);
+									setNarrationAudioReady(false);
 									setApplied(true);
 									setError("");
 								} catch (e) {

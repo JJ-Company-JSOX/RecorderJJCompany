@@ -4,6 +4,8 @@ export const interfaceMessages = {
 		noAudio:
 			"No audio was found. Speech editing was not applied; your video is unchanged. Enable the microphone for narration or system audio for computer sounds, then record again. Existing audio cannot be recovered from a silent video.",
 		visualAlternative: "Review a visual-only plan instead",
+		silentFallback:
+			"No audio was found, so this plan was built from the picture only (pauses, clicks and zooms). Nothing was recovered or invented for the missing sound. You can still draft and generate AI narration below.",
 		noChanges:
 			"Analysis finished. No safe automatic edits were found, so your video is unchanged. Keeping the whole frame also disables automatic zooms.",
 		language: "Interface language",
@@ -47,6 +49,8 @@ export const interfaceMessages = {
 		noAudio:
 			"没有找到音轨，未执行语音剪辑，视频保持不变。需要讲解请开启麦克风，需要电脑声音请开启系统声音，再重新录制。无法从无声视频恢复当时的声音。",
 		visualAlternative: "改为审阅画面分析建议",
+		silentFallback:
+			"没有检测到声音，所以这份方案只根据画面生成（停顿、点击和缩放），不会恢复或编造原本的声音。你仍然可以在下方生成 AI 解说稿和配音。",
 		noChanges:
 			"分析已完成，没有找到可安全自动修改的内容，视频保持不变。勾选保持全画面时，也不会自动添加放大效果。",
 		language: "界面语言",
@@ -87,6 +91,8 @@ export const interfaceMessages = {
 		noAudio:
 			"Tiada audio ditemui. Suntingan pertuturan tidak digunakan; video tidak berubah. Aktifkan mikrofon untuk narasi atau audio sistem untuk bunyi komputer, kemudian rakam semula. Audio asal tidak boleh dipulihkan daripada video tanpa suara.",
 		visualAlternative: "Semak pelan visual sahaja",
+		silentFallback:
+			"Tiada audio ditemui, jadi pelan ini dibina daripada gambar sahaja (jeda, klik dan zum). Tiada bunyi dipulihkan atau direka. Anda masih boleh mendraf dan menjana naratif AI di bawah.",
 		noChanges:
 			"Analisis selesai. Tiada suntingan automatik yang selamat ditemui; video tidak berubah. Pilihan bingkai penuh turut mematikan zum automatik.",
 		language: "Bahasa antara muka",

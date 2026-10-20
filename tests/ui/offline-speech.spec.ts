@@ -322,7 +322,7 @@ test("a missing speech bundle disables complete editing and explains the full ed
 	).toBeEnabled();
 });
 
-test("missing audio is visible on small screens and offers visual review without applying edits", async ({
+test("missing audio falls back to a visual-only plan on small screens without applying edits", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1024, height: 640 });
@@ -333,17 +333,6 @@ test("missing audio is visible on small screens and offers visual review without
 			errorCode: "NO_AUDIO",
 			error: "Technical extraction details",
 		});
-	});
-	await panel
-		.getByRole("button", { name: "Automatically edit speech and video", exact: true })
-		.click();
-	const alert = panel.getByRole("alert");
-	await expect(alert).toContainText("your video is unchanged");
-	await expect(alert).toBeInViewport();
-	await expect(alert).not.toContainText("Technical extraction details");
-	await expect(panel.locator("[data-draft-result]")).toHaveCount(0);
-	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
-	await page.evaluate(() => {
 		window.electronAPI.analyzeAutoEdit = async () => ({
 			success: true,
 			evidence: {
@@ -365,7 +354,12 @@ test("missing audio is visible on small screens and offers visual review without
 			},
 		});
 	});
-	await panel.getByRole("button", { name: "Review a visual-only plan instead" }).click();
+	await panel
+		.getByRole("button", { name: "Automatically edit speech and video", exact: true })
+		.click();
+	await expect(panel.getByText("built from the picture only")).toBeVisible();
+	await expect(panel.getByRole("alert")).toHaveCount(0);
+	await expect(panel.getByText("Technical extraction details")).toHaveCount(0);
 	await expect(panel.locator("[data-no-edits]")).toContainText("No safe automatic edits");
 	await expect(panel.locator("[data-no-edits]")).toBeInViewport();
 	await expect(panel.locator("[data-draft-result]")).toHaveCount(0);

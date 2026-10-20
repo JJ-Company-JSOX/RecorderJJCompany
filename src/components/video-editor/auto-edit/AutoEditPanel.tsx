@@ -47,6 +47,7 @@ export function AutoEditPanel({
 	>(null);
 	const [error, setError] = useState("");
 	const [missingAudio, setMissingAudio] = useState(false);
+	const [silentFallback, setSilentFallback] = useState(false);
 	const [applied, setApplied] = useState(false);
 	const [model, setModel] = useState("");
 	const [modelInfo, setModelInfo] = useState<{
@@ -140,11 +141,12 @@ export function AutoEditPanel({
 			),
 		}));
 	};
-	const analyze = async (withAi = false, withSpeech = false) => {
+	const analyze = async (withAi = false, withSpeech = false, fromSilentVideo = false) => {
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
 		setMissingAudio(false);
+		setSilentFallback(fromSilentVideo);
 		setApplied(false);
 		setSpeechStage("");
 		setDraftSummary("");
@@ -164,6 +166,11 @@ export function AutoEditPanel({
 				: undefined;
 			if (complete?.errorCode === "NO_AUDIO") {
 				if (run !== generation.current) return;
+				// A silent recording can still be edited from the picture; zooms are the main edit there.
+				if (bundledStatus?.available) {
+					setKeepFullFrame(false);
+					return analyze(true, false, true);
+				}
 				setMissingAudio(true);
 				setError(ui.noAudio);
 				return;
@@ -193,7 +200,7 @@ export function AutoEditPanel({
 				if (run !== generation.current) return;
 				if (!frames.success || !frames.analysis) throw Error(frames.error || m.error);
 				next = addVisualSuggestions(next, state, source, frames.analysis);
-				if (keepFullFrame)
+				if (keepFullFrame && !fromSilentVideo)
 					next = {
 						...next,
 						suggestions: next.suggestions.filter((s) => s.kind !== "zoom"),
@@ -479,7 +486,7 @@ export function AutoEditPanel({
 									<Button
 										variant="secondary"
 										disabled={!!busy || !bundledStatus?.available}
-										onClick={() => void analyze(true)}
+										onClick={() => void analyze(true, false, true)}
 									>
 										{ui.visualAlternative}
 									</Button>
@@ -611,6 +618,11 @@ export function AutoEditPanel({
 					)}
 					{plan && (
 						<>
+							{silentFallback && (
+								<p role="status" className="rounded-lg border p-3 text-sm">
+									{ui.silentFallback}
+								</p>
+							)}
 							{!available.length && (
 								<p
 									role="status"

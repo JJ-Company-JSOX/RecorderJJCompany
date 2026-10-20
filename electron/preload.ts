@@ -228,6 +228,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			frames: Array<{ id: string; timeMs: number; focus?: { cx: number; cy: number } }>;
 		},
 	) => ipcRenderer.invoke("auto-edit-narrate-bundled", plan, language, screen),
+	translateAutoEditSubtitles: (
+		lines: Array<{ id: string; text: string }>,
+		target: "zh" | "en" | "ms",
+	) => ipcRenderer.invoke("auto-edit-translate-subtitles", lines, target),
 	getBundledTtsStatus: () => ipcRenderer.invoke("auto-edit-tts-status"),
 	synthesizeAutoEditNarration: (
 		cues: Array<{ id: string; text: string }>,

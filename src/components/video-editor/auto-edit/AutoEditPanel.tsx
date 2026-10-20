@@ -56,7 +56,7 @@ export function AutoEditPanel({
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
 	const [busy, setBusy] = useState<
-		"analysis" | "review" | "narrate" | "synthesize" | "vision" | "tools" | null
+		"analysis" | "review" | "narrate" | "synthesize" | "vision" | "tools" | "translate" | null
 	>(null);
 	const [error, setError] = useState("");
 	const [silentFallback, setSilentFallback] = useState(false);
@@ -98,6 +98,8 @@ export function AutoEditPanel({
 	const [voiceOpen, setVoiceOpen] = useState(false);
 	const [textOpen, setTextOpen] = useState(false);
 	const [textDeleted, setTextDeleted] = useState<string[]>([]);
+	const [translateTarget, setTranslateTarget] = useState<PlanLanguage>("en");
+	const [translated, setTranslated] = useState(0);
 	const [showProtected, setShowProtected] = useState(false);
 	const resultAnchor = useRef<HTMLDivElement>(null);
 	const progressAnchor = useRef<HTMLDivElement>(null);
@@ -213,6 +215,7 @@ export function AutoEditPanel({
 		});
 		// The editor may normalize the applied state, so record its baseline once it arrives.
 		setUndoState({ before: latest.state, afterBaseline: null });
+		setTranslated(0);
 		setUndone(false);
 		setPlan(null);
 		setDecisions({});
@@ -497,7 +500,6 @@ export function AutoEditPanel({
 	const lines = textLines(state);
 	const openTextEdit = () => {
 		setTextDeleted([]);
-		setApplied(false);
 		setVoiceOpen(false);
 		setTextOpen(true);
 	};
@@ -519,6 +521,48 @@ export function AutoEditPanel({
 		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
 	const voiceActions = narrationPlan(state).suggestions.length;
 	const protectedCount = plan ? plan.suggestions.length - available.length : 0;
+	const translateText = async () => {
+		const before = currentState.current.state;
+		const lines = before.autoCaptions
+			.filter((c) => c.text.trim() && c.text.length <= 300)
+			.map((c) => ({ id: c.id, text: c.text }));
+		if (!lines.length || !window.electronAPI.translateAutoEditSubtitles) return;
+		const run = ++generation.current;
+		setBusy("translate");
+		setError("");
+		setProgress({ completed: 0, total: 0 });
+		try {
+			const result = await window.electronAPI.translateAutoEditSubtitles(
+				lines,
+				translateTarget,
+			);
+			if (run !== generation.current) return;
+			if (!result.success || !result.lines) throw new Error(result.error);
+			const byId = new Map(result.lines.map((l) => [l.id, l.text]));
+			const latest = currentState.current.state;
+			if (baselineFor(latest, source) !== baselineFor(before, source)) throw Error(m.stale);
+			// Word timings belong to the original words, so translated lines show as whole lines.
+			onApply({
+				...latest,
+				autoCaptions: latest.autoCaptions.map((c) => {
+					const text = byId.get(c.id);
+					return text ? { id: c.id, startMs: c.startMs, endMs: c.endMs, text } : c;
+				}),
+			});
+			setUndoState({ before, afterBaseline: null });
+			setUndone(false);
+			setSummary(null);
+			setSilentFallback(false);
+			setTranslated(textLines(latest).filter((l) => byId.has(l.id)).length);
+			setTextOpen(false);
+			setApplied(true);
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
 	const startOver = () => {
 		generation.current++;
 		setPlan(null);
@@ -527,6 +571,7 @@ export function AutoEditPanel({
 		setSummary(null);
 		setVoiceOpen(false);
 		setTextOpen(false);
+		setTranslated(0);
 		setShowProtected(false);
 		setSilentFallback(false);
 		setError("");
@@ -671,7 +716,7 @@ export function AutoEditPanel({
 									disabled={!!busy}
 									onClick={openTextEdit}
 								>
-									{w.textEdit}
+									{w.textEntry}
 								</Button>
 							)}
 							{speechReady === false && <p className="text-sm">{m.speechMissing}</p>}
@@ -820,7 +865,7 @@ export function AutoEditPanel({
 					)}
 					<div ref={resultAnchor} />
 					{stale && <p role="alert">{m.stale}</p>}
-					{applied && !voiceOpen && (
+					{applied && !voiceOpen && !textOpen && (
 						<section
 							className="space-y-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4"
 							role="status"
@@ -864,6 +909,11 @@ export function AutoEditPanel({
 								</p>
 							)}
 							{silentFallback && <p className="text-sm">{ui.silentFallback}</p>}
+							{translated > 0 && !undone && (
+								<p className="text-sm font-medium">
+									{w.translated.replace("{n}", String(translated))}
+								</p>
+							)}
 							{undone ? (
 								<p className="text-sm font-medium">{w.undone}</p>
 							) : (
@@ -875,9 +925,9 @@ export function AutoEditPanel({
 										{w.voiceNext}
 									</Button>
 								)}
-								{!undone && lines.length > 0 && (
+								{lines.length > 0 && (
 									<Button variant="secondary" onClick={openTextEdit}>
-										{w.textEdit}
+										{w.textEntry}
 									</Button>
 								)}
 								{canUndoRun && undoState && (
@@ -975,6 +1025,41 @@ export function AutoEditPanel({
 								<Button variant="ghost" onClick={() => setTextOpen(false)}>
 									{w.textEditBack}
 								</Button>
+							</div>
+							<div
+								className="space-y-2 border-t border-separator pt-4"
+								data-translate-subtitles
+							>
+								<h4 className="text-sm font-semibold">{w.translateTitle}</h4>
+								<p className="text-xs text-muted-foreground">{w.translateHelp}</p>
+								<div className="flex flex-wrap items-center gap-2">
+									<label className="flex items-center gap-2 text-sm">
+										{w.translateTo}
+										<select
+											value={translateTarget}
+											onChange={(e) =>
+												setTranslateTarget(e.target.value as PlanLanguage)
+											}
+											className="rounded-lg border border-separator bg-background px-2 py-1.5 text-sm text-foreground"
+										>
+											<option value="zh">中文</option>
+											<option value="en">English</option>
+											<option value="ms">Bahasa Melayu</option>
+										</select>
+									</label>
+									<Button
+										variant="secondary"
+										disabled={!!busy || !bundledStatus?.available}
+										onClick={() => void translateText()}
+									>
+										{busy === "translate"
+											? `${w.translating}${progress.total ? ` ${progress.completed}/${progress.total}` : ""}`
+											: w.translateRun}
+									</Button>
+								</div>
+								{bundledStatus && !bundledStatus.available && (
+									<p className="text-xs">{m.offlineMissing}</p>
+								)}
 							</div>
 						</section>
 					)}

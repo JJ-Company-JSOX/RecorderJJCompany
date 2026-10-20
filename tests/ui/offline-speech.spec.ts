@@ -233,7 +233,7 @@ test("deleting a subtitle line cuts that part of the video and can be undone", a
 		.getByRole("button", { name: "Automatically edit speech and video", exact: true })
 		.click();
 	await expect(page.locator('[data-variant="caption"]')).toHaveCount(1);
-	await panel.getByRole("button", { name: "Edit by subtitles", exact: true }).click();
+	await panel.getByRole("button", { name: "Edit or translate subtitles", exact: true }).click();
 	const list = panel.locator("[data-text-edit]");
 	await expect(list.getByText("Open file", { exact: true })).toBeVisible();
 	await expect(list.getByRole("button", { name: "Cut 0 selected sentences" })).toBeDisabled();
@@ -251,6 +251,44 @@ test("deleting a subtitle line cuts that part of the video and can be undone", a
 		"data-end-ms",
 		"5000",
 	);
+});
+
+test("subtitles are translated offline with the same timing and can be undone", async ({
+	page,
+}) => {
+	const panel = await setup(page);
+	await page.evaluate(() => {
+		window.electronAPI.translateAutoEditSubtitles = async (lines, target) => {
+			document.documentElement.dataset.translateTarget = target;
+			return {
+				success: true,
+				lines: lines.map((l) => ({
+					id: l.id,
+					text: l.text === "Open file" ? "打开文件" : l.text,
+				})),
+			};
+		};
+	});
+	await panel
+		.getByRole("button", { name: "Automatically edit speech and video", exact: true })
+		.click();
+	await panel.getByRole("button", { name: "Edit or translate subtitles", exact: true }).click();
+	const translate = panel.locator("[data-translate-subtitles]");
+	await translate.getByLabel("Translate into").selectOption("zh");
+	await translate.getByRole("button", { name: "Translate", exact: true }).click();
+	await expect(panel.getByText("1 subtitles translated.")).toBeVisible();
+	await expect(page.locator("html")).toHaveAttribute("data-translate-target", "zh");
+	await panel.getByRole("button", { name: "Edit or translate subtitles", exact: true }).click();
+	await expect(
+		panel.locator("[data-text-edit]").getByText("打开文件", { exact: true }),
+	).toBeVisible();
+	await panel.getByRole("button", { name: "Back", exact: true }).click();
+	await panel.getByRole("button", { name: "Undo these changes" }).click();
+	await panel.getByRole("button", { name: "Edit or translate subtitles", exact: true }).click();
+	await expect(
+		panel.locator("[data-text-edit]").getByText("Open file", { exact: true }),
+	).toBeVisible();
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(1);
 });
 
 test("cancel ignores a late completed model reply without applying any edits", async ({ page }) => {

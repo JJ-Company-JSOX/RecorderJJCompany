@@ -15,6 +15,7 @@ import {
 	isNarrationLanguage,
 	LocalNarrationGenerator,
 } from "../autoEdit/narrator";
+import { isSubtitleLines, type SubtitleLine, translateSubtitles } from "../autoEdit/translate";
 import { getBundledTtsStatus, synthesizeBundledNarration } from "../autoEdit/tts";
 import { analyzeVideoFrames } from "../autoEdit/vision";
 import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
@@ -373,6 +374,48 @@ export function registerAutoEditHandlers() {
 					success: false,
 					error:
 						error instanceof Error ? error.message : "Bundled narration draft failed",
+				};
+			} finally {
+				await session?.close();
+				running.delete(event.sender.id);
+				event.sender.removeListener("destroyed", abort);
+			}
+		},
+	);
+	ipcMain.handle(
+		"auto-edit-translate-subtitles",
+		async (event, lines: SubtitleLine[], target?: string) => {
+			if (running.has(event.sender.id))
+				return { success: false, error: "Analysis already running" };
+			const controller = new AbortController();
+			running.set(event.sender.id, controller);
+			const abort = () => controller.abort();
+			event.sender.once("destroyed", abort);
+			let session: Awaited<ReturnType<typeof startBundledAi>> | undefined;
+			try {
+				if (!isSubtitleLines(lines) || !isNarrationLanguage(target))
+					throw new Error("Invalid subtitles");
+				session = await startBundledAi(bundledRoot(), controller.signal);
+				return {
+					success: true,
+					lines: await translateSubtitles({
+						lines,
+						target,
+						complete: session.complete,
+						signal: controller.signal,
+						onProgress: (completed, total) => {
+							if (!event.sender.isDestroyed())
+								event.sender.send("auto-edit-vision-progress", {
+									completed,
+									total,
+								});
+						},
+					}),
+				};
+			} catch (error) {
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : "Subtitle translation failed",
 				};
 			} finally {
 				await session?.close();

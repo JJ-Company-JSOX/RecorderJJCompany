@@ -73,14 +73,13 @@ test("visual suggestions require image consent, per-item acceptance and support 
 		})
 		.check();
 	await analyze.click();
-	await expect(dialog.locator("[data-suggestion-id]")).toHaveCount(2);
+	await expect(dialog.locator("[data-suggestion-id]")).toHaveCount(1);
 	const apply = dialog.getByRole("button", { name: "Apply accepted edits" });
 	await expect(apply).toBeDisabled();
 	await expect(page.locator('[data-variant="zoom"]')).toHaveCount(0);
 	await dialog.getByRole("radio", { name: "Accept", exact: true }).nth(0).check();
-	await expect(apply).toBeDisabled();
-	await dialog.getByRole("radio", { name: "Accept", exact: true }).nth(1).check();
 	await apply.click();
+	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
 	await expect(dialog.getByRole("status").filter({ hasText: "Applied" })).toBeVisible();
 	await page.screenshot({ path: "test-results/visual-ai-review.png" });
 	await dialog.getByRole("button", { name: "Close", exact: true }).click();

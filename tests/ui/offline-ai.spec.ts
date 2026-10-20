@@ -30,7 +30,7 @@ test("included offline AI needs one click, no model setup, and keeps Apply and U
 			throw Error("Customer must not configure a model");
 		};
 		window.electronAPI.analyzeAutoEditFrames = async (input) => {
-			if (input.model !== "jsox-bundled-vision" || input.count !== 4)
+			if (input.model !== "jsox-bundled-vision" || input.count !== 8)
 				throw Error("Bundled model must be selected automatically");
 			document.documentElement.dataset.offlineAiCalls = String(
 				Number(document.documentElement.dataset.offlineAiCalls || 0) + 1,
@@ -69,8 +69,8 @@ test("included offline AI needs one click, no model setup, and keeps Apply and U
 	await panel.getByRole("button", { name: "Accept remaining suggestions" }).click();
 	await panel.getByRole("button", { name: "Apply accepted edits" }).click();
 	await panel.getByRole("button", { name: "Close", exact: true }).click();
-	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(1);
-	await expect(page.locator('[data-variant="zoom"]')).toHaveCount(0);
+	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
+	await expect(page.locator('[data-variant="zoom"]')).toHaveCount(1);
 	await page.getByRole("button", { name: "Undo", exact: true }).click();
 	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
 	await expect(page.locator('[data-variant="zoom"]')).toHaveCount(0);

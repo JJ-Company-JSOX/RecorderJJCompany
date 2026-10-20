@@ -47,7 +47,7 @@ export const messages = {
 		acceptRemaining: "Accept remaining suggestions",
 		rejectRemaining: "Reject remaining suggestions",
 		allProtected:
-			"This video was already edited here (it has zooms or cuts), so every new suggestion lands on an existing edit and was skipped to avoid doubling it. Nothing was changed. To run AI edit again from scratch, close this panel, undo the earlier edits (Ctrl+Z), then start again.",
+			'Every suggestion lands on something already on the timeline, such as a text label, added audio or a clip whose speed you changed, so it was skipped to keep that work intact. Nothing was changed. Open "Show why" below to see each reason.',
 		audioHelp:
 			"For future recordings, enable microphone or system audio and check playback. Missing recorded sound cannot be recovered here. No AI model or JSON download is needed for this local plan.",
 		reject: "Reject",
@@ -57,17 +57,22 @@ export const messages = {
 		stale: "The source or timeline changed. Generate a new plan before applying.",
 		blocked: "Protected: overlaps an existing edit or speed setting.",
 		"legacy-speed": "Protected: this recording already has speed changes from an older edit.",
-		"existing-edit": "Protected: overlaps a zoom, text annotation or audio edit you already made.",
+		"existing-edit": "Protected: overlaps a text label or audio already on the timeline.",
 		"existing-speed": "Protected: overlaps a clip you already sped up or slowed down.",
 		"existing-zoom": "Protected: overlaps a zoom effect you already added here.",
 		"existing-annotation": "Protected: you already added a text annotation at this point.",
-		"speech-invalid-grounding": "Protected: this speech cut could not be grounded in the transcript.",
-		"speech-audio-unverified": "Protected: speech alignment for this subtitle could not be verified.",
+		"speech-invalid-grounding":
+			"Protected: this speech cut could not be grounded in the transcript.",
+		"speech-audio-unverified":
+			"Protected: speech alignment for this subtitle could not be verified.",
 		"speech-asr-uncertain": "Protected: speech recognition for this cut is uncertain.",
-		"speech-vad-unverified": "Protected: speech boundary detection for this cut could not be verified.",
+		"speech-vad-unverified":
+			"Protected: speech boundary detection for this cut could not be verified.",
 		"speech-overlapping-speech": "Protected: this cut overlaps other recognized speech.",
-		"speech-unique-content": "Protected: this cut may remove unique content not said elsewhere.",
-		"speech-confidence-unverified": "Protected: speech recognition confidence for this cut could not be verified.",
+		"speech-unique-content":
+			"Protected: this cut may remove unique content not said elsewhere.",
+		"speech-confidence-unverified":
+			"Protected: speech recognition confidence for this cut could not be verified.",
 		seek: "Preview this moment",
 		json: "Download JSON",
 		details: "Inspect JSON plan",
@@ -76,7 +81,8 @@ export const messages = {
 		speed: "Speed up pause",
 		annotation: "Text annotation",
 		"silent-static": "Silence AND identical frames; 400 ms retained at each edge.",
-		"silent-moving": "No one is speaking but the screen is still changing, so it is sped up 2× instead of cut.",
+		"silent-moving":
+			"No one is speaking but the screen is still changing, so it is sped up 2× instead of cut.",
 		click: "Recorded click location.",
 		transcript: "Exact text from existing transcript; no translation or recognition added.",
 		warning: "Analysis limitation",
@@ -139,7 +145,7 @@ export const messages = {
 		acceptRemaining: "接受剩余建议",
 		rejectRemaining: "拒绝剩余建议",
 		allProtected:
-			"这个视频之前已经剪过（已经有放大或剪切），新的建议都落在已有修改上，为了不重复修改就全部跳过了，视频没有改变。想从头重新自动剪辑：先关掉这个窗口，用撤销（Ctrl+Z）退回之前的修改，再重新开始。",
+			"每一条建议都碰到了时间轴上已有的内容（例如文字标注、加进去的音频，或你改过速度的片段），为了不弄乱这些内容就全部跳过了，视频没有改变。点下面的“查看原因”可以看到每一条的原因。",
 		audioHelp:
 			"下次录制请启用麦克风或系统声音，并回放确认。这里无法恢复未录下的声音。生成此本地方案无需安装 AI 模型或下载 JSON。",
 		reject: "拒绝",
@@ -149,7 +155,7 @@ export const messages = {
 		stale: "素材或时间线已变化，请重新生成方案。",
 		blocked: "已保护：与现有编辑或速度设置冲突。",
 		"legacy-speed": "已保护：这段录屏已有旧版编辑设置的变速。",
-		"existing-edit": "已保护：与你已添加的缩放、文字标注或音频编辑重叠。",
+		"existing-edit": "已保护：与时间轴上已有的文字标注或音频重叠。",
 		"existing-speed": "已保护：与你已加速或减速的片段重叠。",
 		"existing-zoom": "已保护：与你在此处已添加的缩放效果重叠。",
 		"existing-annotation": "已保护：你已在此处添加过文字标注。",
@@ -233,7 +239,7 @@ export const messages = {
 		acceptRemaining: "Terima cadangan selebihnya",
 		rejectRemaining: "Tolak cadangan selebihnya",
 		allProtected:
-			"Video ini sudah disunting di sini (sudah ada zum atau potongan), jadi setiap cadangan baharu jatuh pada suntingan sedia ada dan dilangkau supaya tidak berganda. Tiada apa diubah. Untuk menjalankan suntingan AI semula dari awal, tutup panel ini, buat asal suntingan terdahulu (Ctrl+Z), kemudian mula semula.",
+			'Setiap cadangan jatuh pada sesuatu yang sudah ada pada garis masa, seperti label teks, audio tambahan atau klip yang kelajuannya anda ubah, jadi ia dilangkau supaya kerja itu kekal. Tiada apa diubah. Buka "Tunjukkan sebabnya" di bawah untuk melihat setiap sebab.',
 		audioHelp:
 			"Untuk rakaman seterusnya, aktifkan mikrofon atau audio sistem dan semak main balik. Bunyi yang tidak dirakam tidak dapat dipulihkan di sini. Pelan setempat ini tidak memerlukan model AI atau muat turun JSON.",
 		reject: "Tolak",
@@ -242,18 +248,28 @@ export const messages = {
 		applied: "Digunakan. Buat asal untuk memulihkan garis masa sebelumnya.",
 		stale: "Sumber atau garis masa berubah. Jana pelan baharu.",
 		blocked: "Dilindungi: bertindih dengan suntingan atau tetapan kelajuan sedia ada.",
-		"legacy-speed": "Dilindungi: rakaman ini sudah mempunyai perubahan kelajuan daripada suntingan lama.",
-		"existing-edit": "Dilindungi: bertindih dengan zum, label teks atau suntingan audio sedia ada.",
-		"existing-speed": "Dilindungi: bertindih dengan klip yang sudah dipercepat atau diperlahankan.",
+		"legacy-speed":
+			"Dilindungi: rakaman ini sudah mempunyai perubahan kelajuan daripada suntingan lama.",
+		"existing-edit":
+			"Dilindungi: bertindih dengan label teks atau audio yang sudah ada pada garis masa.",
+		"existing-speed":
+			"Dilindungi: bertindih dengan klip yang sudah dipercepat atau diperlahankan.",
 		"existing-zoom": "Dilindungi: bertindih dengan kesan zum yang sudah ditambah di sini.",
 		"existing-annotation": "Dilindungi: label teks sudah ditambah pada titik ini.",
-		"speech-invalid-grounding": "Dilindungi: pemotongan pertuturan ini tidak dapat disahkan dalam transkrip.",
-		"speech-audio-unverified": "Dilindungi: penjajaran pertuturan untuk sari kata ini tidak dapat disahkan.",
-		"speech-asr-uncertain": "Dilindungi: pengecaman pertuturan untuk pemotongan ini tidak pasti.",
-		"speech-vad-unverified": "Dilindungi: pengesanan sempadan pertuturan untuk pemotongan ini tidak dapat disahkan.",
-		"speech-overlapping-speech": "Dilindungi: pemotongan ini bertindih dengan pertuturan lain yang dikenal pasti.",
-		"speech-unique-content": "Dilindungi: pemotongan ini mungkin membuang kandungan unik yang tidak disebut di tempat lain.",
-		"speech-confidence-unverified": "Dilindungi: keyakinan pengecaman pertuturan untuk pemotongan ini tidak dapat disahkan.",
+		"speech-invalid-grounding":
+			"Dilindungi: pemotongan pertuturan ini tidak dapat disahkan dalam transkrip.",
+		"speech-audio-unverified":
+			"Dilindungi: penjajaran pertuturan untuk sari kata ini tidak dapat disahkan.",
+		"speech-asr-uncertain":
+			"Dilindungi: pengecaman pertuturan untuk pemotongan ini tidak pasti.",
+		"speech-vad-unverified":
+			"Dilindungi: pengesanan sempadan pertuturan untuk pemotongan ini tidak dapat disahkan.",
+		"speech-overlapping-speech":
+			"Dilindungi: pemotongan ini bertindih dengan pertuturan lain yang dikenal pasti.",
+		"speech-unique-content":
+			"Dilindungi: pemotongan ini mungkin membuang kandungan unik yang tidak disebut di tempat lain.",
+		"speech-confidence-unverified":
+			"Dilindungi: keyakinan pengecaman pertuturan untuk pemotongan ini tidak dapat disahkan.",
 		seek: "Pratonton masa ini",
 		json: "Muat turun JSON",
 		details: "Lihat pelan JSON",
@@ -262,7 +278,8 @@ export const messages = {
 		speed: "Percepat jeda",
 		annotation: "Anotasi teks",
 		"silent-static": "Senyap DAN bingkai yang sama; 400 ms dikekalkan pada setiap hujung.",
-		"silent-moving": "Tiada orang bercakap tetapi skrin masih berubah, jadi ia dipercepat 2× dan bukan dipotong.",
+		"silent-moving":
+			"Tiada orang bercakap tetapi skrin masih berubah, jadi ia dipercepat 2× dan bukan dipotong.",
 		click: "Lokasi klik yang dirakam.",
 		transcript:
 			"Teks tepat daripada transkrip sedia ada; tiada pengecaman atau terjemahan baharu.",

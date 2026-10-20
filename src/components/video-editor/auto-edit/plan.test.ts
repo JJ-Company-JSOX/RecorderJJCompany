@@ -204,8 +204,22 @@ describe("local edit planning", () => {
 		});
 		expect(p.suggestions).toMatchObject([{ kind: "zoom", startMs: 325, endMs: 1250 }]);
 	});
-	it("protects existing audio, zooms, annotations and speed settings", () => {
-		for (const key of ["audioRegions", "zoomRegions", "annotationRegions"] as const) {
+	it("cuts under existing zooms, shrinking or removing them, but never under labels or audio", () => {
+		const s = state();
+		s.zoomRegions = [
+			{ id: "inside", startMs: 4000, endMs: 5000, depth: 2, focus: { cx: 0.5, cy: 0.5 } },
+			{ id: "across", startMs: 6000, endMs: 9000, depth: 2, focus: { cx: 0.5, cy: 0.5 } },
+		];
+		const p = build(s);
+		expect(p.suggestions[0]).toMatchObject({ kind: "trim", startMs: 3400, endMs: 6600 });
+		expect(p.suggestions[0].blocked).toBeUndefined();
+		const next = applyEditPlan(s, source, p, { [p.suggestions[0].id]: "accept" });
+		expect(next.zoomRegions).toEqual([
+			{ id: "across", startMs: 3400, endMs: 5800, depth: 2, focus: { cx: 0.5, cy: 0.5 } },
+		]);
+	});
+	it("protects existing audio, annotations and speed settings", () => {
+		for (const key of ["audioRegions", "annotationRegions"] as const) {
 			const s = state();
 			Object.assign(s, { [key]: [{ id: "user", startMs: 4000, endMs: 5000 }] });
 			const p = build(s);

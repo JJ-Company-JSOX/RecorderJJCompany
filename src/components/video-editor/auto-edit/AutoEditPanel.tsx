@@ -72,7 +72,11 @@ export function AutoEditPanel({
 	const [narrationEdits, setNarrationEdits] = useState<Record<string, string>>({});
 	const [narrationApproved, setNarrationApproved] = useState(false);
 	const [narrationAudioReady, setNarrationAudioReady] = useState(false);
-	const [ttsStatus, setTtsStatus] = useState<{ available: boolean } | null>(null);
+	const [ttsStatus, setTtsStatus] = useState<{
+		available: boolean;
+		voices?: Record<PlanLanguage, boolean>;
+	} | null>(null);
+	const [narrationLanguage, setNarrationLanguage] = useState<PlanLanguage>("zh");
 	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
 	const [keepFullFrame, setKeepFullFrame] = useState(false);
 	const [speechReady, setSpeechReady] = useState<boolean | null>(null);
@@ -159,9 +163,15 @@ export function AutoEditPanel({
 	const pending = available.filter((s) => !decisions[s.id] || decisions[s.id] === "pending");
 	const accepted = available.filter((s) => decisions[s.id] === "accept");
 	const ready = bundledStatus?.available && speechReady;
+	// Mirrors the main-process check: each bundled voice can only read its own script.
+	const speaks = (text: string) =>
+		narrationLanguage === "zh"
+			? /\p{Script=Han}/u.test(text)
+			: /[A-Za-z]/.test(text) && !/\p{Script=Han}/u.test(text);
 	const narrationSpeakable =
 		!!narrationDraft?.cues.length &&
-		narrationDraft.cues.every((c) => /\p{Script=Han}/u.test(narrationEdits[c.id] ?? c.text));
+		narrationDraft.cues.every((c) => speaks(narrationEdits[c.id] ?? c.text));
+	const voiceInstalled = !!ttsStatus?.voices?.[narrationLanguage];
 	const stages = ["media", "transcribe", "understand", "vision"] as const;
 	const activeStage = stages.indexOf(speechStage as (typeof stages)[number]);
 	const decideRemaining = (choice: "accept" | "reject") => {
@@ -373,9 +383,14 @@ export function AutoEditPanel({
 		setNarrationApproved(false);
 		setNarrationAudioReady(false);
 		try {
-			const result = await window.electronAPI.narrateAutoEditBundled(voicePlan);
+			const draftLanguage = language;
+			const result = await window.electronAPI.narrateAutoEditBundled(
+				voicePlan,
+				draftLanguage,
+			);
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
+			setNarrationLanguage(draftLanguage);
 			setNarrationDraft(result.draft);
 			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
 		} catch (e) {
@@ -395,7 +410,10 @@ export function AutoEditPanel({
 				id: cue.id,
 				text: narrationEdits[cue.id] ?? cue.text,
 			}));
-			const result = await window.electronAPI.synthesizeAutoEditNarration(cues);
+			const result = await window.electronAPI.synthesizeAutoEditNarration(
+				cues,
+				narrationLanguage,
+			);
 			if (run !== generation.current) return;
 			if (!result.success || !result.clips) throw new Error(result.error);
 			const { state: latestState } = currentState.current;
@@ -838,6 +856,11 @@ export function AutoEditPanel({
 							<div>
 								<h3 className="text-base font-semibold">{w.voiceTitle}</h3>
 								<p className="text-sm text-muted-foreground">{w.voiceIntro}</p>
+								{ttsStatus && !ttsStatus.voices?.[language] && (
+									<p className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-sm">
+										{w.voiceMissing[language]}
+									</p>
+								)}
 							</div>
 							{voiceActions === 0 ? (
 								<p className="rounded-lg border p-3 text-sm">{w.voiceNothing}</p>
@@ -896,12 +919,14 @@ export function AutoEditPanel({
 											{n.approve}
 										</label>
 										{narrationApproved && !narrationSpeakable && (
-											<p className="text-sm">{n.voiceChineseOnly}</p>
+											<p className="text-sm">
+												{w.voiceWrongLanguage[narrationLanguage]}
+											</p>
 										)}
 										<Button
 											disabled={
 												!narrationApproved ||
-												!ttsStatus?.available ||
+												!voiceInstalled ||
 												!narrationSpeakable ||
 												!!busy
 											}

@@ -95,7 +95,7 @@ describe("bundled narration voice assets", () => {
 		await fs.rm(path.join(root, "model.onnx"));
 		await expect(verifyBundledTtsAssets(root)).rejects.toThrow();
 		if (process.platform === "win32" && process.arch === "x64")
-			expect((await getBundledTtsStatus(root)).available).toBe(false);
+			expect((await getBundledTtsStatus(path.dirname(root))).available).toBe(false);
 	});
 	it("stops before scanning or synthesizing when cancelled", async () => {
 		const controller = new AbortController();
@@ -114,12 +114,13 @@ describe("bundled narration voice assets", () => {
 	});
 	it("reports availability from the manifest only, with no model load", async () => {
 		const { root } = await fixture();
-		const status = await getBundledTtsStatus(root);
+		const status = await getBundledTtsStatus(path.dirname(root));
 		if (process.platform === "win32" && process.arch === "x64") {
 			expect(status.available).toBe(true);
-			expect(status.modelName).toBe("Test AISHELL-3 voice");
+			expect(status.voices).toEqual({ zh: true, en: false, ms: false });
 		} else {
 			expect(status.available).toBe(false);
+			expect(status.voices).toEqual({ zh: false, en: false, ms: false });
 		}
 		expect(mocks.createAsync).not.toHaveBeenCalled();
 	});
@@ -152,6 +153,27 @@ describe("bundled narration voice assets", () => {
 				outputDirectory: path.join(root, "out"),
 			}),
 		).rejects.toThrow("Mandarin Chinese only");
+		await expect(
+			synthesizeBundledNarration({
+				cues: [{ id: "suggestion-1", text: "这里点击按钮。" }],
+				outputDirectory: path.join(root, "out"),
+				language: "en",
+			}),
+		).rejects.toThrow("English text only");
+		await expect(
+			synthesizeBundledNarration({
+				cues: [{ id: "suggestion-1", text: "Zoom in on the button." }],
+				outputDirectory: path.join(root, "out"),
+				language: "ms",
+			}),
+		).rejects.toThrow("No bundled narration voice");
+		await expect(
+			synthesizeBundledNarration({
+				cues: [{ id: "suggestion-1", text: "Zoom in on the button." }],
+				outputDirectory: path.join(root, "out"),
+				language: "en",
+			}),
+		).rejects.toThrow();
 		expect(mocks.createAsync).not.toHaveBeenCalled();
 	});
 	it("synthesizes one verified-path WAV per cue using the pinned model files", async () => {
@@ -192,12 +214,12 @@ describe("bundled narration voice assets", () => {
 		expect(results).toEqual([
 			{
 				id: "suggestion-1",
-				audioPath: path.join(outputDirectory, "narration-suggestion-1.wav"),
+				audioPath: expect.stringMatching(/narration-zh-[a-z0-9]+-suggestion-1\.wav$/),
 				durationMs: expect.any(Number),
 			},
 			{
 				id: "suggestion-2",
-				audioPath: path.join(outputDirectory, "narration-suggestion-2.wav"),
+				audioPath: expect.stringMatching(/narration-zh-[a-z0-9]+-suggestion-2\.wav$/),
 				durationMs: expect.any(Number),
 			},
 		]);

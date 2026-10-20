@@ -223,8 +223,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	narrateAutoEditBundled: (plan: EditPlan, language?: "zh" | "en" | "ms") =>
 		ipcRenderer.invoke("auto-edit-narrate-bundled", plan, language),
 	getBundledTtsStatus: () => ipcRenderer.invoke("auto-edit-tts-status"),
-	synthesizeAutoEditNarration: (cues: Array<{ id: string; text: string }>) =>
-		ipcRenderer.invoke("auto-edit-narrate-synthesize", cues),
+	synthesizeAutoEditNarration: (
+		cues: Array<{ id: string; text: string }>,
+		language?: "zh" | "en" | "ms",
+	) => ipcRenderer.invoke("auto-edit-narrate-synthesize", cues, language),
 	hudOverlaySetIgnoreMouse: (ignore: boolean) => {
 		ipcRenderer.send("hud-overlay-set-ignore-mouse", ignore);
 	},

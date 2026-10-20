@@ -1,63 +1,97 @@
 {
-	"version": 1,
-	"modelName": "VITS AISHELL-3 multi-speaker (sherpa-onnx)",
-	"modelLicense": "Apache-2.0",
-	"modelLicenseUrl": "https://www.apache.org/licenses/LICENSE-2.0.txt",
-	"modelSource": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06",
-	"modelRevision": "57345c004e13ed640e408c4c29ab56187b18f065",
+	"version": 2,
 	"runtimeVersion": "1.13.8",
 	"npm": {
 		"sherpaOnnxNode": "sherpa-onnx-node@1.13.8",
 		"sherpaOnnxWinX64": "sherpa-onnx-win-x64@1.13.8"
 	},
-	"artifacts": [
-		{
-			"file": "model.onnx",
-			"size": 30482262,
-			"sha256": "5511d651b7840c0a93a6bbfd4afd070a2c7f39ca1ec3ff2ecd73191519bbb852",
-			"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/exp/vits-epoch-960.onnx"
+	"voices": {
+		"zh": {
+			"directory": "tts",
+			"modelName": "VITS AISHELL-3 multi-speaker (sherpa-onnx)",
+			"modelLicense": "Apache-2.0",
+			"modelLicenseUrl": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+			"modelSource": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06",
+			"modelRevision": "57345c004e13ed640e408c4c29ab56187b18f065",
+			"artifacts": [
+				{
+					"file": "model.onnx",
+					"size": 30482262,
+					"sha256": "5511d651b7840c0a93a6bbfd4afd070a2c7f39ca1ec3ff2ecd73191519bbb852",
+					"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/exp/vits-epoch-960.onnx"
+				},
+				{
+					"file": "lexicon.txt",
+					"size": 2042943,
+					"sha256": "ab2e61d357551e7b24ddd965d924aca784c20165ff58c150794e539c6b5e9e35",
+					"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/lexicon.txt"
+				},
+				{
+					"file": "tokens.txt",
+					"size": 1671,
+					"sha256": "50b45a7b7de1752fd3c7b4755661c285f1547f59186eca2281089a81307ad953",
+					"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/tokens.txt"
+				},
+				{
+					"file": "speakers.txt",
+					"size": 1392,
+					"sha256": "50a825fc9a89172eee04a4d68869d933d0eca0d847f3b6fcffff9514cc72442d",
+					"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/speakers.txt"
+				},
+				{
+					"file": "date.fst",
+					"size": 59154,
+					"sha256": "eb8aa079ae3cb81d8f4404992f39d61a0cb990947512b5b8d1e54d1f6980e718",
+					"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/date.fst"
+				},
+				{
+					"file": "phone.fst",
+					"size": 88630,
+					"sha256": "1ac2b6fa56b1442320c4de7db08353bab8963a2b57f365eebcdd3a2d3562f8d7",
+					"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/phone.fst"
+				},
+				{
+					"file": "number.fst",
+					"size": 64482,
+					"sha256": "743f402181fcfebf76cc2f0546b71fa26476e626fbe4e460fb7b4c3a7a8bd5bd",
+					"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/number.fst"
+				},
+				{
+					"file": "new_heteronym.fst",
+					"size": 21974,
+					"sha256": "ca14b2127e27baa571664e4bb791e143e7425f56a6bc29db08d74f97e6aa4e29",
+					"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/new_heteronym.fst"
+				}
+			]
 		},
-		{
-			"file": "lexicon.txt",
-			"size": 2042943,
-			"sha256": "ab2e61d357551e7b24ddd965d924aca784c20165ff58c150794e539c6b5e9e35",
-			"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/lexicon.txt"
-		},
-		{
-			"file": "tokens.txt",
-			"size": 1671,
-			"sha256": "50b45a7b7de1752fd3c7b4755661c285f1547f59186eca2281089a81307ad953",
-			"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/tokens.txt"
-		},
-		{
-			"file": "speakers.txt",
-			"size": 1392,
-			"sha256": "50a825fc9a89172eee04a4d68869d933d0eca0d847f3b6fcffff9514cc72442d",
-			"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/speakers.txt"
-		},
-		{
-			"file": "date.fst",
-			"size": 59154,
-			"sha256": "eb8aa079ae3cb81d8f4404992f39d61a0cb990947512b5b8d1e54d1f6980e718",
-			"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/date.fst"
-		},
-		{
-			"file": "phone.fst",
-			"size": 88630,
-			"sha256": "1ac2b6fa56b1442320c4de7db08353bab8963a2b57f365eebcdd3a2d3562f8d7",
-			"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/phone.fst"
-		},
-		{
-			"file": "number.fst",
-			"size": 64482,
-			"sha256": "743f402181fcfebf76cc2f0546b71fa26476e626fbe4e460fb7b4c3a7a8bd5bd",
-			"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/number.fst"
-		},
-		{
-			"file": "new_heteronym.fst",
-			"size": 21974,
-			"sha256": "ca14b2127e27baa571664e4bb791e143e7425f56a6bc29db08d74f97e6aa4e29",
-			"url": "https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/57345c004e13ed640e408c4c29ab56187b18f065/data/new_heteronym.fst"
+		"en": {
+			"directory": "tts-en",
+			"modelName": "VITS LJSpeech English (sherpa-onnx)",
+			"modelLicense": "MIT (VITS weights); LJSpeech public domain; sherpa-onnx conversion Apache-2.0",
+			"modelLicenseUrl": "https://raw.githubusercontent.com/jaywalnut310/vits/2e561ba58618d021b5b8323d3765880f7e0ecfdb/LICENSE",
+			"modelLicenseSha256": "3d8165162cef96f686f02146ac2e4ae80db5797296a99c658befa424ee64727b",
+			"modelSource": "https://huggingface.co/csukuangfj/vits-ljs",
+			"modelRevision": "7ac337c834f318e45a34037cb3371cc3929187ff",
+			"artifacts": [
+				{
+					"file": "model.onnx",
+					"size": 114124456,
+					"sha256": "5bbd273797a9ecf8d94bd6ec02ad16cb41cbb85f055ad98d528ced3e44c9b31a",
+					"url": "https://huggingface.co/csukuangfj/vits-ljs/resolve/7ac337c834f318e45a34037cb3371cc3929187ff/vits-ljs.onnx"
+				},
+				{
+					"file": "lexicon.txt",
+					"size": 3708181,
+					"sha256": "bdccfc6da71c45c48e2e0056fcf0aab760577c5f959f6c1b5eb3e3e916fd5a0e",
+					"url": "https://huggingface.co/csukuangfj/vits-ljs/resolve/7ac337c834f318e45a34037cb3371cc3929187ff/lexicon.txt"
+				},
+				{
+					"file": "tokens.txt",
+					"size": 1084,
+					"sha256": "5fee2c6b238d712287f2ecb08f34a8a8b413bcb7390862ef6fb6fd6f0f8d3a17",
+					"url": "https://huggingface.co/csukuangfj/vits-ljs/resolve/7ac337c834f318e45a34037cb3371cc3929187ff/tokens.txt"
+				}
+			]
 		}
-	]
+	}
 }

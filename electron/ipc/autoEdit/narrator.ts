@@ -24,8 +24,8 @@ const NARRATION_SYSTEM_PROMPT =
 export type NarrationLanguage = "zh" | "en" | "ms";
 const LANGUAGE_INSTRUCTION: Record<NarrationLanguage, string> = {
 	zh: " Write every line in Simplified Chinese (Mandarin); it will be read aloud by a Mandarin voice.",
-	en: " Write every line in plain English; it will be read aloud by an English voice.",
-	ms: " Write every line in Bahasa Melayu (Malaysian Malay, not Indonesian); it will be read aloud by a Malay voice.",
+	en: " Write every line in plain English and spell numbers out as words; it will be read aloud by an English voice.",
+	ms: " Write every line in Bahasa Melayu (Malaysian Malay, not Indonesian) and spell numbers out as words.",
 };
 export const isNarrationLanguage = (value: unknown): value is NarrationLanguage =>
 	value === "zh" || value === "en" || value === "ms";

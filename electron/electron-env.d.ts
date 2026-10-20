@@ -311,11 +311,13 @@ interface Window {
 		}>;
 		getBundledTtsStatus: () => Promise<{
 			available: boolean;
+			voices: { zh: boolean; en: boolean; ms: boolean };
 			reason?: string;
-			modelName?: string;
-			numSpeakers?: number;
 		}>;
-		synthesizeAutoEditNarration: (cues: Array<{ id: string; text: string }>) => Promise<{
+		synthesizeAutoEditNarration: (
+			cues: Array<{ id: string; text: string }>,
+			language?: "zh" | "en" | "ms",
+		) => Promise<{
 			success: boolean;
 			clips?: Array<{ id: string; audioPath: string; durationMs: number }>;
 			error?: string;

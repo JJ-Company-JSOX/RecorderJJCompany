@@ -342,7 +342,7 @@ export function registerAutoEditHandlers() {
 	ipcMain.handle("auto-edit-tts-status", () => getBundledTtsStatus());
 	ipcMain.handle(
 		"auto-edit-narrate-synthesize",
-		async (event, cues: Array<{ id: string; text: string }>) => {
+		async (event, cues: Array<{ id: string; text: string }>, language?: string) => {
 			if (running.has(event.sender.id))
 				return { success: false, error: "Analysis already running" };
 			const controller = new AbortController();
@@ -355,6 +355,7 @@ export function registerAutoEditHandlers() {
 				const clips = await synthesizeBundledNarration({
 					cues,
 					outputDirectory: path.join(app.getPath("userData"), "narration-audio"),
+					language: isNarrationLanguage(language) ? language : "zh",
 					signal: controller.signal,
 				});
 				return { success: true, clips };

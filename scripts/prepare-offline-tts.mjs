@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const lock = JSON.parse(await fs.readFile(path.join(root, "scripts/offline-tts.lock.json"), "utf8"));
-const directory = path.join(root, "vendor/offline-ai/win32-x64/tts");
 const verifyOnly = process.argv.includes("--verify");
 async function hash(file) {
 	const h = createHash("sha256");
@@ -48,15 +47,14 @@ async function download(entry, file) {
 		}
 	}
 }
-const required = [...lock.artifacts.map((a) => a.file), "MODEL-LICENSE.txt", "NOTICE.txt"];
-async function verify() {
+async function verify(directory, required) {
 	const manifest = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8"));
 	if (
 		manifest.version !== 1 ||
 		!Array.isArray(manifest.files) ||
 		required.some((file) => !manifest.files.some((entry) => entry.path === file))
 	)
-		throw new Error("Incomplete offline TTS manifest");
+		throw new Error(`Incomplete offline TTS manifest: ${directory}`);
 	const seen = new Set();
 	for (const entry of manifest.files) {
 		if (
@@ -71,30 +69,42 @@ async function verify() {
 			throw new Error(`Invalid offline TTS asset: ${entry.path}`);
 		seen.add(entry.path.toLowerCase());
 	}
-	return manifest;
 }
-if (verifyOnly) {
-	await verify();
-	console.log("Pinned offline TTS bundle verified; no network used");
-	process.exit(0);
+for (const [language, voice] of Object.entries(lock.voices)) {
+	const directory = path.join(root, "vendor/offline-ai/win32-x64", voice.directory);
+	const required = [...voice.artifacts.map((a) => a.file), "MODEL-LICENSE.txt", "NOTICE.txt"];
+	if (verifyOnly) {
+		await verify(directory, required);
+		continue;
+	}
+	await fs.mkdir(directory, { recursive: true });
+	for (const entry of voice.artifacts) await download(entry, path.join(directory, entry.file));
+	const license = await fetch(voice.modelLicenseUrl, { signal: AbortSignal.timeout(60000) });
+	if (!license.ok) throw new Error(`Model license download failed: ${license.status}`);
+	const licenseText = await license.text();
+	if (
+		voice.modelLicenseSha256 &&
+		createHash("sha256").update(licenseText).digest("hex") !== voice.modelLicenseSha256
+	)
+		throw new Error(`Model license checksum mismatch: ${language}`);
+	await fs.writeFile(path.join(directory, "MODEL-LICENSE.txt"), licenseText);
+	await fs.writeFile(
+		path.join(directory, "NOTICE.txt"),
+		`Jsox offline narration speech synthesis (${language})\nModel: ${voice.modelName}\nModel license: ${voice.modelLicense}\nSource: ${voice.modelSource}\nRevision: ${voice.modelRevision}\nSynthesis engine: sherpa-onnx ${lock.runtimeVersion} (Apache-2.0), https://github.com/k2-fsa/sherpa-onnx\nNode bindings: ${lock.npm.sherpaOnnxNode}, prebuilt native addon: ${lock.npm.sherpaOnnxWinX64}\nNo Python, Ollama, or network service is used by installed customers.\n`,
+	);
+	const files = [];
+	for (const name of required) {
+		const file = path.join(directory, name);
+		files.push({ path: name, bytes: (await fs.stat(file)).size, sha256: await hash(file) });
+	}
+	await fs.writeFile(
+		path.join(directory, "manifest.json"),
+		JSON.stringify({ version: 1, modelName: voice.modelName, files }, null, 2),
+	);
+	await verify(directory, required);
 }
-await fs.mkdir(directory, { recursive: true });
-for (const entry of lock.artifacts) await download(entry, path.join(directory, entry.file));
-const license = await fetch(lock.modelLicenseUrl, { signal: AbortSignal.timeout(60000) });
-if (!license.ok) throw new Error(`Model license download failed: ${license.status}`);
-await fs.writeFile(path.join(directory, "MODEL-LICENSE.txt"), await license.text());
-await fs.writeFile(
-	path.join(directory, "NOTICE.txt"),
-	`Jsox offline narration speech synthesis\nModel: ${lock.modelName}\nModel license: ${lock.modelLicense}\nSource: ${lock.modelSource}\nRevision: ${lock.modelRevision}\nSynthesis engine: sherpa-onnx ${lock.runtimeVersion} (Apache-2.0), https://github.com/k2-fsa/sherpa-onnx\nNode bindings: ${lock.npm.sherpaOnnxNode}, prebuilt native addon: ${lock.npm.sherpaOnnxWinX64}\nNo Python, Ollama, or network service is used by installed customers.\n`,
+console.log(
+	verifyOnly
+		? "Pinned offline TTS voices verified; no network used"
+		: "Offline narration TTS voices ready",
 );
-const files = [];
-for (const name of required) {
-	const file = path.join(directory, name);
-	files.push({ path: name, bytes: (await fs.stat(file)).size, sha256: await hash(file) });
-}
-await fs.writeFile(
-	path.join(directory, "manifest.json"),
-	JSON.stringify({ version: 1, modelName: lock.modelName, files }, null, 2),
-);
-await verify();
-console.log("Offline narration TTS bundle ready");

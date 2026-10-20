@@ -117,11 +117,9 @@ export function conflictFor(s: EditSuggestion, state: EditState): ConflictReason
 		// sped-up clip; only added audio (voice-over, music) would drift out of sync.
 		if (s.kind === "trim" && s.reason === "transcript")
 			return state.audioRegions.some((r) => overlaps(s, r)) ? "existing-edit" : undefined;
-		if (
-			[...state.zoomRegions, ...state.annotationRegions, ...state.audioRegions].some((r) =>
-				overlaps(s, r),
-			)
-		)
+		// Zooms only shrink (or vanish if fully cut) when time is removed under them, so they do
+		// not block; Recordly adds them to every fresh recording. Labels and added audio would drift.
+		if ([...state.annotationRegions, ...state.audioRegions].some((r) => overlaps(s, r)))
 			return "existing-edit";
 		if (state.clipRegions.some((c) => overlaps(s, c) && c.speed !== 1)) return "existing-speed";
 	}

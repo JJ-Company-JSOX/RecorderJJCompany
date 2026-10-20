@@ -161,10 +161,14 @@ it("blocks uncertain confidence, existing authored effects and speed changes", (
 	s.zoomRegions = [
 		{ id: "manual", startMs: 1200, endMs: 1800, depth: 2, focus: { cx: 0.5, cy: 0.5 } },
 	];
+	// A zoom only shrinks when time under it is cut, so it does not block.
+	expect(trims(addSpeechSuggestions(base(s), s, source, analysis()))[0].blocked).toBeUndefined();
+	s.zoomRegions = [];
+	s.audioRegions = [{ id: "music", startMs: 1200, endMs: 1800, audioPath: "m.wav", volume: 1 }];
 	expect(trims(addSpeechSuggestions(base(s), s, source, analysis()))[0].blocked).toBe(
 		"existing-edit",
 	);
-	s.zoomRegions = [];
+	s.audioRegions = [];
 	s.clipRegions[0].speed = 2;
 	expect(trims(addSpeechSuggestions(base(s), s, source, analysis()))[0].blocked).toBe(
 		"existing-speed",

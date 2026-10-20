@@ -319,6 +319,11 @@ export function AutoEditPanel({
 						suggestions: next.suggestions.filter((s) => s.kind !== "zoom"),
 					};
 			}
+			// A zoom is already there (often added by Recordly when the recording opened): skip, not "protected".
+			next = {
+				...next,
+				suggestions: next.suggestions.filter((s) => s.blocked !== "existing-zoom"),
+			};
 			if (main && autoApply) {
 				// Screen labels can cover controls; preserve them for the review-first workflow.
 				next = {
@@ -1458,30 +1463,38 @@ export function AutoEditPanel({
 								</details>
 							)}
 
-							<details className="rounded-lg border border-separator p-3">
-								<summary>{m.details}</summary>
-								<pre className="max-h-48 overflow-auto text-xs">
-									{JSON.stringify({ ...plan, decisions }, null, 2)}
-								</pre>
-								<Button
-									variant="secondary"
-									onClick={() => {
-										const url = URL.createObjectURL(
-											new Blob(
-												[JSON.stringify({ ...plan, decisions }, null, 2)],
-												{ type: "application/json" },
-											),
-										);
-										const anchor = document.createElement("a");
-										anchor.href = url;
-										anchor.download = "recordly-edit-plan.json";
-										anchor.click();
-										setTimeout(() => URL.revokeObjectURL(url), 1000);
-									}}
-								>
-									{m.json}
-								</Button>
-							</details>
+							{import.meta.env.DEV && (
+								<details className="rounded-lg border border-separator p-3">
+									<summary>{m.details}</summary>
+									<pre className="max-h-48 overflow-auto text-xs">
+										{JSON.stringify({ ...plan, decisions }, null, 2)}
+									</pre>
+									<Button
+										variant="secondary"
+										onClick={() => {
+											const url = URL.createObjectURL(
+												new Blob(
+													[
+														JSON.stringify(
+															{ ...plan, decisions },
+															null,
+															2,
+														),
+													],
+													{ type: "application/json" },
+												),
+											);
+											const anchor = document.createElement("a");
+											anchor.href = url;
+											anchor.download = "recordly-edit-plan.json";
+											anchor.click();
+											setTimeout(() => URL.revokeObjectURL(url), 1000);
+										}}
+									>
+										{m.json}
+									</Button>
+								</details>
+							)}
 							<Button variant="ghost" size="sm" onClick={startOver}>
 								{w.startOver}
 							</Button>

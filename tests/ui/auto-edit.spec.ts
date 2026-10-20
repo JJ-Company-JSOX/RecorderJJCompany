@@ -169,7 +169,7 @@ test("a plan becomes stale when existing edits change", async ({ page }) => {
 });
 
 for (const allProtected of [false, true]) {
-	test(`batch review preserves choices and existing zooms (all protected: ${allProtected})`, async ({
+	test(`batch review preserves choices and skips clicks that already have a zoom (every click zoomed: ${allProtected})`, async ({
 		page,
 	}) => {
 		if (allProtected) await page.setViewportSize({ width: 1280, height: 720 });
@@ -232,37 +232,28 @@ for (const allProtected of [false, true]) {
 		).toBeGreaterThanOrEqual(32);
 		await dialog.getByRole("button", { name: "Generate local plan" }).click();
 		const items = dialog.locator("[data-suggestion-id]");
-		await expect(items).toHaveCount(3);
-		await expect(items.first().getByRole("radio")).toHaveCount(0);
-		await expect(dialog.getByText(/No AI model or JSON download is needed/)).toBeVisible();
 		const apply = dialog.getByRole("button", { name: "Apply accepted edits" });
 		if (allProtected) {
-			await expect(dialog.locator("[data-plan-summary]")).toHaveText(
-				"Available: 0 · Protected: 3 · Review required: 0 · Accept: 0",
-			);
-			await expect(dialog.locator("[data-plan-all-protected]")).toContainText(
-				"nothing new to apply",
-			);
-			await expect(
-				dialog.getByRole("button", { name: "Accept remaining suggestions" }),
-			).toHaveCount(0);
+			// Every click already has a zoom, so there is nothing to suggest (not a wall of "protected").
+			await expect(dialog.locator("[data-no-edits]")).toBeVisible();
+			await expect(items).toHaveCount(0);
+			await expect(dialog.locator("[data-plan-all-protected]")).toHaveCount(0);
 			await expect(apply).toBeDisabled();
-			await page.getByLabel("Plan language").selectOption("zh");
-			await expect(dialog.locator("[data-plan-all-protected]")).toContainText(
-				"没有新的修改可应用",
-			);
 			await page.screenshot({ path: "test-results/auto-edit-protected.png" });
 		} else {
-			await items.nth(1).getByRole("radio", { name: "Reject", exact: true }).check();
+			// The click at 0.5 s already has a zoom; only the other two are suggested.
+			await expect(items).toHaveCount(2);
+			await expect(dialog.getByText(/No AI model or JSON download is needed/)).toBeVisible();
+			await items.nth(0).getByRole("radio", { name: "Reject", exact: true }).check();
 			await dialog.getByRole("button", { name: "Accept remaining suggestions" }).click();
 			await expect(
-				items.nth(1).getByRole("radio", { name: "Reject", exact: true }),
+				items.nth(0).getByRole("radio", { name: "Reject", exact: true }),
 			).toBeChecked();
 			await expect(
-				items.nth(2).getByRole("radio", { name: "Accept", exact: true }),
+				items.nth(1).getByRole("radio", { name: "Accept", exact: true }),
 			).toBeChecked();
 			await expect(dialog.locator("[data-plan-summary]")).toHaveText(
-				"Available: 2 · Protected: 1 · Review required: 0 · Accept: 1",
+				"Available: 2 · Protected: 0 · Review required: 0 · Accept: 1",
 			);
 			await expect(zooms).toHaveCount(1);
 			await expect(

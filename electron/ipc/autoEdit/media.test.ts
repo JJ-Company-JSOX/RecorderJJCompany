@@ -64,10 +64,11 @@ describe("actual FFmpeg local analysis (synthetic fixtures, NOT language accurac
 		expect(plan.suggestions[0].startMs).toBeGreaterThanOrEqual(2390);
 		expect(plan.suggestions[0].endMs).toBeLessThanOrEqual(5620);
 	});
-	it("does not treat missing audio as silence", async () => {
+	it("treats a recording with no audio stream at all as silent", async () => {
 		const result = await analyze(fixture("no-audio", staticVideo));
-		expect(result.audioVerified).toBe(false);
-		expect(result.silentRanges).toEqual([]);
+		expect(result.audioVerified).toBe(true);
+		expect(result.noAudio).toBe(true);
+		expect(result.silentRanges).toEqual([{ startMs: 0, endMs: result.durationMs }]);
 	});
 	it("does not cut moving silent footage", async () => {
 		const result = await analyze(fixture("moving", "testsrc2=s=160x90:r=10", [silence]));

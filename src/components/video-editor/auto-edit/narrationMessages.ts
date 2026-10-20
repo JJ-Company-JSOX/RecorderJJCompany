@@ -10,7 +10,8 @@ export const narrationMessages = {
 		approved: "Approved. You can now generate the narration audio below.",
 		generateAudio: "Generate narration audio",
 		synthesizing: "Generating narration audio",
-		audioReady: "Narration audio added as a new, undoable audio track.",
+		audioReady:
+			"Narration audio added as a new, undoable audio track, with matching subtitles.",
 		result: "Narration drafted",
 	},
 	zh: {
@@ -24,7 +25,7 @@ export const narrationMessages = {
 		approved: "已确认。现在可以在下方生成解说语音了。",
 		generateAudio: "生成解说语音",
 		synthesizing: "正在生成解说语音",
-		audioReady: "解说语音已添加为新的、可撤销的音轨。",
+		audioReady: "解说语音已添加为新的、可撤销的音轨，并自动加上了对应字幕。",
 		result: "已生成解说稿",
 	},
 	ms: {
@@ -39,7 +40,8 @@ export const narrationMessages = {
 		approved: "Diluluskan. Anda kini boleh menjana audio naratif di bawah.",
 		generateAudio: "Jana audio naratif",
 		synthesizing: "Menjana audio naratif",
-		audioReady: "Audio naratif ditambah sebagai trek audio baharu yang boleh dibuat asal.",
+		audioReady:
+			"Audio naratif ditambah sebagai trek audio baharu yang boleh dibuat asal, berserta sari kata yang sepadan.",
 		result: "Naratif didraf",
 	},
 };

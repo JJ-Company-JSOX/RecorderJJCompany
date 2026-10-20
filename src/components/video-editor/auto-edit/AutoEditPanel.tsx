@@ -5,12 +5,13 @@ import { useI18n } from "@/contexts/I18nContext";
 import type { AudioRegion, CursorTelemetryPoint } from "../types";
 import { applyEditPlan } from "./apply";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
+import { guideMessages } from "./guideMessages";
 import { interfaceMessages } from "./interfaceMessages";
 import { messages, type PlanLanguage } from "./messages";
 import type { NarrationDraft } from "./narration";
-import { guideMessages } from "./guideMessages";
-import { wizardMessages } from "./wizardMessages";
+import { narrationCaptions } from "./narrationCaptions";
 import { narrationMessages } from "./narrationMessages";
+import { OfflineToolsPanel } from "./OfflineToolsPanel";
 import {
 	baselineFor,
 	buildEditPlan,
@@ -22,7 +23,7 @@ import {
 import { addSpeechSuggestions } from "./speechPlan";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
-import { OfflineToolsPanel } from "./OfflineToolsPanel";
+import { wizardMessages } from "./wizardMessages";
 
 export function AutoEditPanel({
 	open,
@@ -57,7 +58,6 @@ export function AutoEditPanel({
 		"analysis" | "review" | "narrate" | "synthesize" | "vision" | "tools" | null
 	>(null);
 	const [error, setError] = useState("");
-	const [missingAudio, setMissingAudio] = useState(false);
 	const [silentFallback, setSilentFallback] = useState(false);
 	const [applied, setApplied] = useState(false);
 	const [model, setModel] = useState("");
@@ -251,7 +251,6 @@ export function AutoEditPanel({
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
-		setMissingAudio(false);
 		setSilentFallback(fromSilentVideo);
 		setApplied(false);
 		setSpeechStage("");
@@ -275,14 +274,9 @@ export function AutoEditPanel({
 				: undefined;
 			if (complete?.errorCode === "NO_AUDIO") {
 				if (run !== generation.current) return;
-				// A silent recording can still be edited from the picture; zooms are the main edit there.
-				if (bundledStatus?.available) {
-					setKeepFullFrame(false);
-					return analyze(true, false, true, main);
-				}
-				setMissingAudio(true);
-				setError(ui.noAudio);
-				return;
+				// A silent recording is edited from the picture: frozen parts, idle parts and clicks.
+				setKeepFullFrame(false);
+				return analyze(!!bundledStatus?.available, false, true, main);
 			}
 			const result = complete ?? (await window.electronAPI.analyzeAutoEdit(source));
 			if (run !== generation.current) return;
@@ -433,7 +427,15 @@ export function AutoEditPanel({
 					trackIndex,
 				});
 			}
-			onApply({ ...latestState, audioRegions: [...latestState.audioRegions, ...regions] });
+			onApply({
+				...latestState,
+				audioRegions: [...latestState.audioRegions, ...regions],
+				// Silent recordings have no subtitles; the approved narration lines become them.
+				autoCaptions: [
+					...latestState.autoCaptions,
+					...narrationCaptions(latestState, regions, cues),
+				],
+			});
 			setNarrationAudioReady(true);
 		} catch (e) {
 			if (run === generation.current)
@@ -633,15 +635,6 @@ export function AutoEditPanel({
 							className="space-y-3 rounded-lg border border-danger/30 bg-background p-3 text-sm"
 						>
 							<p>{error}</p>
-							{missingAudio && (
-								<Button
-									variant="secondary"
-									disabled={!!busy || !bundledStatus?.available}
-									onClick={() => void analyze(true, false, true)}
-								>
-									{ui.visualAlternative}
-								</Button>
-							)}
 						</div>
 					)}
 					{(busy === "analysis" || busy === "vision" || busy === "review") && (

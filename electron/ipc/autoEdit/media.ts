@@ -143,11 +143,14 @@ export async function analyzeLocalMedia(options: {
 			silentRanges = intersectRanges(silentRanges, ranges);
 		}
 	}
+	// No audio stream anywhere (video or linked mic/system files): the whole recording is silent.
+	const noAudio = tracks === 0 && warnings.length === 0;
 	return {
 		durationMs,
 		staticRanges,
-		silentRanges: tracks ? silentRanges : [],
-		audioVerified: tracks > 0 && warnings.length === 0,
+		silentRanges: tracks || noAudio ? silentRanges : [],
+		audioVerified: warnings.length === 0,
+		...(noAudio ? { noAudio } : {}),
 		warnings,
 	};
 }

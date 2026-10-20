@@ -18,6 +18,8 @@ export interface MediaEvidence {
 	staticRanges: Span[];
 	silentRanges: Span[];
 	audioVerified: boolean;
+	/** The recording and its linked audio files contain no audio stream at all. */
+	noAudio?: boolean;
 	warnings: string[];
 }
 export interface EditState {

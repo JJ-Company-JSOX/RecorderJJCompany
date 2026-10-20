@@ -47,6 +47,7 @@ test("wallpaper tiles add, select and remove custom backgrounds without nested c
 	await expect(custom).toHaveCount(0);
 	await expect(original).toHaveAttribute("aria-pressed", "true");
 	await page.reload({ waitUntil: "domcontentloaded" });
+	await page.getByRole("radio", { name: "Scene", exact: true }).click({ timeout: 20000 });
 	await expect(add).toBeVisible({ timeout: 20000 });
 	await expect(custom).toHaveCount(0);
 });

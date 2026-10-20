@@ -9,8 +9,16 @@ import { interfaceMessages } from "./interfaceMessages";
 import { messages, type PlanLanguage } from "./messages";
 import type { NarrationDraft } from "./narration";
 import { guideMessages } from "./guideMessages";
+import { wizardMessages } from "./wizardMessages";
 import { narrationMessages } from "./narrationMessages";
-import { baselineFor, buildEditPlan, type Decision, type EditPlan, type EditState } from "./plan";
+import {
+	baselineFor,
+	buildEditPlan,
+	type Decision,
+	type EditPlan,
+	type EditState,
+	type EditSuggestion,
+} from "./plan";
 import { addSpeechSuggestions } from "./speechPlan";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
@@ -40,6 +48,7 @@ export function AutoEditPanel({
 	const v = visionMessages[language];
 	const n = narrationMessages[language];
 	const g = guideMessages[language];
+	const w = wizardMessages[language];
 	const [visionConsent, setVisionConsent] = useState(false);
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
@@ -69,7 +78,20 @@ export function AutoEditPanel({
 	const [speechReady, setSpeechReady] = useState<boolean | null>(null);
 	const [autoApply, setAutoApply] = useState(true);
 	const [speechStage, setSpeechStage] = useState("");
-	const [draftSummary, setDraftSummary] = useState("");
+	const [summary, setSummary] = useState<{
+		cuts: number;
+		speedUps: number;
+		zooms: number;
+		captions: number;
+		savedMs: number;
+	} | null>(null);
+	const [undoState, setUndoState] = useState<{
+		before: EditState;
+		afterBaseline: string | null;
+	} | null>(null);
+	const [undone, setUndone] = useState(false);
+	const [voiceOpen, setVoiceOpen] = useState(false);
+	const [showProtected, setShowProtected] = useState(false);
 	const resultAnchor = useRef<HTMLDivElement>(null);
 	const progressAnchor = useRef<HTMLDivElement>(null);
 	const errorAnchor = useRef<HTMLDivElement>(null);
@@ -82,6 +104,13 @@ export function AutoEditPanel({
 	useEffect(() => {
 		if (applied || plan) resultAnchor.current?.scrollIntoView({ block: "start" });
 	}, [applied, plan]);
+	useEffect(() => {
+		setUndoState((current) =>
+			current && current.afterBaseline === null
+				? { ...current, afterBaseline: baselineFor(state, source) }
+				: current,
+		);
+	}, [state, source]);
 	const currentState = useRef({ state, source });
 	currentState.current = { state, source };
 	const generation = useRef(0);
@@ -146,7 +175,69 @@ export function AutoEditPanel({
 			),
 		}));
 	};
-	const analyze = async (withAi = false, withSpeech = false, fromSilentVideo = false) => {
+	const applyNow = (next: EditPlan, choices: Record<string, Decision>) => {
+		const latest = currentState.current;
+		if (baselineFor(latest.state, latest.source) !== next.baseline) throw Error(m.stale);
+		const after = applyEditPlan(latest.state, latest.source, next, choices);
+		onApply(after);
+		const selected = next.suggestions.filter((s) => choices[s.id] === "accept");
+		const length = (s: EditSuggestion) => s.endMs - s.startMs;
+		setSummary({
+			cuts: selected.filter((s) => s.kind === "trim").length,
+			speedUps: selected.filter((s) => s.kind === "speed").length,
+			zooms: selected.filter((s) => s.kind === "zoom").length,
+			captions: selected.filter((s) => s.kind === "caption").length,
+			savedMs: selected.reduce(
+				(total, s) =>
+					total +
+					(s.kind === "trim"
+						? length(s)
+						: s.kind === "speed" && s.speed
+							? length(s) * (1 - 1 / s.speed)
+							: 0),
+				0,
+			),
+		});
+		// The editor may normalize the applied state, so record its baseline once it arrives.
+		setUndoState({ before: latest.state, afterBaseline: null });
+		setUndone(false);
+		setPlan(null);
+		setDecisions({});
+		setApplied(true);
+	};
+	const narrationPlan = (s: EditState): EditPlan => ({
+		version: 1,
+		id: crypto.randomUUID(),
+		coordinateSpace: "timeline-ms",
+		baseline: baselineFor(s, source),
+		suggestions: [
+			...s.zoomRegions.map((z, i) => ({
+				id: `zoom-${i + 1}`,
+				kind: "zoom" as const,
+				reason: "click" as const,
+				startMs: z.startMs,
+				endMs: z.endMs,
+			})),
+			...s.clipRegions
+				.filter((c) => c.speed > 1)
+				.map((c, i) => ({
+					id: `speed-${i + 1}`,
+					kind: "speed" as const,
+					reason: "silent-moving" as const,
+					startMs: c.startMs,
+					endMs: c.endMs,
+					speed: c.speed,
+				})),
+		].sort((a, b) => a.startMs - b.startMs),
+		warnings: [],
+		reviewer: "rules",
+	});
+	const analyze = async (
+		withAi = false,
+		withSpeech = false,
+		fromSilentVideo = false,
+		main = false,
+	) => {
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
@@ -154,7 +245,10 @@ export function AutoEditPanel({
 		setSilentFallback(fromSilentVideo);
 		setApplied(false);
 		setSpeechStage("");
-		setDraftSummary("");
+		setSummary(null);
+		setUndone(false);
+		setVoiceOpen(false);
+		setShowProtected(false);
 		setPlan(null);
 		setDecisions({});
 		setNarrationDraft(null);
@@ -174,7 +268,7 @@ export function AutoEditPanel({
 				// A silent recording can still be edited from the picture; zooms are the main edit there.
 				if (bundledStatus?.available) {
 					setKeepFullFrame(false);
-					return analyze(true, false, true);
+					return analyze(true, false, true, main);
 				}
 				setMissingAudio(true);
 				setError(ui.noAudio);
@@ -214,7 +308,7 @@ export function AutoEditPanel({
 						suggestions: next.suggestions.filter((s) => s.kind !== "zoom"),
 					};
 			}
-			if (withSpeech && autoApply) {
+			if (main && autoApply) {
 				// Screen labels can cover controls; preserve them for the review-first workflow.
 				next = {
 					...next,
@@ -222,21 +316,11 @@ export function AutoEditPanel({
 						(s) => !(s.kind === "annotation" && s.reason === "vision"),
 					),
 				};
-				const latest = currentState.current;
-				if (baselineFor(latest.state, latest.source) !== next.baseline)
-					throw Error(m.stale);
-				const choices = Object.fromEntries(
-					next.suggestions
-						.filter((s) => !s.blocked)
-						.map((s) => [s.id, "accept" as const]),
+				const choices: Record<string, Decision> = Object.fromEntries(
+					next.suggestions.filter((s) => !s.blocked).map((s) => [s.id, "accept"]),
 				);
 				if (Object.keys(choices).length) {
-					onApply(applyEditPlan(latest.state, latest.source, next, choices));
-					const selected = next.suggestions.filter((s) => choices[s.id] === "accept");
-					setDraftSummary(
-						`${m.trim}: ${selected.filter((s) => s.kind === "trim").length} · ${m.caption}: ${selected.filter((s) => s.kind === "caption").length} · ${m.protectedCount}: ${next.suggestions.filter((s) => s.blocked).length}`,
-					);
-					setApplied(true);
+					applyNow(next, choices);
 					return;
 				}
 			}
@@ -280,35 +364,16 @@ export function AutoEditPanel({
 			if (run === generation.current) setBusy(null);
 		}
 	};
-	const narrate = async () => {
-		if (!plan || !modelInfo || !modelConsent) return;
-		const run = ++generation.current;
-		setBusy("narrate");
-		setError("");
-		setNarrationApproved(false);
-		setNarrationAudioReady(false);
-		try {
-			const result = await window.electronAPI.narrateAutoEditLocally(plan, model);
-			if (run !== generation.current) return;
-			if (!result.success || !result.draft) throw new Error(result.error);
-			setNarrationDraft(result.draft);
-			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
-		} catch (e) {
-			if (run === generation.current)
-				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
-		} finally {
-			if (run === generation.current) setBusy(null);
-		}
-	};
 	const narrateBundled = async () => {
-		if (!plan) return;
+		const voicePlan = narrationPlan(currentState.current.state);
+		if (!voicePlan.suggestions.length) return;
 		const run = ++generation.current;
 		setBusy("narrate");
 		setError("");
 		setNarrationApproved(false);
 		setNarrationAudioReady(false);
 		try {
-			const result = await window.electronAPI.narrateAutoEditBundled(plan);
+			const result = await window.electronAPI.narrateAutoEditBundled(voicePlan);
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
 			setNarrationDraft(result.draft);
@@ -381,6 +446,29 @@ export function AutoEditPanel({
 			if (run === generation.current) setBusy(null);
 		}
 	};
+	const stepIndex = voiceOpen
+		? 3
+		: applied || plan
+			? 2
+			: busy === "analysis" || busy === "vision"
+				? 1
+				: 0;
+	const showStart = !plan && !applied && !voiceOpen;
+	const canUndoRun =
+		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
+	const voiceActions = narrationPlan(state).suggestions.length;
+	const protectedCount = plan ? plan.suggestions.length - available.length : 0;
+	const startOver = () => {
+		generation.current++;
+		setPlan(null);
+		setDecisions({});
+		setApplied(false);
+		setSummary(null);
+		setVoiceOpen(false);
+		setShowProtected(false);
+		setSilentFallback(false);
+		setError("");
+	};
 	return (
 		<Dialog
 			open={open}
@@ -390,265 +478,466 @@ export function AutoEditPanel({
 		>
 			<DialogContent
 				data-auto-edit-panel
-				className="!w-[calc(100vw-2rem)] !max-w-4xl max-h-[calc(100dvh-2rem)] overflow-hidden !p-0 flex flex-col gap-0"
+				className="!w-[calc(100vw-2rem)] !max-w-3xl max-h-[calc(100dvh-2rem)] overflow-hidden !p-0 flex flex-col gap-0"
 				aria-label={m.title}
 			>
-				<DialogHeader className="shrink-0 border-b border-separator px-6 py-5 pr-14">
-					<div className="mb-2 text-xs font-medium text-primary">{ui.badge}</div>
-					<DialogTitle className="text-2xl font-semibold">{ui.title}</DialogTitle>
-					<p className="mt-1 text-sm text-muted-foreground">{ui.intro}</p>
+				<DialogHeader className="shrink-0 border-b border-separator px-6 py-4 pr-14">
+					<div className="flex flex-wrap items-center justify-between gap-3">
+						<div>
+							<DialogTitle className="text-xl font-semibold">{ui.title}</DialogTitle>
+							<p className="mt-0.5 text-xs text-muted-foreground">
+								<span
+									aria-hidden="true"
+									className={`mr-1.5 inline-block size-2 rounded-full ${ready ? "bg-emerald-500" : "bg-amber-500"}`}
+								/>
+								{ready ? ui.ready : !bundledStatus ? ui.checking : m.offlineTitle} ·{" "}
+								{ui.badge}
+							</p>
+						</div>
+						<select
+							aria-label="Plan language"
+							value={language}
+							onChange={(e) => setLanguage(e.target.value as PlanLanguage)}
+							className="rounded-lg border border-separator bg-background px-2 py-1.5 text-sm text-foreground"
+						>
+							<option value="zh">中文</option>
+							<option value="en">English</option>
+							<option value="ms">Bahasa Melayu</option>
+						</select>
+					</div>
+					<ol className="mt-3 flex items-center gap-2 text-xs" data-edit-workflow>
+						{w.steps.map((step, index) => (
+							<li
+								key={step}
+								aria-current={index === stepIndex ? "step" : undefined}
+								className={`flex items-center gap-1.5 ${index === stepIndex ? "font-semibold text-foreground" : index < stepIndex ? "text-primary" : "text-muted-foreground"}`}
+							>
+								<span
+									className={`flex size-5 items-center justify-center rounded-full text-[11px] ${index === stepIndex ? "bg-primary text-white" : index < stepIndex ? "bg-primary/15" : "bg-muted"}`}
+								>
+									{index < stepIndex ? "✓" : index + 1}
+								</span>
+								{step}
+								{index === 3 && (
+									<span className="text-muted-foreground">
+										({w.optionalStep})
+									</span>
+								)}
+								{index < w.steps.length - 1 && (
+									<span
+										aria-hidden="true"
+										className="mx-1 h-px w-5 bg-separator"
+									/>
+								)}
+							</li>
+						))}
+					</ol>
 				</DialogHeader>
 				<div
 					data-auto-edit-scroll
-					className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-6 py-5"
+					className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-5"
 				>
-					<div className="flex flex-wrap items-center justify-between gap-3">
-						<p className="flex items-center gap-2 text-sm font-medium" data-ai-ready>
-							<span
-								aria-hidden="true"
-								className={`size-2 rounded-full ${ready ? "bg-emerald-500" : "bg-amber-500"}`}
-							/>
-							{ready ? ui.ready : !bundledStatus ? ui.checking : m.offlineTitle}
-						</p>
-						<label className="flex items-center gap-2 text-xs text-muted-foreground">
-							{ui.language}
-							<select
-								aria-label="Plan language"
-								value={language}
-								onChange={(e) => setLanguage(e.target.value as PlanLanguage)}
-								className="rounded-lg border border-separator bg-background px-2 py-1.5 text-sm text-foreground"
-							>
-								<option value="zh">中文</option>
-								<option value="en">English</option>
-								<option value="ms">Bahasa Melayu</option>
-							</select>
-						</label>
-					</div>
-					<div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-edit-workflow>
-						{ui.steps.map((step, index) => (
-							<div
-								key={step}
-								className={`rounded-xl border p-3 ${index === (applied || plan ? 1 : 0) ? "border-primary/40 bg-primary/5" : "border-separator"}`}
-							>
-								<div className="mb-1 flex items-center gap-2 text-sm font-semibold">
-									<span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs">
-										{index + 1}
-									</span>
-									{step}
-								</div>
-								<p className="text-xs leading-relaxed text-muted-foreground">
-									{ui.stepHelp[index]}
-								</p>
+					{showStart && (
+						<section className="space-y-4" aria-label={m.offlineTitle}>
+							<div>
+								<h3 className="text-base font-semibold">{w.chooseTitle}</h3>
+								<p className="text-xs text-muted-foreground">{w.chooseHelp}</p>
 							</div>
-						))}
-					</div>
-					<details className="rounded-xl border border-separator p-4" data-how-to>
-						<summary className="cursor-pointer text-sm font-medium">{g.title}</summary>
-						<ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-							{g.steps.map((step) => (
-								<li key={step}>{step}</li>
-							))}
-						</ol>
-						<h4 className="mt-4 text-sm font-semibold">{g.termsTitle}</h4>
-						<dl className="mt-2 space-y-2 text-sm">
-							{g.terms.map(([term, meaning]) => (
-								<div key={term}>
-									<dt className="font-medium">{term}</dt>
-									<dd className="text-muted-foreground">{meaning}</dd>
-								</div>
-							))}
-						</dl>
-					</details>
-					<section
-						className="space-y-4 rounded-xl border border-primary/25 bg-primary/5 p-4"
-						aria-label={m.offlineTitle}
-					>
-						<h3 className="text-base font-semibold">{ui.options}</h3>
-						<label className="flex items-start gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={autoApply}
-								disabled={!!busy}
-								onChange={(e) => setAutoApply(e.target.checked)}
-							/>
-							{m.autoDraft}
-						</label>
-						<label className="flex items-start gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={keepFullFrame}
-								disabled={!!busy}
-								onChange={(event) => setKeepFullFrame(event.target.checked)}
-							/>
-							{m.keepFullFrame}
-						</label>
-						<Button
-							className="min-h-12 w-full text-base font-semibold sm:w-auto sm:min-w-64"
-							aria-label={m.completeEdit}
-							disabled={
-								!!busy ||
-								!bundledStatus?.available ||
-								!speechReady ||
-								!source ||
-								!state.clipRegions.length
-							}
-							onClick={() => void analyze(true, true)}
-						>
-							{ui.start}
-						</Button>
-						<p className="text-xs leading-relaxed text-muted-foreground">
-							{ui.actionHelp}
-						</p>
-						{speechReady === false && <p className="text-sm">{m.speechMissing}</p>}
-						{error && (
-							<div
-								ref={errorAnchor}
-								role="alert"
-								className="space-y-3 rounded-lg border border-danger/30 bg-background p-3 text-sm"
-							>
-								<p>{error}</p>
-								{missingAudio && (
-									<Button
-										variant="secondary"
-										disabled={!!busy || !bundledStatus?.available}
-										onClick={() => void analyze(true, false, true)}
-									>
-										{ui.visualAlternative}
-									</Button>
-								)}
-							</div>
-						)}
-						{busy && (
-							<div
-								ref={progressAnchor}
-								className="space-y-3 rounded-lg border border-separator bg-background p-4"
-								role="status"
-								aria-live="polite"
-								data-analysis-progress
-							>
-								<p className="font-semibold">{ui.progress}</p>
-								<div className="flex gap-1.5" aria-hidden="true">
-									{stages.map((stage, index) => (
-										<span
-											key={stage}
-											className={`h-1.5 flex-1 rounded-full ${index <= activeStage ? "bg-primary" : "bg-muted"}`}
-										/>
-									))}
-								</div>
-								<p className="text-sm">
-									{m[
-										speechStage as
-											| "media"
-											| "transcribe"
-											| "understand"
-											| "vision"
-									] ?? (busy === "review" ? m.reviewing : m.busy)}
-								</p>
-								<p className="text-xs text-muted-foreground">{ui.wait}</p>
-								<Button
-									variant="secondary"
-									onClick={() => {
-										generation.current++;
-										void window.electronAPI.cancelAutoEditAnalysis?.();
-										setBusy(null);
-									}}
+							<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+								<label
+									className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${autoApply ? "border-primary/50 bg-primary/5" : "border-separator"}`}
 								>
-									{m.cancel}
-								</Button>
+									<input
+										type="checkbox"
+										className="mt-1"
+										checked={autoApply}
+										disabled={!!busy}
+										onChange={(e) => setAutoApply(e.target.checked)}
+									/>
+									<span>
+										<span className="block text-sm font-medium">
+											{m.autoDraft}
+										</span>
+										<span className="block text-xs text-muted-foreground">
+											{autoApply ? w.autoApplyHelp : w.reviewInsteadHelp}
+										</span>
+									</span>
+								</label>
+								<label
+									className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${!keepFullFrame ? "border-primary/50 bg-primary/5" : "border-separator"}`}
+								>
+									<input
+										type="checkbox"
+										className="mt-1"
+										checked={!keepFullFrame}
+										disabled={!!busy}
+										onChange={(event) =>
+											setKeepFullFrame(!event.target.checked)
+										}
+									/>
+									<span>
+										<span className="block text-sm font-medium">
+											{w.zoomLabel}
+										</span>
+										<span className="block text-xs text-muted-foreground">
+											{w.zoomHelp}
+										</span>
+									</span>
+								</label>
 							</div>
-						)}
-						{bundledStatus && !bundledStatus.available && (
-							<p className="text-sm">{m.offlineMissing}</p>
-						)}
-					</section>
-					<details
-						data-analysis-options
-						className="rounded-xl border border-separator p-4"
-					>
-						<summary className="cursor-pointer text-sm font-medium">{ui.other}</summary>
-						<p className="my-3 text-xs leading-relaxed text-muted-foreground">
-							{ui.otherHelp}
-						</p>
-						<div className="flex flex-wrap gap-2">
 							<Button
+								className="min-h-12 w-full text-base font-semibold"
+								aria-label={m.completeEdit}
 								disabled={
 									!!busy ||
 									!bundledStatus?.available ||
+									!speechReady ||
 									!source ||
-									state.clipRegions.length === 0
+									!state.clipRegions.length
 								}
-								onClick={() => void analyze(true)}
+								onClick={() => void analyze(true, true, false, true)}
 							>
-								{busy ? m.offlineBusy : m.offlineAnalyze}
+								{ui.start}
 							</Button>
-							{busy === "vision" && (
-								<p role="status">
-									{m.offlineBusy}: {progress.completed}/{progress.total}
-								</p>
+							<p className="text-center text-xs text-muted-foreground">
+								{ui.actionHelp}
+							</p>
+							{speechReady === false && <p className="text-sm">{m.speechMissing}</p>}
+							{bundledStatus && !bundledStatus.available && (
+								<p className="text-sm">{m.offlineMissing}</p>
 							)}
+						</section>
+					)}
+					{error && (
+						<div
+							ref={errorAnchor}
+							role="alert"
+							className="space-y-3 rounded-lg border border-danger/30 bg-background p-3 text-sm"
+						>
+							<p>{error}</p>
+							{missingAudio && (
+								<Button
+									variant="secondary"
+									disabled={!!busy || !bundledStatus?.available}
+									onClick={() => void analyze(true, false, true)}
+								>
+									{ui.visualAlternative}
+								</Button>
+							)}
+						</div>
+					)}
+					{(busy === "analysis" || busy === "vision" || busy === "review") && (
+						<div
+							ref={progressAnchor}
+							className="space-y-3 rounded-xl border border-separator bg-background p-4"
+							role="status"
+							aria-live="polite"
+							data-analysis-progress
+						>
+							<p className="font-semibold">{ui.progress}</p>
+							<div className="flex gap-1.5" aria-hidden="true">
+								{stages.map((stage, index) => (
+									<span
+										key={stage}
+										className={`h-1.5 flex-1 rounded-full ${index <= activeStage ? "bg-primary" : "bg-muted"}`}
+									/>
+								))}
+							</div>
+							<p className="text-sm">
+								{m[
+									speechStage as "media" | "transcribe" | "understand" | "vision"
+								] ?? (busy === "review" ? m.reviewing : m.busy)}
+								{busy === "vision" && ` (${progress.completed}/${progress.total})`}
+							</p>
+							<p className="text-xs text-muted-foreground">{ui.wait}</p>
 							<Button
-								disabled={!!busy || !source || state.clipRegions.length === 0}
-								onClick={() => void analyze()}
+								variant="secondary"
+								onClick={() => {
+									generation.current++;
+									void window.electronAPI.cancelAutoEditAnalysis?.();
+									setBusy(null);
+								}}
 							>
-								{busy === "analysis" ? m.busy : m.analyze}
+								{m.cancel}
 							</Button>
 						</div>
-					</details>
-					<OfflineToolsPanel
-						key={open ? source : "closed"}
-						source={source}
-						state={state}
-						language={language}
-						busy={!!busy}
-						setBusy={(value) => setBusy(value ? "tools" : null)}
-						onApply={onApply}
-						onSeek={onSeek}
-					/>
-					<details className="rounded-xl border border-separator p-4" data-hardware-guide>
-						<summary className="cursor-pointer text-sm font-medium">
-							{ui.hardware}
-						</summary>
-						<div className="mt-3 space-y-3 text-sm leading-relaxed text-muted-foreground">
-							<p>{ui.requirements}</p>
-							<p>{ui.storage}</p>
-							{bundledStatus && (
-								<p>
-									{ui.memory}:{" "}
-									{(bundledStatus.freeMemoryBytes / 1024 ** 3).toFixed(1)} GiB
+					)}
+					{showStart && (
+						<div className="space-y-3 border-t border-separator pt-4">
+							<p className="text-xs font-medium text-muted-foreground">{w.more}</p>
+							<details className="rounded-xl border border-separator p-4" data-how-to>
+								<summary className="cursor-pointer text-sm font-medium">
+									{g.title}
+								</summary>
+								<ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
+									{g.steps.map((step) => (
+										<li key={step}>{step}</li>
+									))}
+								</ol>
+								<h4 className="mt-4 text-sm font-semibold">{g.termsTitle}</h4>
+								<dl className="mt-2 space-y-2 text-sm">
+									{g.terms.map(([term, meaning]) => (
+										<div key={term}>
+											<dt className="font-medium">{term}</dt>
+											<dd className="text-muted-foreground">{meaning}</dd>
+										</div>
+									))}
+								</dl>
+							</details>
+							<details
+								data-analysis-options
+								className="rounded-xl border border-separator p-4"
+							>
+								<summary className="cursor-pointer text-sm font-medium">
+									{ui.other}
+								</summary>
+								<p className="my-3 text-xs leading-relaxed text-muted-foreground">
+									{ui.otherHelp}
 								</p>
-							)}
-							{bundledStatus &&
-								bundledStatus.freeMemoryBytes <
-									bundledStatus.requiredMemoryBytes && (
-									<p className="font-medium text-amber-600">{ui.memoryLow}</p>
-								)}
-							<p className="text-xs">{ui.hardwareNote}</p>
+								<div className="flex flex-wrap gap-2">
+									<Button
+										disabled={
+											!!busy ||
+											!bundledStatus?.available ||
+											!source ||
+											state.clipRegions.length === 0
+										}
+										onClick={() => void analyze(true)}
+									>
+										{busy ? m.offlineBusy : m.offlineAnalyze}
+									</Button>
+									{busy === "vision" && (
+										<p role="status">
+											{m.offlineBusy}: {progress.completed}/{progress.total}
+										</p>
+									)}
+									<Button
+										disabled={
+											!!busy || !source || state.clipRegions.length === 0
+										}
+										onClick={() => void analyze()}
+									>
+										{busy === "analysis" ? m.busy : m.analyze}
+									</Button>
+								</div>
+							</details>
+							<OfflineToolsPanel
+								key={open ? source : "closed"}
+								source={source}
+								state={state}
+								language={language}
+								busy={!!busy}
+								setBusy={(value) => setBusy(value ? "tools" : null)}
+								onApply={onApply}
+								onSeek={onSeek}
+							/>
+							<details
+								className="rounded-xl border border-separator p-4"
+								data-hardware-guide
+							>
+								<summary className="cursor-pointer text-sm font-medium">
+									{ui.hardware}
+								</summary>
+								<div className="mt-3 space-y-3 text-sm leading-relaxed text-muted-foreground">
+									<p>{ui.requirements}</p>
+									<p>{ui.storage}</p>
+									{bundledStatus && (
+										<p>
+											{ui.memory}:{" "}
+											{(bundledStatus.freeMemoryBytes / 1024 ** 3).toFixed(1)}{" "}
+											GiB
+										</p>
+									)}
+									{bundledStatus &&
+										bundledStatus.freeMemoryBytes <
+											bundledStatus.requiredMemoryBytes && (
+											<p className="font-medium text-amber-600">
+												{ui.memoryLow}
+											</p>
+										)}
+									<p className="text-xs">{ui.hardwareNote}</p>
+								</div>
+							</details>
 						</div>
-					</details>
+					)}
 					<div ref={resultAnchor} />
 					{stale && <p role="alert">{m.stale}</p>}
-					{applied && (
+					{applied && !voiceOpen && (
 						<section
-							className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4"
+							className="space-y-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4"
 							role="status"
 							aria-live="polite"
 							data-draft-result
 						>
-							<h3 className="font-semibold">{ui.result}</h3>
-							<p className="text-sm">{m.applied}</p>
-							{draftSummary && <p className="text-sm font-medium">{draftSummary}</p>}
-							<p className="text-sm">{ui.next}</p>
+							{!undone && (
+								<div>
+									<h3 className="text-base font-semibold">{w.doneTitle}</h3>
+									<p className="text-sm">{m.applied}</p>
+								</div>
+							)}
+							{summary && !undone && (
+								<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+									{(
+										[
+											[summary.cuts, w.cuts],
+											[summary.speedUps, w.speedUps],
+											[summary.zooms, w.zooms],
+											[summary.captions, w.captions],
+										] as const
+									).map(([count, label]) => (
+										<div
+											key={label}
+											className="rounded-lg border border-separator bg-background p-3 text-center"
+										>
+											<div className="text-2xl font-semibold">{count}</div>
+											<div className="text-xs text-muted-foreground">
+												{label}
+											</div>
+										</div>
+									))}
+								</div>
+							)}
+							{summary && !undone && summary.savedMs >= 1000 && (
+								<p className="text-sm font-medium">
+									{w.shorter.replace(
+										"{s}",
+										String(Math.round(summary.savedMs / 1000)),
+									)}
+								</p>
+							)}
+							{silentFallback && <p className="text-sm">{ui.silentFallback}</p>}
+							{undone ? (
+								<p className="text-sm font-medium">{w.undone}</p>
+							) : (
+								<p className="text-sm">{ui.next}</p>
+							)}
+							<div className="flex flex-wrap gap-2">
+								{!undone && bundledStatus?.available && voiceActions > 0 && (
+									<Button onClick={() => setVoiceOpen(true)}>
+										{w.voiceNext}
+									</Button>
+								)}
+								{canUndoRun && undoState && (
+									<Button
+										variant="secondary"
+										onClick={() => {
+											onApply(undoState.before);
+											setUndone(true);
+										}}
+									>
+										{w.undoRun}
+									</Button>
+								)}
+								<Button variant="ghost" onClick={startOver}>
+									{w.startOver}
+								</Button>
+							</div>
 							<p className="text-xs text-muted-foreground">{m.speechCaution}</p>
 						</section>
 					)}
-					{plan && (
-						<>
+					{voiceOpen && (
+						<section
+							className="space-y-4 rounded-xl border p-4"
+							aria-label={w.voiceTitle}
+						>
+							<div>
+								<h3 className="text-base font-semibold">{w.voiceTitle}</h3>
+								<p className="text-sm text-muted-foreground">{w.voiceIntro}</p>
+							</div>
+							{voiceActions === 0 ? (
+								<p className="rounded-lg border p-3 text-sm">{w.voiceNothing}</p>
+							) : (
+								<Button
+									disabled={!bundledStatus?.available || !!busy}
+									onClick={() => void narrateBundled()}
+								>
+									{busy === "narrate" ? n.busy : n.draft}
+								</Button>
+							)}
+							{narrationDraft &&
+								(narrationDraft.cues.length === 0 ? (
+									<p className="text-sm">{n.empty}</p>
+								) : (
+									<div className="space-y-3">
+										<p className="text-sm">{n.editHint}</p>
+										<ol className="space-y-2">
+											{narrationDraft.cues.map((cue) => (
+												<li key={cue.id} className="flex items-start gap-2">
+													<Button
+														variant="ghost"
+														size="sm"
+														disabled={!!busy}
+														onClick={() => onSeek(cue.startMs / 1000)}
+													>
+														{(cue.startMs / 1000).toFixed(1)} s
+													</Button>
+													<textarea
+														aria-label={cue.id}
+														value={narrationEdits[cue.id] ?? cue.text}
+														disabled={!!busy}
+														rows={2}
+														onChange={(e) => {
+															setNarrationEdits((prev) => ({
+																...prev,
+																[cue.id]: e.target.value,
+															}));
+															setNarrationApproved(false);
+															setNarrationAudioReady(false);
+														}}
+														className="w-full rounded-lg border p-2 text-sm"
+													/>
+												</li>
+											))}
+										</ol>
+										<label className="flex items-center gap-2 text-sm">
+											<input
+												type="checkbox"
+												checked={narrationApproved}
+												disabled={!!busy}
+												onChange={(e) =>
+													setNarrationApproved(e.target.checked)
+												}
+											/>
+											{n.approve}
+										</label>
+										{narrationApproved && !narrationSpeakable && (
+											<p className="text-sm">{n.voiceChineseOnly}</p>
+										)}
+										<Button
+											disabled={
+												!narrationApproved ||
+												!ttsStatus?.available ||
+												!narrationSpeakable ||
+												!!busy
+											}
+											onClick={() => void synthesizeNarration()}
+										>
+											{busy === "synthesize"
+												? n.synthesizing
+												: n.generateAudio}
+										</Button>
+										{narrationAudioReady && (
+											<p className="text-sm font-medium">{n.audioReady}</p>
+										)}
+									</div>
+								))}
+							<details className="text-xs text-muted-foreground">
+								<summary className="cursor-pointer">{w.voicePrivacy}</summary>
+								<p className="mt-2">{n.info}</p>
+							</details>
+							<Button variant="secondary" onClick={() => setVoiceOpen(false)}>
+								{w.voiceDone}
+							</Button>
+						</section>
+					)}
+					{plan && !voiceOpen && (
+						<section className="space-y-4">
 							{silentFallback && (
 								<p role="status" className="rounded-lg border p-3 text-sm">
 									{ui.silentFallback}
 								</p>
 							)}
-							{!available.length && (
+							{!plan.suggestions.length && (
 								<p
 									role="status"
 									data-no-edits
@@ -657,7 +946,12 @@ export function AutoEditPanel({
 									{ui.noChanges}
 								</p>
 							)}
-							<h3 className="font-semibold">{ui.reviewTitle}</h3>
+							<div>
+								<h3 className="text-base font-semibold">{ui.reviewTitle}</h3>
+								{available.length > 0 && (
+									<p className="text-xs text-muted-foreground">{w.reviewHelp}</p>
+								)}
+							</div>
 							{plan.warnings.map((warning, i) => (
 								<p key={`${warning}-${i}`} className="text-sm">
 									{m.warning}:{" "}
@@ -708,15 +1002,28 @@ export function AutoEditPanel({
 									</p>
 								)
 							)}
+
 							{plan.reviewer === "local-ai" && !plan.visualAnalysis && (
 								<p role="status">{m.reviewed}</p>
 							)}
 							{!plan.suggestions.length && <p>{m.empty}</p>}
+							{protectedCount > 0 && (
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => setShowProtected((value) => !value)}
+								>
+									{showProtected
+										? w.hideProtected
+										: w.showProtected.replace("{n}", String(protectedCount))}
+								</Button>
+							)}
 							<ol className="space-y-3">
 								{plan.suggestions.map((s) => (
 									<li
 										key={s.id}
 										data-suggestion-id={s.id}
+										hidden={!!s.blocked && !showProtected}
 										className={`rounded-lg border p-3 ${s.blocked ? "border-dashed opacity-70" : ""}`}
 									>
 										<div className="flex justify-between gap-2">
@@ -779,100 +1086,6 @@ export function AutoEditPanel({
 									</li>
 								))}
 							</ol>
-							<section
-								className="mt-4 space-y-3 rounded-lg border p-3"
-								aria-label={n.title.replace(" \u00b7 experimental", "")}
-							>
-								<h3 className="font-semibold">
-									{n.title.replace(" \u00b7 experimental", "")}
-								</h3>
-								<p className="text-sm">{n.info}</p>
-								<Button
-									disabled={
-										!bundledStatus?.available ||
-										stale ||
-										!!busy ||
-										!plan.suggestions.some((s) => !s.blocked)
-									}
-									onClick={() => void narrateBundled()}
-								>
-									{busy === "narrate" ? n.busy : n.draft}
-								</Button>
-								{narrationDraft &&
-									(narrationDraft.cues.length === 0 ? (
-										<p className="text-sm">{n.empty}</p>
-									) : (
-										<div className="space-y-3">
-											<p className="text-sm">{n.editHint}</p>
-											<ol className="space-y-2">
-												{narrationDraft.cues.map((cue) => (
-													<li key={cue.id} className="space-y-1">
-														<Button
-															variant="ghost"
-															disabled={stale || !!busy}
-															onClick={() =>
-																onSeek(cue.startMs / 1000)
-															}
-														>
-															{m.seek}
-														</Button>
-														<textarea
-															aria-label={cue.id}
-															value={
-																narrationEdits[cue.id] ?? cue.text
-															}
-															disabled={stale || !!busy}
-															onChange={(e) => {
-																setNarrationEdits((prev) => ({
-																	...prev,
-																	[cue.id]: e.target.value,
-																}));
-																setNarrationApproved(false);
-																setNarrationAudioReady(false);
-															}}
-															className="w-full rounded border p-2 text-sm"
-														/>
-													</li>
-												))}
-											</ol>
-											<label className="flex gap-2">
-												<input
-													type="checkbox"
-													checked={narrationApproved}
-													disabled={stale || !!busy}
-													onChange={(e) =>
-														setNarrationApproved(e.target.checked)
-													}
-												/>
-												{n.approve}
-											</label>
-											{narrationApproved && (
-												<p className="text-sm">{n.approved}</p>
-											)}
-											{narrationApproved && !narrationSpeakable && (
-												<p className="text-sm">{n.voiceChineseOnly}</p>
-											)}
-											{narrationApproved && (
-												<Button
-													disabled={
-														!ttsStatus?.available ||
-														!narrationSpeakable ||
-														stale ||
-														!!busy
-													}
-													onClick={() => void synthesizeNarration()}
-												>
-													{busy === "synthesize"
-														? n.synthesizing
-														: n.generateAudio}
-												</Button>
-											)}
-											{narrationAudioReady && (
-												<p className="text-sm">{n.audioReady}</p>
-											)}
-										</div>
-									))}
-							</section>
 							{import.meta.env.DEV && (
 								<details>
 									<summary>{m.ai}</summary>
@@ -957,26 +1170,7 @@ export function AutoEditPanel({
 									>
 										{busy === "review" ? m.reviewing : m.review}
 									</Button>
-									<section
-										className="mt-4 space-y-3 rounded border p-3"
-										aria-label={`${n.title} (Ollama)`}
-									>
-										<h3>{n.title} (Ollama)</h3>
-										<p className="text-sm">{n.info}</p>
-										<Button
-											disabled={
-												!modelInfo ||
-												!modelConsent ||
-												!model.trim() ||
-												stale ||
-												!!busy ||
-												!plan.suggestions.some((s) => !s.blocked)
-											}
-											onClick={() => void narrate()}
-										>
-											{busy === "narrate" ? n.busy : n.draft}
-										</Button>
-									</section>
+
 									<section
 										className="mt-4 space-y-3 rounded border p-3"
 										aria-label={v.title}
@@ -1024,6 +1218,7 @@ export function AutoEditPanel({
 									</section>
 								</details>
 							)}
+
 							<details className="rounded-lg border border-separator p-3">
 								<summary>{m.details}</summary>
 								<pre className="max-h-48 overflow-auto text-xs">
@@ -1048,11 +1243,14 @@ export function AutoEditPanel({
 									{m.json}
 								</Button>
 							</details>
-						</>
+							<Button variant="ghost" size="sm" onClick={startOver}>
+								{w.startOver}
+							</Button>
+						</section>
 					)}
 				</div>
 				<footer
-					className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-separator bg-background px-6 py-4"
+					className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-separator bg-background px-6 py-3"
 					data-auto-edit-footer
 				>
 					<Button variant="secondary" onClick={onClose}>
@@ -1065,14 +1263,7 @@ export function AutoEditPanel({
 							}
 							onClick={() => {
 								try {
-									onApply(applyEditPlan(state, source, plan, decisions));
-									setPlan(null);
-									setDecisions({});
-									setNarrationDraft(null);
-									setNarrationEdits({});
-									setNarrationApproved(false);
-									setNarrationAudioReady(false);
-									setApplied(true);
+									applyNow(plan, decisions);
 									setError("");
 								} catch (e) {
 									setError(`${m.error} ${e instanceof Error ? e.message : ""}`);

@@ -7,7 +7,7 @@ export const interfaceMessages = {
 		silentFallback:
 			"No audio was found, so this plan was built from the picture only (pauses, clicks and zooms). Nothing was recovered or invented for the missing sound. You can still draft and generate AI narration below.",
 		noChanges:
-			"Analysis finished. No safe automatic edits were found, so your video is unchanged. Keeping the whole frame also disables automatic zooms.",
+			"Analysis finished. No safe automatic edits were found, so your video is unchanged. If “Zoom in where I click” is off, no zooms are added.",
 		language: "Interface language",
 		badge: "Offline · stays on this computer",
 		intro: "Turn a recording into a first draft, then check it before exporting.",
@@ -52,7 +52,7 @@ export const interfaceMessages = {
 		silentFallback:
 			"没有检测到声音，所以这份方案只根据画面生成（停顿、点击和缩放），不会恢复或编造原本的声音。你仍然可以在下方生成 AI 解说稿和配音。",
 		noChanges:
-			"分析已完成，没有找到可安全自动修改的内容，视频保持不变。勾选保持全画面时，也不会自动添加放大效果。",
+			"分析已完成，没有找到可安全自动修改的内容，视频保持不变。如果关掉了“在我点击的地方自动放大”，也不会添加放大效果。",
 		language: "界面语言",
 		badge: "完全离线 · 视频留在本机",
 		intro: "先生成剪辑草稿，检查满意后再导出。",
@@ -94,7 +94,7 @@ export const interfaceMessages = {
 		silentFallback:
 			"Tiada audio ditemui, jadi pelan ini dibina daripada gambar sahaja (jeda, klik dan zum). Tiada bunyi dipulihkan atau direka. Anda masih boleh mendraf dan menjana naratif AI di bawah.",
 		noChanges:
-			"Analisis selesai. Tiada suntingan automatik yang selamat ditemui; video tidak berubah. Pilihan bingkai penuh turut mematikan zum automatik.",
+			"Analisis selesai. Tiada suntingan automatik yang selamat ditemui; video tidak berubah. Jika “Zum di tempat saya klik” dimatikan, tiada zum ditambah.",
 		language: "Bahasa antara muka",
 		badge: "Luar talian · video kekal di komputer ini",
 		intro: "Hasilkan draf dahulu, semak hasilnya, kemudian eksport.",

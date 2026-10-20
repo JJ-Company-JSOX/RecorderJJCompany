@@ -128,6 +128,9 @@ export function AutoEditPanel({
 	const pending = available.filter((s) => !decisions[s.id] || decisions[s.id] === "pending");
 	const accepted = available.filter((s) => decisions[s.id] === "accept");
 	const ready = bundledStatus?.available && speechReady;
+	const narrationSpeakable =
+		!!narrationDraft?.cues.length &&
+		narrationDraft.cues.every((c) => /\p{Script=Han}/u.test(narrationEdits[c.id] ?? c.text));
 	const stages = ["media", "transcribe", "understand", "vision"] as const;
 	const activeStage = stages.indexOf(speechStage as (typeof stages)[number]);
 	const decideRemaining = (choice: "accept" | "reject") => {
@@ -821,10 +824,16 @@ export function AutoEditPanel({
 											{narrationApproved && (
 												<p className="text-sm">{n.approved}</p>
 											)}
+											{narrationApproved && !narrationSpeakable && (
+												<p className="text-sm">{n.voiceChineseOnly}</p>
+											)}
 											{narrationApproved && (
 												<Button
 													disabled={
-														!ttsStatus?.available || stale || !!busy
+														!ttsStatus?.available ||
+														!narrationSpeakable ||
+														stale ||
+														!!busy
 													}
 													onClick={() => void synthesizeNarration()}
 												>

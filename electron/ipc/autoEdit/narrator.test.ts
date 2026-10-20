@@ -80,7 +80,12 @@ describe("local-only narration draft (mock service, no inference claim)", () => 
 	it("drafts a narration cue per unblocked suggestion from a fixed loopback address", async () => {
 		const draft = await new LocalNarrationGenerator().generate(plan(), "local");
 		expect(draft.cues).toEqual([
-			{ id: "rule-1", startMs: 1000, endMs: 2000, text: "Clicking here to zoom in on the detail." },
+			{
+				id: "rule-1",
+				startMs: 1000,
+				endMs: 2000,
+				text: "Clicking here to zoom in on the detail.",
+			},
 		]);
 		for (const request of mock.requests) {
 			expect(request.hostname).toBe("127.0.0.1");
@@ -127,11 +132,18 @@ describe("local-only narration draft (mock service, no inference claim)", () => 
 describe("bundled offline narration draft (reuses the AI edition's own model session)", () => {
 	it("drafts a narration cue per unblocked suggestion via the given complete() call", async () => {
 		const complete = vi.fn(async () =>
-			JSON.stringify({ cues: [{ id: "rule-1", text: "Clicking here to zoom in on the detail." }] }),
+			JSON.stringify({
+				cues: [{ id: "rule-1", text: "Clicking here to zoom in on the detail." }],
+			}),
 		);
 		const draft = await generateBundledNarration(plan(), complete);
 		expect(draft.cues).toEqual([
-			{ id: "rule-1", startMs: 1000, endMs: 2000, text: "Clicking here to zoom in on the detail." },
+			{
+				id: "rule-1",
+				startMs: 1000,
+				endMs: 2000,
+				text: "Clicking here to zoom in on the detail.",
+			},
 		]);
 		expect(complete).toHaveBeenCalledOnce();
 	});
@@ -142,6 +154,12 @@ describe("bundled offline narration draft (reuses the AI edition's own model ses
 		expect(question).not.toContain("PRIVATE_TRANSCRIPT");
 		expect(question).not.toContain("/local/user.mp4");
 		expect(question).not.toContain("baseline");
+	});
+	it("asks for Mandarin lines, the only language the bundled voice can read", async () => {
+		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
+		await generateBundledNarration(plan(), complete);
+		const [instruction] = complete.mock.calls[0];
+		expect(instruction).toContain("Simplified Chinese");
 	});
 	it("returns no cues and never calls complete() when every suggestion is blocked", async () => {
 		const blocked = plan();

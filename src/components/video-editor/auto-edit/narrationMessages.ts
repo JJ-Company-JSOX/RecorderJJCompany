@@ -1,7 +1,7 @@
 export const narrationMessages = {
 	en: {
 		title: "AI narration draft · experimental",
-		info: "Sends only action metadata (kind, reason and timing — never transcript text, captions or file paths) for each suggestion to the local Ollama model. The model drafts a narration line per action; it does not describe on-screen content it was never shown. Review and edit every line before approving.",
+		info: "Sends only action metadata (kind, reason and timing — never transcript text, captions or file paths) for each suggestion to the AI model on this computer. The model drafts a narration line per action; it does not describe on-screen content it was never shown. Review and edit every line before approving. Lines are written and voiced in Mandarin Chinese, the only language the built-in voice speaks.",
 		draft: "Draft narration",
 		busy: "Drafting narration",
 		empty: "No unblocked suggestions to narrate yet. Generate or accept a plan first.",
@@ -11,11 +11,13 @@ export const narrationMessages = {
 		generateAudio: "Generate narration audio",
 		synthesizing: "Generating narration audio",
 		audioReady: "Narration audio added as a new, undoable audio track.",
+		voiceChineseOnly:
+			"The built-in voice reads Mandarin Chinese only. Write every line in Chinese to generate audio.",
 		result: "Narration drafted",
 	},
 	zh: {
 		title: "AI 解说稿草稿 · 实验版",
-		info: "只向本机 Ollama 模型发送每条建议的操作元数据（类型、原因、时间——绝不发送转录文字、字幕或文件路径）。模型按每个操作写一句解说,不会描述它从未看到过的画面内容。应用前请逐句审阅、可编辑。",
+		info: "只向本机的 AI 模型发送每条建议的操作元数据（类型、原因、时间——绝不发送转录文字、字幕或文件路径）。模型按每个操作写一句解说,不会描述它从未看到过的画面内容。应用前请逐句审阅、可编辑。解说词用普通话（简体中文）书写和朗读，内置配音只支持普通话。",
 		draft: "生成解说稿草稿",
 		busy: "正在生成解说稿",
 		empty: "暂时没有未被保护的建议可以配解说词,请先生成或采纳一份方案。",
@@ -25,11 +27,12 @@ export const narrationMessages = {
 		generateAudio: "生成解说语音",
 		synthesizing: "正在生成解说语音",
 		audioReady: "解说语音已添加为新的、可撤销的音轨。",
+		voiceChineseOnly: "内置配音只能朗读普通话（中文）。请把每一句都写成中文，才能生成语音。",
 		result: "已生成解说稿",
 	},
 	ms: {
 		title: "Draf naratif AI · eksperimen",
-		info: "Hanya menghantar metadata tindakan (jenis, sebab dan masa — bukan transkrip, sari kata atau laluan fail) bagi setiap cadangan kepada model Ollama setempat. Model mendraf satu baris naratif setiap tindakan; ia tidak menerangkan kandungan skrin yang tidak pernah ditunjukkan kepadanya. Semak dan sunting setiap baris sebelum meluluskan.",
+		info: "Hanya menghantar metadata tindakan (jenis, sebab dan masa — bukan transkrip, sari kata atau laluan fail) bagi setiap cadangan kepada model AI pada komputer ini. Model mendraf satu baris naratif setiap tindakan; ia tidak menerangkan kandungan skrin yang tidak pernah ditunjukkan kepadanya. Semak dan sunting setiap baris sebelum meluluskan. Baris ditulis dan disuarakan dalam bahasa Mandarin, satu-satunya bahasa suara terbina dalam.",
 		draft: "Draf naratif",
 		busy: "Mendraf naratif",
 		empty: "Tiada cadangan tidak dilindungi untuk dinaratifkan lagi. Jana atau terima pelan dahulu.",
@@ -40,6 +43,8 @@ export const narrationMessages = {
 		generateAudio: "Jana audio naratif",
 		synthesizing: "Menjana audio naratif",
 		audioReady: "Audio naratif ditambah sebagai trek audio baharu yang boleh dibuat asal.",
+		voiceChineseOnly:
+			"Suara terbina dalam hanya membaca bahasa Mandarin. Tulis setiap baris dalam bahasa Cina untuk menjana audio.",
 		result: "Naratif didraf",
 	},
 };

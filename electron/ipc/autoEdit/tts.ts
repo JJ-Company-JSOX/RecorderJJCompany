@@ -159,6 +159,13 @@ export async function synthesizeBundledNarration(options: {
 		? (options.speakerId as number)
 		: DEFAULT_SPEAKER_ID;
 	if (speakerId < 0 || speakerId >= NUM_SPEAKERS) throw new Error("Invalid narration speaker");
+	for (const cue of cues) {
+		if (!/^[A-Za-z0-9_-]{1,64}$/.test(cue?.id)) throw new Error("Invalid narration cue id");
+		if (typeof cue.text !== "string" || !cue.text.trim() || cue.text.length > 500)
+			throw new Error(`Invalid narration text for cue ${cue.id}`);
+		if (!/\p{Script=Han}/u.test(cue.text))
+			throw new Error("The bundled narration voice speaks Mandarin Chinese only");
+	}
 	const root = await verifyBundledTtsAssets(getBundledTtsRoot(), signal);
 	const sherpaOnnx = await import("sherpa-onnx-node");
 	const tts = await loadEngine(root);
@@ -166,9 +173,6 @@ export async function synthesizeBundledNarration(options: {
 	const results: Array<{ id: string; audioPath: string; durationMs: number }> = [];
 	for (const cue of cues) {
 		signal?.throwIfAborted();
-		if (!/^[A-Za-z0-9_-]{1,64}$/.test(cue.id)) throw new Error("Invalid narration cue id");
-		if (typeof cue.text !== "string" || !cue.text.trim() || cue.text.length > 500)
-			throw new Error(`Invalid narration text for cue ${cue.id}`);
 		const audio = await tts.generateAsync({ text: cue.text, sid: speakerId, speed: 1.0 });
 		const audioPath = path.join(outputDirectory, `narration-${cue.id}.wav`);
 		sherpaOnnx.writeWave(audioPath, { samples: audio.samples, sampleRate: audio.sampleRate });

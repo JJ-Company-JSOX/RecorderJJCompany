@@ -143,6 +143,16 @@ describe("bundled narration voice assets", () => {
 				speakerId: 999,
 			}),
 		).rejects.toThrow("Invalid narration speaker");
+		await expect(
+			synthesizeBundledNarration({
+				cues: [
+					{ id: "suggestion-1", text: "这里点击按钮。" },
+					{ id: "suggestion-2", text: "The presenter zooms in." },
+				],
+				outputDirectory: path.join(root, "out"),
+			}),
+		).rejects.toThrow("Mandarin Chinese only");
+		expect(mocks.createAsync).not.toHaveBeenCalled();
 	});
 	it("synthesizes one verified-path WAV per cue using the pinned model files", async () => {
 		if (process.platform !== "win32" || process.arch !== "x64") return;
@@ -156,8 +166,8 @@ describe("bundled narration voice assets", () => {
 		const outputDirectory = path.join(root, "out");
 		const results = await synthesizeBundledNarration({
 			cues: [
-				{ id: "suggestion-1", text: "First line" },
-				{ id: "suggestion-2", text: "Second line" },
+				{ id: "suggestion-1", text: "这里点击按钮。" },
+				{ id: "suggestion-2", text: "然后放大显示。" },
 			],
 			outputDirectory,
 		});
@@ -176,7 +186,7 @@ describe("bundled narration voice assets", () => {
 		);
 		expect(mocks.generateAsync).toHaveBeenCalledTimes(2);
 		expect(mocks.generateAsync).toHaveBeenCalledWith(
-			expect.objectContaining({ text: "First line", sid: 0 }),
+			expect.objectContaining({ text: "这里点击按钮。", sid: 0 }),
 		);
 		expect(mocks.writeWave).toHaveBeenCalledTimes(2);
 		expect(results).toEqual([

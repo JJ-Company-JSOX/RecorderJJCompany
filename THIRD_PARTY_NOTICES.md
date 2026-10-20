@@ -22,8 +22,10 @@ still apply. See [tools scope and limitations](docs/offline-tools.zh-CN.md).
 ## Offline AI edition
 
 The offline edition additionally distributes Qwen3-VL model weights (Apache-2.0),
-OpenAI Whisper small multilingual weights (MIT), llama.cpp (MIT) and whisper.cpp
-(MIT). Exact revisions, asset hashes and model notices are recorded in
+OpenAI Whisper small multilingual weights (MIT), llama.cpp (MIT), whisper.cpp
+(MIT), AISHELL-3 VITS voice weights (Apache-2.0), sherpa-onnx and its prebuilt
+`sherpa-onnx-node` / `sherpa-onnx-win-x64` Node addon (Apache-2.0) and the ONNX
+Runtime library bundled with that addon (MIT). Exact revisions, asset hashes and model notices are recorded in
 [MODEL_LICENSES.md](MODEL_LICENSES.md) and the build lock files under `scripts/`.
 The Windows resource bundles contain the complete model/runtime license texts,
 embedded component notices and LLVM-MinGW toolchain notices. These permissive

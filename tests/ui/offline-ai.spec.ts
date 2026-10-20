@@ -162,7 +162,10 @@ test("after applying, AI voice-over drafts, waits for approval and adds an audio
 				})),
 			},
 		});
-		window.electronAPI.getBundledTtsStatus = async () => ({ available: true });
+		window.electronAPI.getBundledTtsStatus = async () => ({
+			available: true,
+			voices: { zh: true, en: true, ms: false },
+		});
 		window.electronAPI.synthesizeAutoEditNarration = async (cues) => ({
 			success: true,
 			clips: cues.map((c) => ({
@@ -195,6 +198,11 @@ test("after applying, AI voice-over drafts, waits for approval and adds an audio
 	await panel.getByRole("button", { name: "生成解说语音" }).click();
 	await expect(panel.getByText("解说语音已添加为新的、可撤销的音轨。")).toBeVisible();
 	await page.screenshot({ path: "test-results/wizard-voice-done-zh.png" });
+	await panel.getByLabel("Plan language").selectOption("ms");
+	await expect(panel.getByText(/Belum ada suara Melayu terbina dalam/)).toBeVisible();
+	await panel.getByLabel("Plan language").selectOption("en");
+	await expect(panel.getByText(/Belum ada suara Melayu/)).toHaveCount(0);
+	await panel.getByLabel("Plan language").selectOption("zh");
 	await panel.getByRole("button", { name: "完成", exact: true }).click();
 	await panel.getByRole("button", { name: "Close", exact: true }).click();
 	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);

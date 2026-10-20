@@ -21,8 +21,14 @@ const NARRATION_SYSTEM_PROMPT =
 	'Write a short narration line for each listed timestamped action from a screen-recording tutorial editing plan. Reply with {"cues":[{"id":"...","text":"..."}]}, exactly one cue per listed action id. Keep each line under 25 words, present tense, friendly. Describe only what the action kind/reason implies (for example a "zoom" at a "click" is the presenter zooming in on where they clicked; a "trim" removes a pause or repeat). Never invent on-screen content, numbers, names or claims the action metadata does not support. No markdown.';
 
 // The bundled voice (AISHELL-3) has a Mandarin-only lexicon and silently drops other words.
-const MANDARIN_INSTRUCTION =
-	" Write every line in Simplified Chinese (Mandarin), because it will be read aloud by a Mandarin-only voice.";
+export type NarrationLanguage = "zh" | "en" | "ms";
+const LANGUAGE_INSTRUCTION: Record<NarrationLanguage, string> = {
+	zh: " Write every line in Simplified Chinese (Mandarin); it will be read aloud by a Mandarin voice.",
+	en: " Write every line in plain English and spell numbers out as words; it will be read aloud by an English voice.",
+	ms: " Write every line in Bahasa Melayu (Malaysian Malay, not Indonesian) and spell numbers out as words.",
+};
+export const isNarrationLanguage = (value: unknown): value is NarrationLanguage =>
+	value === "zh" || value === "en" || value === "ms";
 
 const NARRATION_SCHEMA = {
 	type: "object",
@@ -116,11 +122,12 @@ export class LocalNarrationGenerator implements NarrationGenerator {
 export async function generateBundledNarration(
 	plan: EditPlan,
 	complete: (instruction: string, question: string, schema: object) => Promise<string>,
+	language: NarrationLanguage = "zh",
 ): Promise<NarrationDraft> {
 	const candidates = buildNarrationCandidates(plan);
 	if (!candidates.length) return { cues: [] };
 	const content = await complete(
-		NARRATION_SYSTEM_PROMPT + MANDARIN_INSTRUCTION,
+		NARRATION_SYSTEM_PROMPT + LANGUAGE_INSTRUCTION[language],
 		JSON.stringify(candidates),
 		NARRATION_SCHEMA,
 	);

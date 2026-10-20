@@ -220,11 +220,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("auto-edit-review-local", plan, model),
 	narrateAutoEditLocally: (plan: EditPlan, model: string) =>
 		ipcRenderer.invoke("auto-edit-narrate-local", plan, model),
-	narrateAutoEditBundled: (plan: EditPlan) =>
-		ipcRenderer.invoke("auto-edit-narrate-bundled", plan),
+	narrateAutoEditBundled: (plan: EditPlan, language?: "zh" | "en" | "ms") =>
+		ipcRenderer.invoke("auto-edit-narrate-bundled", plan, language),
 	getBundledTtsStatus: () => ipcRenderer.invoke("auto-edit-tts-status"),
-	synthesizeAutoEditNarration: (cues: Array<{ id: string; text: string }>) =>
-		ipcRenderer.invoke("auto-edit-narrate-synthesize", cues),
+	synthesizeAutoEditNarration: (
+		cues: Array<{ id: string; text: string }>,
+		language?: "zh" | "en" | "ms",
+	) => ipcRenderer.invoke("auto-edit-narrate-synthesize", cues, language),
 	hudOverlaySetIgnoreMouse: (ignore: boolean) => {
 		ipcRenderer.send("hud-overlay-set-ignore-mouse", ignore);
 	},

@@ -23,7 +23,8 @@ still apply. See [tools scope and limitations](docs/offline-tools.zh-CN.md).
 
 The offline edition additionally distributes Qwen3-VL model weights (Apache-2.0),
 OpenAI Whisper small multilingual weights (MIT), llama.cpp (MIT), whisper.cpp
-(MIT), AISHELL-3 VITS voice weights (Apache-2.0), sherpa-onnx and its prebuilt
+(MIT), AISHELL-3 VITS voice weights (Apache-2.0), VITS LJSpeech English voice weights (MIT; LJSpeech
+public domain), sherpa-onnx and its prebuilt
 `sherpa-onnx-node` / `sherpa-onnx-win-x64` Node addon (Apache-2.0) and the ONNX
 Runtime library bundled with that addon (MIT), plus Silero VAD (MIT), RNNoise
 (BSD-3-Clause) and the shared sherpa-onnx C API runtime with its MSVC notices. Exact revisions, asset hashes and model notices are recorded in

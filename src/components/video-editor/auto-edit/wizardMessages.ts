@@ -22,11 +22,21 @@ export const wizardMessages = {
 		voiceNext: "Next: add AI voice-over",
 		voiceTitle: "AI voice-over",
 		voiceIntro:
-			"AI writes one short line for each zoom or sped-up part, you check the words, then a Mandarin voice reads them. Best for recordings where you did not speak.",
+			"AI writes one short line for each zoom or sped-up part, you check the words, then a voice reads them. The script and voice use the language chosen at the top right. Best for recordings where you did not speak.",
 		voiceNothing:
 			"There are no zooms or sped-up parts to describe yet. Add some first, or skip this step.",
 		voiceDone: "Finish",
 		voicePrivacy: "Privacy details",
+		voiceWrongLanguage: {
+			zh: "The Chinese voice can only read Chinese. Write every line in Chinese.",
+			en: "The English voice can only read English. Remove any Chinese characters.",
+			ms: "There is no built-in Malay voice yet.",
+		},
+		voiceMissing: {
+			zh: "The Chinese voice is not installed in this version.",
+			en: "The English voice is not installed in this version.",
+			ms: "There is no built-in Malay voice yet. You can still draft the Malay script, then record it yourself.",
+		},
 		reviewTitle: "Check each change",
 		reviewHelp: "Choose Accept or Reject for each change, then press Apply at the bottom.",
 		showProtected: "{n} more were left unchanged. Show why",
@@ -55,10 +65,20 @@ export const wizardMessages = {
 		voiceNext: "下一步：加 AI 配音",
 		voiceTitle: "AI 配音",
 		voiceIntro:
-			"AI 会给每一处放大或加速写一句简短解说，你检查文字后，再用普通话读出来。适合录制时没有讲话的视频。",
+			"AI 会给每一处放大或加速写一句简短解说，你检查文字后，再用声音读出来。解说稿和声音都使用右上角选的语言。适合录制时没有讲话的视频。",
 		voiceNothing: "现在还没有放大或加速的地方可以解说。可以先加一些，或者跳过这一步。",
 		voiceDone: "完成",
 		voicePrivacy: "隐私说明",
+		voiceWrongLanguage: {
+			zh: "中文配音只能读中文，请把每一句都写成中文。",
+			en: "英文配音只能读英文，请删掉里面的中文字。",
+			ms: "暂时还没有内置的马来文配音。",
+		},
+		voiceMissing: {
+			zh: "这个版本没有安装中文配音。",
+			en: "这个版本没有安装英文配音。",
+			ms: "暂时还没有内置的马来文配音。可以先生成马来文解说稿，再自己录音。",
+		},
 		reviewTitle: "逐条确认修改",
 		reviewHelp: "每一处选“接受”或“拒绝”，然后点最下面的“应用”。",
 		showProtected: "另有 {n} 处没改，查看原因",
@@ -87,11 +107,21 @@ export const wizardMessages = {
 		voiceNext: "Seterusnya: tambah suara AI",
 		voiceTitle: "Suara AI",
 		voiceIntro:
-			"AI menulis satu baris pendek untuk setiap zum atau bahagian dipercepat, anda semak perkataannya, kemudian suara Mandarin membacanya. Sesuai untuk rakaman tanpa percakapan.",
+			"AI menulis satu baris pendek untuk setiap zum atau bahagian dipercepat, anda semak perkataannya, kemudian suara membacanya. Skrip dan suara menggunakan bahasa yang dipilih di penjuru kanan atas. Sesuai untuk rakaman tanpa percakapan.",
 		voiceNothing:
 			"Belum ada zum atau bahagian dipercepat untuk diterangkan. Tambah dahulu, atau langkau langkah ini.",
 		voiceDone: "Selesai",
 		voicePrivacy: "Butiran privasi",
+		voiceWrongLanguage: {
+			zh: "Suara Cina hanya boleh membaca bahasa Cina. Tulis setiap baris dalam bahasa Cina.",
+			en: "Suara Inggeris hanya boleh membaca bahasa Inggeris. Buang aksara Cina.",
+			ms: "Belum ada suara Melayu terbina dalam.",
+		},
+		voiceMissing: {
+			zh: "Suara Cina tidak dipasang dalam versi ini.",
+			en: "Suara Inggeris tidak dipasang dalam versi ini.",
+			ms: "Belum ada suara Melayu terbina dalam. Anda masih boleh mendraf skrip Melayu, kemudian merakamnya sendiri.",
+		},
 		reviewTitle: "Semak setiap perubahan",
 		reviewHelp: "Pilih Terima atau Tolak untuk setiap perubahan, kemudian tekan Guna di bawah.",
 		showProtected: "{n} lagi tidak diubah. Tunjukkan sebabnya",

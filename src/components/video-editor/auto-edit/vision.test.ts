@@ -42,9 +42,7 @@ it("projects source observations into sped-up and repeated clips, requires expli
 		p = addVisualSuggestions(plan(s), s, source, analysis);
 	expect(p.suggestions.map((x) => [x.kind, x.startMs, x.endMs])).toEqual([
 		["zoom", 750, 1900],
-		["annotation", 750, 1900],
 		["zoom", 4750, 5900],
-		["annotation", 4750, 5900],
 	]);
 	expect(applyEditPlan(s, source, p, {})).toEqual(s);
 	const result = applyEditPlan(
@@ -54,7 +52,7 @@ it("projects source observations into sped-up and repeated clips, requires expli
 		Object.fromEntries(p.suggestions.map((x) => [x.id, "accept"])),
 	);
 	expect(result.zoomRegions).toHaveLength(2);
-	expect(result.annotationRegions[0].content).toBe("Save 保存 Simpan");
+	expect(result.annotationRegions).toHaveLength(0);
 	expect(result.clipRegions).toEqual(s.clipRegions);
 });
 it("does not change rule cuts, invent speed edits or accept model instructions", () => {
@@ -65,11 +63,9 @@ it("does not change rule cuts, invent speed edits or accept model instructions",
 	];
 	const p = addVisualSuggestions(base, s, source, analysis);
 	expect(p.suggestions[0]).toEqual(base.suggestions[0]);
-	expect(
-		p.suggestions
-			.filter((x) => x.reason === "vision")
-			.every((x) => x.kind === "zoom" || x.kind === "annotation"),
-	).toBe(true);
+	expect(p.suggestions.filter((x) => x.reason === "vision").every((x) => x.kind === "zoom")).toBe(
+		true,
+	);
 	expect(() =>
 		parseVisualResponse({ focus: { cx: 700, cy: 300 }, caption: "x", rationale: "x" }, 4000),
 	).toThrow();

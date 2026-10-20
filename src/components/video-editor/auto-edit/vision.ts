@@ -105,8 +105,8 @@ export function addVisualSuggestions(
 					depth: 2,
 					text: observation.rationale,
 				});
-			if (observation.caption)
-				add({ ...span, kind: "annotation", reason: "vision", text: observation.caption });
+			// Screen text is not turned into labels: it only repeats what is already visible
+			// and can copy personal details such as names or greetings into the video.
 		}
 	}
 	return {

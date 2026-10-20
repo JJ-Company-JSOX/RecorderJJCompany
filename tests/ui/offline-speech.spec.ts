@@ -404,3 +404,28 @@ test("small screens keep the main workflow and footer usable in Chinese and Engl
 	await panel.getByRole("button", { name: "返回编辑器", exact: true }).click();
 	await expect(panel).toHaveCount(0);
 });
+
+test("the result screen summarizes changes and undoes the whole run in one click", async ({
+	page,
+}) => {
+	const panel = await setup(page, { speechAvailable: true, deferred: false, labels: true });
+	await expect(
+		panel.getByRole("checkbox", { name: /Apply the automatic draft when ready/ }),
+	).toBeChecked();
+	await panel
+		.getByRole("button", { name: "Automatically edit speech and video", exact: true })
+		.click();
+	await expect(
+		panel.getByText("Applied. Use Undo to restore the previous timeline.", { exact: true }),
+	).toBeVisible();
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await panel.getByLabel("Plan language").selectOption("zh");
+	await page.screenshot({ path: "test-results/wizard-done-zh.png" });
+	await expect(panel.getByRole("button", { name: "下一步：加 AI 配音" })).toHaveCount(0);
+	await panel.getByRole("button", { name: "撤销这次修改" }).click();
+	await expect(page.locator('[data-variant="clip"]')).toHaveCount(1);
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
+	await page.screenshot({ path: "test-results/wizard-undone-zh.png" });
+	await panel.getByLabel("Plan language").selectOption("en");
+	await panel.getByRole("button", { name: "Close", exact: true }).click();
+});

@@ -162,7 +162,6 @@ test("a plan becomes stale when existing edits change", async ({ page }) => {
 	await speed.focus();
 	await speed.press("ArrowRight");
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
-	await page.locator("[data-analysis-options] > summary").click();
 	await expect(page.getByRole("alert")).toContainText("timeline changed");
 	await expect(page.getByRole("button", { name: "Apply accepted edits" })).toBeDisabled();
 	await expect(page.getByRole("button", { name: "Accept remaining suggestions" })).toBeDisabled();
@@ -227,13 +226,13 @@ for (const allProtected of [false, true]) {
 		await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
 		await page.locator("[data-analysis-options] > summary").click();
 		const dialog = page.locator("[data-auto-edit-panel]");
-		await dialog.getByRole("button", { name: "Generate local plan" }).click();
-		const items = dialog.locator("[data-suggestion-id]");
-		await expect(items).toHaveCount(3);
 		expect(
 			(await dialog.getByRole("button", { name: "Generate local plan" }).boundingBox())!
 				.height,
 		).toBeGreaterThanOrEqual(32);
+		await dialog.getByRole("button", { name: "Generate local plan" }).click();
+		const items = dialog.locator("[data-suggestion-id]");
+		await expect(items).toHaveCount(3);
 		await expect(items.first().getByRole("radio")).toHaveCount(0);
 		await expect(dialog.getByText(/No AI model or JSON download is needed/)).toBeVisible();
 		const apply = dialog.getByRole("button", { name: "Apply accepted edits" });

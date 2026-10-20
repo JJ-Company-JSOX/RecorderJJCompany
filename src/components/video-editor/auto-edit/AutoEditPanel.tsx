@@ -453,7 +453,7 @@ export function AutoEditPanel({
 			: busy === "analysis" || busy === "vision"
 				? 1
 				: 0;
-	const showStart = !plan && !applied && !voiceOpen;
+	const showStart = !plan && !applied && !voiceOpen && busy !== "analysis" && busy !== "vision";
 	const canUndoRun =
 		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
 	const voiceActions = narrationPlan(state).suggestions.length;
@@ -704,20 +704,15 @@ export function AutoEditPanel({
 										}
 										onClick={() => void analyze(true)}
 									>
-										{busy ? m.offlineBusy : m.offlineAnalyze}
+										{m.offlineAnalyze}
 									</Button>
-									{busy === "vision" && (
-										<p role="status">
-											{m.offlineBusy}: {progress.completed}/{progress.total}
-										</p>
-									)}
 									<Button
 										disabled={
 											!!busy || !source || state.clipRegions.length === 0
 										}
 										onClick={() => void analyze()}
 									>
-										{busy === "analysis" ? m.busy : m.analyze}
+										{m.analyze}
 									</Button>
 								</div>
 							</details>

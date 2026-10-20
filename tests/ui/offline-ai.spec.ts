@@ -67,8 +67,7 @@ test("included offline AI needs one click, no model setup, and keeps Apply and U
 	await expect(page.locator("html")).toHaveAttribute("data-offline-ai-calls", "1");
 	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
 	await panel.getByRole("button", { name: "Accept remaining suggestions" }).click();
-	await panel.getByRole("button", { name: "Apply accepted edits" }).click();
-	await panel.getByRole("button", { name: "Close", exact: true }).click();
+	await panel.getByRole("button", { name: "Done", exact: true }).click();
 	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
 	await expect(page.locator('[data-variant="zoom"]')).toHaveCount(1);
 	await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -192,7 +191,7 @@ test("after applying, AI voice-over drafts, waits for approval and adds an audio
 	await expect(page.locator("html")).toHaveAttribute("data-offline-ai-calls", "1");
 	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
 	await panel.getByRole("button", { name: "Accept remaining suggestions" }).click();
-	await panel.getByRole("button", { name: "Apply accepted edits" }).click();
+	await panel.getByRole("button", { name: "Done", exact: true }).click();
 	await panel.getByLabel("Plan language").selectOption("zh");
 	await panel.getByRole("button", { name: "下一步：加 AI 配音" }).click();
 	await panel.getByRole("button", { name: "生成解说稿草稿" }).click();
@@ -216,7 +215,6 @@ test("after applying, AI voice-over drafts, waits for approval and adds an audio
 	await expect(panel.getByText(/Belum ada suara Melayu/)).toHaveCount(0);
 	await panel.getByLabel("Plan language").selectOption("zh");
 	await panel.getByRole("button", { name: "完成", exact: true }).click();
-	await panel.getByRole("button", { name: "Close", exact: true }).click();
 	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
 	// The approved narration line also becomes a subtitle for the silent recording.
 	await expect(page.locator('[data-variant="caption"]')).toHaveCount(1);

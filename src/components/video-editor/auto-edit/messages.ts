@@ -52,7 +52,7 @@ export const messages = {
 			"For future recordings, enable microphone or system audio and check playback. Missing recorded sound cannot be recovered here. No AI model or JSON download is needed for this local plan.",
 		reject: "Reject",
 		pending: "Review required",
-		apply: "Apply accepted edits",
+		apply: "Done",
 		applied: "Applied. Use Undo to restore the previous timeline.",
 		stale: "The source or timeline changed. Generate a new plan before applying.",
 		blocked: "Protected: overlaps an existing edit or speed setting.",
@@ -99,7 +99,7 @@ export const messages = {
 		unavailable: "Local analysis requires the desktop app.",
 		reviewed: "Local AI reviewed this plan. Review every remaining item again.",
 		decisionHint:
-			"Preview the suggestions, then choose individually or decide the remaining items together. Bulk decisions preserve your earlier choices and protected edits. Nothing changes until Apply; accepted cuts move later items on the timeline.",
+			"Each change you accept shows up on the timeline and in the preview straight away, and the playhead jumps to it. Reject it to take it back. Press Done when you are happy.",
 	},
 	zh: {
 		labelReview:
@@ -150,7 +150,7 @@ export const messages = {
 			"下次录制请启用麦克风或系统声音，并回放确认。这里无法恢复未录下的声音。生成此本地方案无需安装 AI 模型或下载 JSON。",
 		reject: "拒绝",
 		pending: "待审阅",
-		apply: "应用已接受的建议",
+		apply: "完成",
 		applied: "已应用，可用撤销恢复原时间线。",
 		stale: "素材或时间线已变化，请重新生成方案。",
 		blocked: "已保护：与现有编辑或速度设置冲突。",
@@ -190,7 +190,7 @@ export const messages = {
 		unavailable: "本地媒体分析需要桌面应用。",
 		reviewed: "本地 AI 已审阅，请重新审阅每一项。",
 		decisionHint:
-			"先预览建议，再逐项选择或批量决定剩余项目。批量操作保留你之前的选择和受保护的编辑；点击应用前不会修改时间线，接受删减后后续项目会随时间线前移。",
+			"每接受一处，时间轴和预览马上会出现这个修改，播放头也会跳过去给你看；选“拒绝”就会撤回。满意了就点“完成”。",
 	},
 	ms: {
 		labelReview:
@@ -244,7 +244,7 @@ export const messages = {
 			"Untuk rakaman seterusnya, aktifkan mikrofon atau audio sistem dan semak main balik. Bunyi yang tidak dirakam tidak dapat dipulihkan di sini. Pelan setempat ini tidak memerlukan model AI atau muat turun JSON.",
 		reject: "Tolak",
 		pending: "Perlu disemak",
-		apply: "Gunakan cadangan diterima",
+		apply: "Selesai",
 		applied: "Digunakan. Buat asal untuk memulihkan garis masa sebelumnya.",
 		stale: "Sumber atau garis masa berubah. Jana pelan baharu.",
 		blocked: "Dilindungi: bertindih dengan suntingan atau tetapan kelajuan sedia ada.",
@@ -297,7 +297,7 @@ export const messages = {
 		unavailable: "Analisis setempat memerlukan aplikasi desktop.",
 		reviewed: "AI setempat telah menyemak pelan ini. Semak setiap item sekali lagi.",
 		decisionHint:
-			"Pratonton cadangan, kemudian pilih satu demi satu atau putuskan item selebihnya serentak. Pilihan terdahulu dan suntingan dilindungi dikekalkan. Tiada perubahan sehingga digunakan; potongan diterima mengalihkan item seterusnya pada garis masa.",
+			"Setiap perubahan yang anda terima terus muncul pada garis masa dan pratonton, dan kepala main melompat ke situ. Tolak untuk menariknya balik. Tekan Selesai apabila berpuas hati.",
 	},
 } as const;
 export type PlanLanguage = keyof typeof messages;

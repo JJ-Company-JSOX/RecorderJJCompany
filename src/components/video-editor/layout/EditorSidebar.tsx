@@ -1,6 +1,13 @@
 import { AccountAvatar } from "@/components/ui/account-avatar";
 import type { User } from "@supabase/supabase-js";
-import { Camera, ClosedCaptioning, Cursor, Gear, FrameCorners } from "@/components/ui/icons";
+import {
+	Camera,
+	ClosedCaptioning,
+	Cursor,
+	FrameCorners,
+	Gear,
+	MagicWand,
+} from "@/components/ui/icons";
 import {
 	ToggleButtonGroup,
 	ToggleButton,
@@ -25,6 +32,8 @@ type Props = {
 	activeSection: EditorEffectSection;
 	setActiveSection: (section: EditorEffectSection) => void;
 	settingsPanelProps: ComponentProps<typeof SettingsPanel>;
+	/** Stable ref callback for the AI auto edit panel's container (rendered into by a portal). */
+	aiPanelSlot?: (element: HTMLDivElement | null) => void;
 };
 
 function shallowEqualProperties(before: object, after: object): boolean {
@@ -49,7 +58,9 @@ export const EditorSidebar = memo(
 		settingsPanelProps,
 		panelContent,
 		onAccountClick,
+		aiPanelSlot,
 	}: Props) {
+		const aiActive = !panelContent && activeSection === "ai";
 		const [advancedSections, setAdvancedSections] = useState<Record<string, boolean>>({});
 		const advanced = advancedSections[activeSection] ?? false;
 		const hasAdvanced =
@@ -59,6 +70,11 @@ export const EditorSidebar = memo(
 			);
 		const sections = useMemo(
 			() => [
+				{
+					id: "ai" as const,
+					label: t("settings.sections.ai", "AI auto edit"),
+					icon: MagicWand,
+				},
 				{
 					id: "scene" as const,
 					label: t("settings.sections.scene", "Scene"),
@@ -141,52 +157,63 @@ export const EditorSidebar = memo(
 				</nav>
 				<aside
 					aria-label={panelContent ? "Clips" : undefined}
-					className="editor-inspector [--text-sm:0.8125rem] [--text-base:0.8125rem] flex w-[320px] min-h-0 flex-col"
+					className={`editor-inspector [--text-sm:0.8125rem] [--text-base:0.8125rem] flex ${aiActive ? "w-[360px]" : "w-[320px]"} min-h-0 flex-col`}
 				>
 					<Card className="min-h-0 flex-1 gap-0 overflow-hidden p-0">
-						{panelContent ?? (
-							<>
-								<header className="flex min-h-14 shrink-0 items-center justify-between gap-3 px-5 py-3">
-									<Card.Title className="text-[14px]">
-										{settingsPanelProps.selectedAnnotationId
-											? t("timeline.annotation.label", "Annotation")
-											: (sections.find(
-													(section) => section.id === activeSection,
-												)?.label ??
-												t(
-													`settings.sections.${activeSection}`,
-													activeSection.charAt(0).toUpperCase() +
-														activeSection.slice(1),
-												))}
-									</Card.Title>
-									{hasAdvanced && (
-										<Switch
-											size="sm"
-											isSelected={advanced}
-											onChange={(value) =>
-												setAdvancedSections((current) => ({
-													...current,
-													[activeSection]: value,
-												}))
-											}
-											aria-label="Advanced settings"
-										>
-											<Switch.Content>
-												<Label className="text-xs">Advanced</Label>
-												<Switch.Control>
-													<Switch.Thumb />
-												</Switch.Control>
-											</Switch.Content>
-										</Switch>
-									)}
-								</header>
-								{activeSection === "extensions" ? (
-									<ExtensionManager />
-								) : (
-									<SettingsPanel {...settingsPanelProps} advanced={advanced} />
-								)}
-							</>
-						)}
+						{/* Always mounted so AI work survives switching tabs. */}
+						<div
+							ref={aiPanelSlot}
+							className={aiActive ? "flex min-h-0 flex-1 flex-col" : "hidden"}
+						/>
+						{aiActive
+							? null
+							: (panelContent ?? (
+									<>
+										<header className="flex min-h-14 shrink-0 items-center justify-between gap-3 px-5 py-3">
+											<Card.Title className="text-[14px]">
+												{settingsPanelProps.selectedAnnotationId
+													? t("timeline.annotation.label", "Annotation")
+													: (sections.find(
+															(section) =>
+																section.id === activeSection,
+														)?.label ??
+														t(
+															`settings.sections.${activeSection}`,
+															activeSection.charAt(0).toUpperCase() +
+																activeSection.slice(1),
+														))}
+											</Card.Title>
+											{hasAdvanced && (
+												<Switch
+													size="sm"
+													isSelected={advanced}
+													onChange={(value) =>
+														setAdvancedSections((current) => ({
+															...current,
+															[activeSection]: value,
+														}))
+													}
+													aria-label="Advanced settings"
+												>
+													<Switch.Content>
+														<Label className="text-xs">Advanced</Label>
+														<Switch.Control>
+															<Switch.Thumb />
+														</Switch.Control>
+													</Switch.Content>
+												</Switch>
+											)}
+										</header>
+										{activeSection === "extensions" ? (
+											<ExtensionManager />
+										) : (
+											<SettingsPanel
+												{...settingsPanelProps}
+												advanced={advanced}
+											/>
+										)}
+									</>
+								))}
 					</Card>
 				</aside>
 			</div>

@@ -29,7 +29,8 @@ export function getPreviewResolution(
 ) {
 	const density = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
 	if (mode === "full") return density;
-	return Math.min(1, density, 1280 / Math.max(1, width, height));
+	// Honour screen scaling (125–200% on most laptops) so text stays sharp, up to ~1080p of work.
+	return Math.min(density, 1920 / Math.max(1, width, height));
 }
 
 export function setPreviewQuality(next: PreviewQuality) {

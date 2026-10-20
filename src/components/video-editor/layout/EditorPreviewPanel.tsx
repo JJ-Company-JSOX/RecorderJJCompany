@@ -162,7 +162,7 @@ export function EditorPreviewPanel(props: Props) {
 						}
 					>
 						<option value="balanced">
-							{t("editor.previewQuality.balanced", "Balanced (720p)")}
+							{t("editor.previewQuality.balanced", "Balanced (1080p)")}
 						</option>
 						<option value="full">
 							{t("editor.previewQuality.full", "Full display quality")}

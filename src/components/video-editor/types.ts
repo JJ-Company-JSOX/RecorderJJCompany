@@ -107,6 +107,7 @@ export function normalizeCursorClickEffectColor(
 }
 
 export type EditorEffectSection =
+	| "ai"
 	| "scene"
 	| "cursor"
 	| "captions"

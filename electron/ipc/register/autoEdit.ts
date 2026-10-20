@@ -129,7 +129,7 @@ export function registerAutoEditHandlers() {
 				const analysis = await analyzeVideoFrames({
 					videoPath: approved,
 					model: BUNDLED_MODEL_ID,
-					count: 4,
+					count: 8,
 					ffmpegPath: getFfmpegBinaryPath(),
 					ffprobePath: getFfprobeBinaryPath(),
 					signal: controller.signal,

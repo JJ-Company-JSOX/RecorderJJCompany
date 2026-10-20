@@ -69,11 +69,54 @@ describe("local edit planning", () => {
 			],
 		]);
 	});
-	it("requires BOTH silence and static frames, retaining edge padding", () => {
-		expect(build().suggestions).toMatchObject([{ kind: "trim", startMs: 3400, endMs: 6600 }]);
-		expect(build(state(), { ...evidence(), staticRanges: [] }).suggestions).toEqual([]);
+	it("cuts only when BOTH silence and static frames agree, retaining edge padding", () => {
+		expect(build().suggestions).toMatchObject([
+			{ kind: "trim", startMs: 3400, endMs: 6600, reason: "silent-static" },
+		]);
+		expect(
+			build(state(), { ...evidence(), staticRanges: [] }).suggestions.some(
+				(s) => s.kind === "trim",
+			),
+		).toBe(false);
 		expect(build(state(), { ...evidence(), silentRanges: [] }).suggestions).toEqual([]);
 		expect(build(state(), { ...evidence(), audioVerified: false }).suggestions).toEqual([]);
+	});
+	it("speeds up silent footage whose frames still change instead of cutting it", () => {
+		const p = build(state(), {
+			...evidence(),
+			staticRanges: [],
+			silentRanges: [{ startMs: 1000, endMs: 6000 }],
+		});
+		expect(p.suggestions).toMatchObject([
+			{ kind: "speed", speed: 2, reason: "silent-moving", startMs: 1400, endMs: 5600 },
+		]);
+		const next = applyEditPlan(state(), source, p, acceptAll(p));
+		expect(next.clipRegions.map((c) => c.speed)).toEqual([1, 2, 1]);
+	});
+	it("splits silence into a cut for the frozen part and a speed-up for the moving part", () => {
+		const p = build(state(), {
+			...evidence(),
+			staticRanges: [{ startMs: 1000, endMs: 5000 }],
+			silentRanges: [{ startMs: 1000, endMs: 9000 }],
+		});
+		expect(p.suggestions).toMatchObject([
+			{ kind: "trim", reason: "silent-static", startMs: 1400, endMs: 4600 },
+			{ kind: "speed", reason: "silent-moving", startMs: 5400, endMs: 8600, speed: 2 },
+		]);
+	});
+	it("does not speed up silent moving footage that contains a click", () => {
+		const p = buildEditPlan({
+			state: state(),
+			source,
+			evidence: {
+				...evidence(),
+				staticRanges: [],
+				silentRanges: [{ startMs: 1000, endMs: 6000 }],
+			},
+			cursor: [{ timeMs: 3000, cx: 0.5, cy: 0.5, interactionType: "click" }],
+			id: "test",
+		});
+		expect(p.suggestions.some((s) => s.kind === "speed" || s.kind === "trim")).toBe(false);
 	});
 	it("suggests a reversible speed edit for a short quiet/static pause", () => {
 		const p = build(state(), { ...evidence(), silentRanges: [{ startMs: 3000, endMs: 5000 }] });

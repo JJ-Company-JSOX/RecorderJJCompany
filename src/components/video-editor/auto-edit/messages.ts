@@ -76,6 +76,7 @@ export const messages = {
 		speed: "Speed up pause",
 		annotation: "Text annotation",
 		"silent-static": "Silence AND identical frames; 400 ms retained at each edge.",
+		"silent-moving": "No one is speaking but the screen is still changing, so it is sped up 2× instead of cut.",
 		click: "Recorded click location.",
 		transcript: "Exact text from existing transcript; no translation or recognition added.",
 		warning: "Analysis limitation",
@@ -167,6 +168,7 @@ export const messages = {
 		speed: "加速停顿",
 		annotation: "文字标注",
 		"silent-static": "同时满足静音与相同画面，两端各保留 400 毫秒。",
+		"silent-moving": "这段没人说话，但画面还在变化，所以加速 2 倍而不是删掉。",
 		click: "使用实际记录的点击位置。",
 		transcript: "使用现有转录原文，不新增识别或翻译。",
 		warning: "分析限制",
@@ -260,6 +262,7 @@ export const messages = {
 		speed: "Percepat jeda",
 		annotation: "Anotasi teks",
 		"silent-static": "Senyap DAN bingkai yang sama; 400 ms dikekalkan pada setiap hujung.",
+		"silent-moving": "Tiada orang bercakap tetapi skrin masih berubah, jadi ia dipercepat 2× dan bukan dipotong.",
 		click: "Lokasi klik yang dirakam.",
 		transcript:
 			"Teks tepat daripada transkrip sedia ada; tiada pengecaman atau terjemahan baharu.",

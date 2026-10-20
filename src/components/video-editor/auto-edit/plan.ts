@@ -50,7 +50,14 @@ export type ConflictReason =
 export interface EditSuggestion extends Span {
 	id: string;
 	kind: "trim" | "zoom" | "speed" | "annotation" | "caption";
-	reason: "silent-static" | "click" | "transcript" | "vision" | "speech" | "speech-pause";
+	reason:
+		| "silent-static"
+		| "silent-moving"
+		| "click"
+		| "transcript"
+		| "vision"
+		| "speech"
+		| "speech-pause";
 	cue?: CaptionCue;
 	focus?: { cx: number; cy: number };
 	depth?: 1 | 2 | 3;
@@ -118,6 +125,21 @@ export function conflictFor(s: EditSuggestion, state: EditState): ConflictReason
 	return undefined;
 }
 
+export function subtractRanges(from: Span[], remove: Span[]): Span[] {
+	let pieces = from.filter(validSpan);
+	for (const cut of remove) {
+		pieces = pieces.flatMap((piece) =>
+			overlaps(piece, cut)
+				? [
+						{ startMs: piece.startMs, endMs: Math.min(piece.endMs, cut.startMs) },
+						{ startMs: Math.max(piece.startMs, cut.endMs), endMs: piece.endMs },
+					].filter(validSpan)
+				: [piece],
+		);
+	}
+	return pieces.sort((x, y) => x.startMs - y.startMs);
+}
+
 /** Evidence is in source coordinates; authored clips may be reordered, repeated or sped up. */
 export function buildEditPlan(input: {
 	state: EditState;
@@ -141,11 +163,18 @@ export function buildEditPlan(input: {
 			endMs: Math.round(clip.startMs + (s.endMs - sourceStart) / clip.speed),
 		});
 		if (evidence.audioVerified && !state.additionalVisualSource) {
-			const quiet = intersectRanges(
-				intersectRanges(evidence.staticRanges, evidence.silentRanges),
-				[{ startMs: sourceStart, endMs: sourceEnd }],
-			);
-			for (const range of quiet) {
+			const clipSpan = [{ startMs: sourceStart, endMs: sourceEnd }];
+			const silent = intersectRanges(evidence.silentRanges, clipSpan);
+			const silentStatic = intersectRanges(silent, evidence.staticRanges);
+			const quiet = [
+				...silentStatic.map((range) => ({ range, moving: false })),
+				// Silent but changing frames may still demonstrate something, so only speed it up.
+				...subtractRanges(silent, evidence.staticRanges).map((range) => ({
+					range,
+					moving: true,
+				})),
+			];
+			for (const { range, moving } of quiet) {
 				// No text interpretation: every supplied cue protects speech in every language.
 				if (
 					state.autoCaptions.some((c) =>
@@ -164,7 +193,11 @@ export function buildEditPlan(input: {
 				)
 					continue;
 				const padded = project({ startMs: range.startMs + 400, endMs: range.endMs - 400 });
-				if (padded.endMs - padded.startMs < 1000) continue;
+				if (padded.endMs - padded.startMs < (moving ? 1500 : 1000)) continue;
+				if (moving) {
+					add({ ...padded, kind: "speed", reason: "silent-moving", speed: 2 });
+					continue;
+				}
 				const kind = padded.endMs - padded.startMs >= 2500 ? "trim" : "speed";
 				// Always retain at least 400 ms at clip boundaries, even for all-static recordings.
 				add({

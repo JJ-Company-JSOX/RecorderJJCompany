@@ -9,10 +9,20 @@ export interface NarrationGenerator {
 	generate(plan: EditPlan, model: string): Promise<NarrationDraft>;
 }
 
-type NarrationCandidate = { id: string; kind: string; startMs: number; endMs: number; reason: string };
+type NarrationCandidate = {
+	id: string;
+	kind: string;
+	startMs: number;
+	endMs: number;
+	reason: string;
+};
 
 const NARRATION_SYSTEM_PROMPT =
 	'Write a short narration line for each listed timestamped action from a screen-recording tutorial editing plan. Reply with {"cues":[{"id":"...","text":"..."}]}, exactly one cue per listed action id. Keep each line under 25 words, present tense, friendly. Describe only what the action kind/reason implies (for example a "zoom" at a "click" is the presenter zooming in on where they clicked; a "trim" removes a pause or repeat). Never invent on-screen content, numbers, names or claims the action metadata does not support. No markdown.';
+
+// The bundled voice (AISHELL-3) has a Mandarin-only lexicon and silently drops other words.
+const MANDARIN_INSTRUCTION =
+	" Write every line in Simplified Chinese (Mandarin), because it will be read aloud by a Mandarin-only voice.";
 
 const NARRATION_SCHEMA = {
 	type: "object",
@@ -51,7 +61,7 @@ function parseNarrationCues(candidates: NarrationCandidate[], raw: unknown): Nar
 		!raw ||
 		typeof raw !== "object" ||
 		!Array.isArray((raw as { cues?: unknown }).cues) ||
-		((raw as { cues: unknown[] }).cues.length > candidates.length)
+		(raw as { cues: unknown[] }).cues.length > candidates.length
 	)
 		throw new Error("Invalid narration draft");
 	const byId = new Map(candidates.map((c) => [c.id, c]));
@@ -64,7 +74,12 @@ function parseNarrationCues(candidates: NarrationCandidate[], raw: unknown): Nar
 		seen.add(source.id);
 		if (typeof cue.text !== "string" || !cue.text.trim() || cue.text.length > 500)
 			throw new Error("Invalid narration text");
-		return { id: source.id, startMs: source.startMs, endMs: source.endMs, text: cue.text.trim() };
+		return {
+			id: source.id,
+			startMs: source.startMs,
+			endMs: source.endMs,
+			text: cue.text.trim(),
+		};
 	});
 	return { cues: cues.sort((a, b) => a.startMs - b.startMs) };
 }
@@ -105,7 +120,7 @@ export async function generateBundledNarration(
 	const candidates = buildNarrationCandidates(plan);
 	if (!candidates.length) return { cues: [] };
 	const content = await complete(
-		NARRATION_SYSTEM_PROMPT,
+		NARRATION_SYSTEM_PROMPT + MANDARIN_INSTRUCTION,
 		JSON.stringify(candidates),
 		NARRATION_SCHEMA,
 	);

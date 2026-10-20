@@ -25,8 +25,12 @@
 
 ```sh
 npm run prepare:offline-ai
+npm run prepare:offline-speech
+npm run prepare:offline-tts
 npm run build:win:offline
 ```
+
+完整离线 AI 包同时内置语音识别（Whisper small，约 190 MB）和 AI 解说配音（AISHELL-3 VITS，约 33 MB，Apache-2.0）。打包前依次执行 `verify:offline-ai`、`verify:offline-speech`、`verify:offline-tts`，任何一项缺失或损坏都会停止打包。内置配音只支持普通话，所以内置模型生成的解说稿固定用简体中文书写。开发时先完成上面三个准备命令，再用 `npm run dev` 直接测试，无需打包。
 
 准备脚本将校验后的官方模型及便携构建工具放进 Git 忽略目录，编译固定源码版本的独立 CPU 组件，检查其 Windows DLL 依赖，并生成随包清单。构建工具只在开发机 `.tmp`，模型及成品组件在 `vendor/offline-ai`；顾客包只包含运行所需文件。正式打包前执行 `verify:offline-ai`，缺失或损坏时失败，不生成“看似支持 AI、实际要求顾客另行配置”的完整版本。
 

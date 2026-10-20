@@ -8,6 +8,7 @@ import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { interfaceMessages } from "./interfaceMessages";
 import { messages, type PlanLanguage } from "./messages";
 import type { NarrationDraft } from "./narration";
+import { guideMessages } from "./guideMessages";
 import { narrationMessages } from "./narrationMessages";
 import { baselineFor, buildEditPlan, type Decision, type EditPlan, type EditState } from "./plan";
 import { addSpeechSuggestions } from "./speechPlan";
@@ -38,6 +39,7 @@ export function AutoEditPanel({
 	const ui = interfaceMessages[language];
 	const v = visionMessages[language];
 	const n = narrationMessages[language];
+	const g = guideMessages[language];
 	const [visionConsent, setVisionConsent] = useState(false);
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
@@ -440,6 +442,23 @@ export function AutoEditPanel({
 							</div>
 						))}
 					</div>
+					<details className="rounded-xl border border-separator p-4" data-how-to>
+						<summary className="cursor-pointer text-sm font-medium">{g.title}</summary>
+						<ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
+							{g.steps.map((step) => (
+								<li key={step}>{step}</li>
+							))}
+						</ol>
+						<h4 className="mt-4 text-sm font-semibold">{g.termsTitle}</h4>
+						<dl className="mt-2 space-y-2 text-sm">
+							{g.terms.map(([term, meaning]) => (
+								<div key={term}>
+									<dt className="font-medium">{term}</dt>
+									<dd className="text-muted-foreground">{meaning}</dd>
+								</div>
+							))}
+						</dl>
+					</details>
 					<section
 						className="space-y-4 rounded-xl border border-primary/25 bg-primary/5 p-4"
 						aria-label={m.offlineTitle}
@@ -659,6 +678,9 @@ export function AutoEditPanel({
 									{pending.length} · {m.accept}: {accepted.length}
 								</p>
 							)}
+							{plan.suggestions.length > available.length && (
+								<p className="text-xs text-muted-foreground">{g.summaryHelp}</p>
+							)}
 							{available.length > 0 ? (
 								<>
 									<p className="text-sm">{m.decisionHint}</p>
@@ -695,7 +717,7 @@ export function AutoEditPanel({
 									<li
 										key={s.id}
 										data-suggestion-id={s.id}
-										className="rounded-lg border p-3"
+										className={`rounded-lg border p-3 ${s.blocked ? "border-dashed opacity-70" : ""}`}
 									>
 										<div className="flex justify-between gap-2">
 											<strong>

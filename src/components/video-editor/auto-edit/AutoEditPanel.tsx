@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useI18n } from "@/contexts/I18nContext";
-import type { CursorTelemetryPoint } from "../types";
+import type { AudioRegion, CursorTelemetryPoint } from "../types";
 import { applyEditPlan } from "./apply";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { interfaceMessages } from "./interfaceMessages";
@@ -42,9 +42,9 @@ export function AutoEditPanel({
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
-	const [busy, setBusy] = useState<"analysis" | "review" | "narrate" | "vision" | "tools" | null>(
-		null,
-	);
+	const [busy, setBusy] = useState<
+		"analysis" | "review" | "narrate" | "synthesize" | "vision" | "tools" | null
+	>(null);
 	const [error, setError] = useState("");
 	const [missingAudio, setMissingAudio] = useState(false);
 	const [applied, setApplied] = useState(false);
@@ -59,6 +59,8 @@ export function AutoEditPanel({
 	const [narrationDraft, setNarrationDraft] = useState<NarrationDraft | null>(null);
 	const [narrationEdits, setNarrationEdits] = useState<Record<string, string>>({});
 	const [narrationApproved, setNarrationApproved] = useState(false);
+	const [narrationAudioReady, setNarrationAudioReady] = useState(false);
+	const [ttsStatus, setTtsStatus] = useState<{ available: boolean } | null>(null);
 	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
 	const [keepFullFrame, setKeepFullFrame] = useState(true);
 	const [speechReady, setSpeechReady] = useState<boolean | null>(null);
@@ -99,6 +101,14 @@ export function AutoEditPanel({
 			})
 			.catch(() => {
 				if (active) setBundledStatus(null);
+			});
+		void window.electronAPI
+			.getBundledTtsStatus?.()
+			.then((status) => {
+				if (active) setTtsStatus(status);
+			})
+			.catch(() => {
+				if (active) setTtsStatus(null);
 			});
 		return () => {
 			active = false;
@@ -143,6 +153,7 @@ export function AutoEditPanel({
 		setNarrationDraft(null);
 		setNarrationEdits({});
 		setNarrationApproved(false);
+		setNarrationAudioReady(false);
 		try {
 			if (!window.electronAPI.analyzeAutoEdit) throw new Error(m.unavailable);
 			const complete = withSpeech
@@ -260,6 +271,7 @@ export function AutoEditPanel({
 		setBusy("narrate");
 		setError("");
 		setNarrationApproved(false);
+		setNarrationAudioReady(false);
 		try {
 			const result = await window.electronAPI.narrateAutoEditLocally(plan, model);
 			if (run !== generation.current) return;
@@ -279,12 +291,52 @@ export function AutoEditPanel({
 		setBusy("narrate");
 		setError("");
 		setNarrationApproved(false);
+		setNarrationAudioReady(false);
 		try {
 			const result = await window.electronAPI.narrateAutoEditBundled(plan);
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
 			setNarrationDraft(result.draft);
 			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
+	const synthesizeNarration = async () => {
+		if (!narrationDraft || !narrationApproved) return;
+		const run = ++generation.current;
+		setBusy("synthesize");
+		setError("");
+		try {
+			const cues = narrationDraft.cues.map((cue) => ({
+				id: cue.id,
+				text: narrationEdits[cue.id] ?? cue.text,
+			}));
+			const result = await window.electronAPI.synthesizeAutoEditNarration(cues);
+			if (run !== generation.current) return;
+			if (!result.success || !result.clips) throw new Error(result.error);
+			const { state: latestState } = currentState.current;
+			const trackIndex =
+				Math.max(-1, ...latestState.audioRegions.map((r) => r.trackIndex ?? 0)) + 1;
+			const regions: AudioRegion[] = [];
+			for (const clip of result.clips) {
+				const cue = narrationDraft.cues.find((c) => c.id === clip.id);
+				if (!cue) continue;
+				regions.push({
+					id: `narration-${clip.id}`,
+					startMs: cue.startMs,
+					endMs: cue.startMs + clip.durationMs,
+					audioPath: clip.audioPath,
+					volume: 1,
+					normalize: false,
+					trackIndex,
+				});
+			}
+			onApply({ ...latestState, audioRegions: [...latestState.audioRegions, ...regions] });
+			setNarrationAudioReady(true);
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -306,6 +358,7 @@ export function AutoEditPanel({
 			setNarrationDraft(null);
 			setNarrationEdits({});
 			setNarrationApproved(false);
+			setNarrationAudioReady(false);
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -717,13 +770,17 @@ export function AutoEditPanel({
 														<Button
 															variant="ghost"
 															disabled={stale || !!busy}
-															onClick={() => onSeek(cue.startMs / 1000)}
+															onClick={() =>
+																onSeek(cue.startMs / 1000)
+															}
 														>
 															{m.seek}
 														</Button>
 														<textarea
 															aria-label={cue.id}
-															value={narrationEdits[cue.id] ?? cue.text}
+															value={
+																narrationEdits[cue.id] ?? cue.text
+															}
 															disabled={stale || !!busy}
 															onChange={(e) => {
 																setNarrationEdits((prev) => ({
@@ -731,6 +788,7 @@ export function AutoEditPanel({
 																	[cue.id]: e.target.value,
 																}));
 																setNarrationApproved(false);
+																setNarrationAudioReady(false);
 															}}
 															className="w-full rounded border p-2 text-sm"
 														/>
@@ -742,13 +800,32 @@ export function AutoEditPanel({
 													type="checkbox"
 													checked={narrationApproved}
 													disabled={stale || !!busy}
-													onChange={(e) => setNarrationApproved(e.target.checked)}
+													onChange={(e) =>
+														setNarrationApproved(e.target.checked)
+													}
 												/>
-											{n.approve}
-										</label>
-										{narrationApproved && <p className="text-sm">{n.approved}</p>}
-									</div>
-								))}
+												{n.approve}
+											</label>
+											{narrationApproved && (
+												<p className="text-sm">{n.approved}</p>
+											)}
+											{narrationApproved && (
+												<Button
+													disabled={
+														!ttsStatus?.available || stale || !!busy
+													}
+													onClick={() => void synthesizeNarration()}
+												>
+													{busy === "synthesize"
+														? n.synthesizing
+														: n.generateAudio}
+												</Button>
+											)}
+											{narrationAudioReady && (
+												<p className="text-sm">{n.audioReady}</p>
+											)}
+										</div>
+									))}
 							</section>
 							{import.meta.env.DEV && (
 								<details>
@@ -948,6 +1025,7 @@ export function AutoEditPanel({
 									setNarrationDraft(null);
 									setNarrationEdits({});
 									setNarrationApproved(false);
+									setNarrationAudioReady(false);
 									setApplied(true);
 									setError("");
 								} catch (e) {

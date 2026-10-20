@@ -308,6 +308,17 @@ interface Window {
 			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;
 			error?: string;
 		}>;
+		getBundledTtsStatus: () => Promise<{
+			available: boolean;
+			reason?: string;
+			modelName?: string;
+			numSpeakers?: number;
+		}>;
+		synthesizeAutoEditNarration: (cues: Array<{ id: string; text: string }>) => Promise<{
+			success: boolean;
+			clips?: Array<{ id: string; audioPath: string; durationMs: number }>;
+			error?: string;
+		}>;
 		hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
 		hudOverlaySetSourceSelectionActive: (active: boolean) => void;
 		hudOverlayDrag: (phase: "start" | "move" | "end", screenX: number, screenY: number) => void;

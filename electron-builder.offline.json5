@@ -18,6 +18,14 @@
   "extraFiles": [
     { "from": "scripts/launch-windows-offline-ai.cmd", "to": "Start-Jsox-Offline-AI.cmd" }
   ],
+  "asarUnpack": [
+    "node_modules/ffmpeg-static/**",
+    "node_modules/ffprobe-static/**",
+    "node_modules/uiohook-napi/**",
+    "node_modules/sherpa-onnx-node/**",
+    "node_modules/sherpa-onnx-win-x64/**",
+    "electron/native/bin/**"
+  ],
   "win": {
     "signAndEditExecutable": false,
     "artifactName": "Jsox-Recorder-Offline-AI-${version}-${arch}.${ext}"
@@ -29,7 +37,7 @@
     {
       "from": "vendor/offline-ai/win32-x64",
       "to": "offline-ai",
-      "filter": ["manifest.json", "*.gguf", "*.txt", "runtime-static/**"]
+      "filter": ["manifest.json", "*.gguf", "*.txt", "runtime-static/**", "tts/**"]
     }
   ]
 }

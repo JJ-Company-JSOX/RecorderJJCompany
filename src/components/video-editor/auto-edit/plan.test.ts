@@ -118,6 +118,34 @@ describe("local edit planning", () => {
 		});
 		expect(p.suggestions.some((s) => s.kind === "speed" || s.kind === "trim")).toBe(false);
 	});
+	it("only speeds up a frozen picture while the pointer is moving across it", () => {
+		const moves = [0, 1, 2, 3, 4].map((i) => ({
+			timeMs: 3500 + i * 600,
+			cx: 0.2 + i * 0.1,
+			cy: 0.5,
+			interactionType: "move" as const,
+		}));
+		const p = buildEditPlan({
+			state: state(),
+			source,
+			evidence: evidence(),
+			cursor: moves,
+			id: "t",
+		});
+		expect(p.suggestions).toMatchObject([
+			{ kind: "speed", reason: "silent-moving", speed: 2, startMs: 3400, endMs: 6600 },
+		]);
+		// A barely moving pointer (cursor jitter) does not protect the pause.
+		const jitter = moves.map((m) => ({ ...m, cx: 0.5 + (m.timeMs % 2) * 0.001 }));
+		const q = buildEditPlan({
+			state: state(),
+			source,
+			evidence: evidence(),
+			cursor: jitter,
+			id: "t",
+		});
+		expect(q.suggestions).toMatchObject([{ kind: "trim", reason: "silent-static" }]);
+	});
 	it("suggests a reversible speed edit for a short quiet/static pause", () => {
 		const p = build(state(), { ...evidence(), silentRanges: [{ startMs: 3000, endMs: 5000 }] });
 		expect(p.suggestions[0]).toMatchObject({ kind: "speed", speed: 1.5 });

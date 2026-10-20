@@ -70,6 +70,31 @@ describe("actual FFmpeg local analysis (synthetic fixtures, NOT language accurac
 		expect(result.noAudio).toBe(true);
 		expect(result.silentRanges).toEqual([{ startMs: 0, endMs: result.durationMs }]);
 	});
+	it("detects a still screen in a lossy recording despite keyframe noise", async () => {
+		const file = path.join(dir, "lossy-still.mp4");
+		execFileSync(ffmpegPath, [
+			"-y",
+			"-hide_banner",
+			"-loglevel",
+			"error",
+			"-f",
+			"lavfi",
+			"-i",
+			"testsrc2=s=640x360:r=30,trim=0:1,loop=loop=-1:size=1:start=0,trim=0:6,setpts=N/30/TB",
+			"-c:v",
+			"libx264",
+			"-crf",
+			"28",
+			"-g",
+			"30",
+			"-pix_fmt",
+			"yuv420p",
+			file,
+		]);
+		const result = await analyze(file);
+		expect(result.staticRanges).toHaveLength(1);
+		expect(result.staticRanges[0].endMs - result.staticRanges[0].startMs).toBeGreaterThan(4000);
+	});
 	it("does not cut moving silent footage", async () => {
 		const result = await analyze(fixture("moving", "testsrc2=s=160x90:r=10", [silence]));
 		expect(result.staticRanges).toEqual([]);

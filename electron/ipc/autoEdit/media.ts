@@ -81,7 +81,8 @@ export async function analyzeLocalMedia(options: {
 		"0:v:0",
 		"-an",
 		"-vf",
-		"setpts=PTS-STARTPTS,freezedetect=n=0:d=1.5",
+		// -60 dB tolerates encoder noise (keyframes never decode bit-identical) but not real changes.
+		"setpts=PTS-STARTPTS,freezedetect=n=-60dB:d=1.5",
 		"-filter_threads",
 		"1",
 		"-f",

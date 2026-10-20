@@ -10,6 +10,7 @@ import { messages, type PlanLanguage } from "./messages";
 import type { NarrationDraft } from "./narration";
 import { narrationCaptions } from "./narrationCaptions";
 import { narrationMessages } from "./narrationMessages";
+import { narrationMoments, scheduleNarration } from "./narrationMoments";
 import { OfflineToolsPanel } from "./OfflineToolsPanel";
 import {
 	baselineFor,
@@ -268,26 +269,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		id: crypto.randomUUID(),
 		coordinateSpace: "timeline-ms",
 		baseline: baselineFor(s, source),
-		suggestions: [
-			...s.zoomRegions.map((z, i) => ({
-				id: `zoom-${i + 1}`,
-				kind: "zoom" as const,
-				reason: "click" as const,
-				startMs: z.startMs,
-				endMs: z.endMs,
-				focus: z.focus,
-			})),
-			...s.clipRegions
-				.filter((c) => c.speed > 1)
-				.map((c, i) => ({
-					id: `speed-${i + 1}`,
-					kind: "speed" as const,
-					reason: "silent-moving" as const,
-					startMs: c.startMs,
-					endMs: c.endMs,
-					speed: c.speed,
-				})),
-		].sort((a, b) => a.startMs - b.startMs),
+		suggestions: narrationMoments(s, cursor),
 		warnings: [],
 		reviewer: "rules",
 	});
@@ -450,20 +432,21 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			const { state: latestState } = currentState.current;
 			const trackIndex =
 				Math.max(-1, ...latestState.audioRegions.map((r) => r.trackIndex ?? 0)) + 1;
-			const regions: AudioRegion[] = [];
-			for (const clip of result.clips) {
-				const cue = narrationDraft.cues.find((c) => c.id === clip.id);
-				if (!cue) continue;
-				regions.push({
-					id: `narration-${clip.id}`,
-					startMs: cue.startMs,
-					endMs: cue.startMs + clip.durationMs,
-					audioPath: clip.audioPath,
-					volume: 1,
-					normalize: false,
-					trackIndex,
-				});
-			}
+			// Each line waits for the previous one, so voices never talk over each other.
+			const regions: AudioRegion[] = scheduleNarration(
+				result.clips.flatMap((clip) => {
+					const cue = narrationDraft.cues.find((c) => c.id === clip.id);
+					return cue ? [{ ...clip, startMs: cue.startMs }] : [];
+				}),
+			).map((clip) => ({
+				id: `narration-${clip.id}`,
+				startMs: clip.startMs,
+				endMs: clip.endMs,
+				audioPath: clip.audioPath,
+				volume: 1,
+				normalize: false,
+				trackIndex,
+			}));
 			onApply({
 				...latestState,
 				audioRegions: [...latestState.audioRegions, ...regions],
@@ -512,7 +495,14 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	};
 	const canUndoRun =
 		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
-	const voiceActions = narrationPlan(state).suggestions.length;
+	const voiceMoments = narrationPlan(state).suggestions;
+	// Recordings with speech get subtitles from the speech; an extra AI voice would talk over it.
+	const voiceActions =
+		silentFallback ||
+		!state.autoCaptions.length ||
+		voiceMoments.some((moment) => moment.kind !== "caption")
+			? voiceMoments.length
+			: 0;
 	const translateText = async () => {
 		const before = currentState.current.state;
 		const lines = before.autoCaptions
@@ -685,6 +675,16 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								</span>
 							</label>
 						</div>
+						{bundledStatus?.available && voiceActions > 0 && (
+							<Button
+								variant="secondary"
+								className="w-full"
+								disabled={!!busy}
+								onClick={() => setVoiceOpen(true)}
+							>
+								{w.voiceEntry}
+							</Button>
+						)}
 						{lines.length > 0 && (
 							<Button
 								variant="secondary"
@@ -1137,6 +1137,11 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							>
 								{ui.noChanges}
 							</p>
+						)}
+						{bundledStatus?.available && voiceActions > 0 && (
+							<Button className="w-full" onClick={() => setVoiceOpen(true)}>
+								{w.voiceEntry}
+							</Button>
 						)}
 						<div>
 							<h3 className="text-base font-semibold">{ui.reviewTitle}</h3>

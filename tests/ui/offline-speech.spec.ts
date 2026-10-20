@@ -421,6 +421,10 @@ test("missing audio falls back to a visual-only plan on small screens without ap
 	await expect(panel.getByRole("alert")).toHaveCount(0);
 	await expect(panel.getByText("Technical extraction details")).toHaveCount(0);
 	await expect(panel.locator("[data-no-edits]")).toContainText("No safe automatic edits");
+	// Even with nothing to cut, a silent video can still get AI voice-over and subtitles.
+	await expect(
+		panel.getByRole("button", { name: "Add AI voice-over and subtitles", exact: true }),
+	).toBeVisible();
 	await expect(panel.locator("[data-no-edits]")).toBeInViewport();
 	await expect(panel.locator("[data-draft-result]")).toHaveCount(0);
 	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");

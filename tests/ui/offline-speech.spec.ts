@@ -220,7 +220,6 @@ test("one click automatically applies grounded subtitles and trim in one undoabl
 	);
 	await expect(page.locator('[data-variant="caption"]')).toHaveCount(1);
 	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
-	await panel.getByRole("button", { name: "Close", exact: true }).click();
 	await page.getByRole("button", { name: "Undo", exact: true }).click();
 	await expect(page.locator('[data-variant="clip"]')).toHaveCount(1);
 	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
@@ -320,8 +319,7 @@ test("cancel ignores a late completed model reply without applying any edits", a
 });
 
 test("new signed-out projects export locally without opening a sign-in flow", async ({ page }) => {
-	const panel = await setup(page);
-	await panel.getByRole("button", { name: "Back to editor", exact: true }).click();
+	await setup(page);
 	await page.getByRole("button", { name: "Export", exact: true }).click();
 	await expect(page.getByRole("row", { name: "Local", exact: true })).toHaveAttribute(
 		"aria-selected",
@@ -331,7 +329,7 @@ test("new signed-out projects export locally without opening a sign-in flow", as
 	await expect(page.locator('input[type="email"]')).toHaveCount(0);
 });
 
-test("review mode shows speech proposals and leaves the timeline unchanged until Apply", async ({
+test("review mode shows speech proposals and leaves the timeline unchanged until a change is accepted", async ({
 	page,
 }) => {
 	const panel = await setup(page);
@@ -341,9 +339,7 @@ test("review mode shows speech proposals and leaves the timeline unchanged until
 		.click();
 	await expect(panel.locator("[data-suggestion-id]")).toHaveCount(3);
 	await expect(panel.getByText("Speech subtitle", { exact: true })).toHaveCount(2);
-	await expect(
-		panel.getByRole("button", { name: "Apply accepted edits", exact: true }),
-	).toBeDisabled();
+	await expect(panel.getByRole("button", { name: "Done", exact: true })).toBeVisible();
 	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
 	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
 });
@@ -430,17 +426,13 @@ test("missing audio falls back to a visual-only plan on small screens without ap
 	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000");
 });
 
-test("small screens keep the main workflow and footer usable in Chinese and English", async ({
-	page,
-}) => {
+test("small screens keep the sidebar workflow usable in Chinese and English", async ({ page }) => {
 	await page.setViewportSize({ width: 1024, height: 640 });
 	const panel = await setup(page);
 	await expect(panel.locator("[data-edit-workflow]")).toBeVisible();
 	await expect(panel.locator("[data-analysis-options]")).not.toHaveAttribute("open");
-	const footer = panel.locator("[data-auto-edit-footer]");
 	for (const language of ["en", "zh"]) {
 		await panel.getByLabel("Plan language").selectOption(language);
-		await expect(footer).toBeInViewport();
 		const bounds = await panel.boundingBox();
 		expect(bounds).not.toBeNull();
 		expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -460,13 +452,11 @@ test("small screens keep the main workflow and footer usable in Chinese and Engl
 	}
 	await panel.locator("[data-hardware-guide] > summary").click();
 	await expect(panel.getByText(/16GB/)).toBeVisible();
-	await expect(footer).toBeInViewport();
-	await panel.locator("[data-auto-edit-scroll]").evaluate((element) => {
-		element.scrollTop = element.scrollHeight;
-	});
-	await expect(footer).toBeInViewport();
-	await panel.getByRole("button", { name: "返回编辑器", exact: true }).click();
-	await expect(panel).toHaveCount(0);
+	// Other sidebar tabs swap the AI panel out; the AI tab brings it back.
+	await page.getByRole("radio", { name: "Scene", exact: true }).click();
+	await expect(panel).toBeHidden();
+	await page.getByRole("radio", { name: "AI auto edit", exact: true }).click();
+	await expect(panel).toBeVisible();
 });
 
 test("the result screen summarizes changes and undoes the whole run in one click", async ({
@@ -491,5 +481,4 @@ test("the result screen summarizes changes and undoes the whole run in one click
 	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
 	await page.screenshot({ path: "test-results/wizard-undone-zh.png" });
 	await panel.getByLabel("Plan language").selectOption("en");
-	await panel.getByRole("button", { name: "Close", exact: true }).click();
 });

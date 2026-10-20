@@ -26,6 +26,9 @@ test("editor inspector and playback controls fit a smaller desktop", async ({ pa
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");
+	// AI auto edit is the default tab; it must fit too, then check Scene.
+	await expect(page.locator("[data-auto-edit-panel]")).toBeInViewport({ timeout: 20000 });
+	await page.getByRole("radio", { name: "Scene", exact: true }).click();
 	await expect(page.getByRole("slider", { name: "Blur", exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Export", exact: true })).toBeInViewport();
 	await expect(page.getByRole("button", { name: "Play", exact: true })).toBeInViewport();

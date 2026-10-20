@@ -22,7 +22,7 @@ test("fresh signed-out install opens editor without email or authentication requ
 	await expect(page.locator('input[type="email"]')).toHaveCount(0);
 	await expect(page.locator('[data-onboarding-state="login"]')).toHaveCount(0);
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
-	await expect(page.getByRole("dialog", { name: "Auto edit plan", exact: true })).toBeVisible();
+	await expect(page.locator("[data-auto-edit-panel]")).toBeVisible();
 	expect(authRequests).toEqual([]);
 });
 

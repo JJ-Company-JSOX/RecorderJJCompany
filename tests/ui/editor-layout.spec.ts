@@ -4,6 +4,8 @@ import { installDesktopBridge } from "./bridge";
 test("advanced controls preserve values and remember each section's view", async ({ page }) => {
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");
+	// AI auto edit is the default tab; open Scene first.
+	await page.getByRole("radio", { name: "Scene", exact: true }).click({ timeout: 20000 });
 	const advanced = page.getByRole("switch", { name: "Advanced settings" });
 	await expect(advanced).toBeVisible({ timeout: 20000 });
 	await expect(page.getByRole("switch", { name: "Link padding sides" })).toHaveCount(0);

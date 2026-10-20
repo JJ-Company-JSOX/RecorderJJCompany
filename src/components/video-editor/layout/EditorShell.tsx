@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+import type { EditState } from "../auto-edit/plan";
 import { OnboardingController } from "@/components/auth/OnboardingController";
 import { AccountProfileContext } from "@/components/ui/account-avatar";
 import { DashboardSettingsContext } from "../dashboard/DashboardSettings";
@@ -71,9 +73,9 @@ type Props = {
 };
 
 export function EditorShell(props: Props) {
-	const [autoEditOpen, setAutoEditOpen] = useState(false);
-	// Keep the panel mounted after its first use so closing still cancels analysis.
-	const [autoEditLoaded, setAutoEditLoaded] = useState(false);
+	// AI auto edit lives in the sidebar; it renders into this slot through a portal so the
+	// memoized sidebar does not re-render with it.
+	const [autoEditSlot, setAutoEditSlot] = useState<HTMLDivElement | null>(null);
 	const [onboardingRequest, setOnboardingRequest] = useState(0);
 	const showOnboarding = useCallback(() => setOnboardingRequest((value) => value + 1), []);
 	const [signInOpen, setSignInOpen] = useState(false);
@@ -136,6 +138,93 @@ export function EditorShell(props: Props) {
 			library.importing,
 			library.cancelling,
 			library.canUndo,
+		],
+	);
+	// Memoized so the always-mounted AI panel skips re-rendering while the playhead moves.
+	const autoEditState = useMemo(
+		() => ({
+			clipRegions: timeline.clipRegions,
+			zoomRegions: timeline.zoomRegions,
+			annotationRegions: timeline.annotationRegions,
+			audioRegions: timeline.audioRegions,
+			autoCaptions: timeline.autoCaptions,
+			speedRegions: timeline.speedRegions,
+			sourceAudioTrackSettingsByClip: Object.fromEntries(
+				timeline.clipRegions.map((clip) => [
+					clip.id,
+					{
+						...timeline.defaultSourceAudioTrackSettings,
+						...timeline.sourceAudioTrackSettingsByClip[clip.id],
+					},
+				]),
+			),
+			additionalVisualSource:
+				appearance.webcam.enabled && appearance.webcam.sourcePath
+					? `${appearance.webcam.sourcePath}|${appearance.webcam.timeOffsetMs}`
+					: null,
+		}),
+		[
+			timeline.clipRegions,
+			timeline.zoomRegions,
+			timeline.annotationRegions,
+			timeline.audioRegions,
+			timeline.autoCaptions,
+			timeline.speedRegions,
+			timeline.defaultSourceAudioTrackSettings,
+			timeline.sourceAudioTrackSettingsByClip,
+			appearance.webcam.enabled,
+			appearance.webcam.sourcePath,
+			appearance.webcam.timeOffsetMs,
+		],
+	);
+	const applyAutoEdit = useCallback(
+		(next: EditState, seekSeconds = 0) => {
+			timeline.setClipRegions(next.clipRegions);
+			timeline.setZoomRegions(next.zoomRegions);
+			timeline.setAnnotationRegions(next.annotationRegions);
+			timeline.setAudioRegions(next.audioRegions);
+			timeline.setAutoCaptions(next.autoCaptions);
+			if (next.autoCaptions.length > timeline.autoCaptions.length)
+				timeline.setAutoCaptionSettings((current) => ({
+					...current,
+					enabled: true,
+				}));
+			// New segments inherit per-source audio settings; originals stay available for Undo.
+			timeline.setSourceAudioTrackSettingsByClip((current) => {
+				const updated = {
+					...current,
+					...next.sourceAudioTrackSettingsByClip,
+				};
+				for (const clip of next.clipRegions) {
+					const owner =
+						timeline.clipRegions.find((c) => clip.id === c.id) ??
+						[...timeline.clipRegions]
+							.sort((a, b) => b.id.length - a.id.length)
+							.find((c) => clip.id.startsWith(`${c.id}-auto-`));
+					if (
+						!next.sourceAudioTrackSettingsByClip?.[clip.id] &&
+						owner &&
+						current[owner.id]
+					)
+						updated[clip.id] = current[owner.id];
+				}
+				return updated;
+			});
+			ui.setCurrentTime(seekSeconds);
+			ui.videoPlaybackRef.current?.seekTimeline(seekSeconds);
+		},
+		[
+			timeline.clipRegions,
+			timeline.autoCaptions.length,
+			timeline.setClipRegions,
+			timeline.setZoomRegions,
+			timeline.setAnnotationRegions,
+			timeline.setAudioRegions,
+			timeline.setAutoCaptions,
+			timeline.setAutoCaptionSettings,
+			timeline.setSourceAudioTrackSettingsByClip,
+			ui.setCurrentTime,
+			ui.videoPlaybackRef,
 		],
 	);
 	const selectEffectSection = useCallback(
@@ -320,8 +409,7 @@ export function EditorShell(props: Props) {
 			<EditorHeader
 				onOpenAutoEdit={() => {
 					ui.setIsPlaying(false);
-					setAutoEditLoaded(true);
-					setAutoEditOpen(true);
+					selectEffectSection("ai");
 				}}
 				clipsOpen={library.open}
 				onToggleClips={() => library.setOpen((open) => !open)}
@@ -363,66 +451,18 @@ export function EditorShell(props: Props) {
 			/>
 			<EditorAnnouncementBanner />
 			<Suspense fallback={null}>
-				{autoEditLoaded && (
-					<AutoEditPanel
-						open={autoEditOpen}
-						onClose={() => setAutoEditOpen(false)}
-						state={{
-							...timeline,
-							sourceAudioTrackSettingsByClip: Object.fromEntries(
-								timeline.clipRegions.map((clip) => [
-									clip.id,
-									{
-										...timeline.defaultSourceAudioTrackSettings,
-										...timeline.sourceAudioTrackSettingsByClip[clip.id],
-									},
-								]),
-							),
-							additionalVisualSource:
-								appearance.webcam.enabled && appearance.webcam.sourcePath
-									? `${appearance.webcam.sourcePath}|${appearance.webcam.timeOffsetMs}`
-									: null,
-						}}
-						source={snapshot.currentSourcePath ?? ""}
-						cursor={timeline.cursorTelemetry}
-						onSeek={playback.handleTimelineSeek}
-						onApply={(next) => {
-							timeline.setClipRegions(next.clipRegions);
-							timeline.setZoomRegions(next.zoomRegions);
-							timeline.setAnnotationRegions(next.annotationRegions);
-							timeline.setAudioRegions(next.audioRegions);
-							timeline.setAutoCaptions(next.autoCaptions);
-							if (next.autoCaptions.length > timeline.autoCaptions.length)
-								timeline.setAutoCaptionSettings((current) => ({
-									...current,
-									enabled: true,
-								}));
-							// New segments inherit per-source audio settings; originals stay available for Undo.
-							timeline.setSourceAudioTrackSettingsByClip((current) => {
-								const updated = {
-									...current,
-									...next.sourceAudioTrackSettingsByClip,
-								};
-								for (const clip of next.clipRegions) {
-									const owner =
-										timeline.clipRegions.find((c) => clip.id === c.id) ??
-										[...timeline.clipRegions]
-											.sort((a, b) => b.id.length - a.id.length)
-											.find((c) => clip.id.startsWith(`${c.id}-auto-`));
-									if (
-										!next.sourceAudioTrackSettingsByClip?.[clip.id] &&
-										owner &&
-										current[owner.id]
-									)
-										updated[clip.id] = current[owner.id];
-								}
-								return updated;
-							});
-							ui.setCurrentTime(0);
-							ui.videoPlaybackRef.current?.seekTimeline(0);
-						}}
-					/>
-				)}
+				{autoEditSlot &&
+					createPortal(
+						<AutoEditPanel
+							open={ui.activeEffectSection === "ai" && !library.open}
+							state={autoEditState}
+							source={snapshot.currentSourcePath ?? ""}
+							cursor={timeline.cursorTelemetry}
+							onSeek={playback.handleTimelineSeek}
+							onApply={applyAutoEdit}
+						/>,
+						autoEditSlot,
+					)}
 			</Suspense>
 			<div
 				className="relative flex min-h-0 flex-1 flex-col"
@@ -478,6 +518,7 @@ export function EditorShell(props: Props) {
 						t={t}
 						activeSection={ui.activeEffectSection}
 						setActiveSection={selectEffectSection}
+						aiPanelSlot={setAutoEditSlot}
 						settingsPanelProps={{
 							...settingsPanelProps,
 							accountUser: auth.user,

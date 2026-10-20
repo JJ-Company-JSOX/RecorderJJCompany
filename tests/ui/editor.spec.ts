@@ -11,6 +11,8 @@ test("editor loads video, switches tools and edits export options", async ({ pag
 	await expect(page.getByRole("navigation", { name: "Editor tools" })).toBeVisible({
 		timeout: 20000,
 	});
+	// AI auto edit is the default tab; open Scene first.
+	await page.getByRole("radio", { name: "Scene", exact: true }).click();
 	await expect(page.getByRole("slider", { name: "Blur", exact: true })).toBeVisible();
 	await expect
 		.poll(() =>

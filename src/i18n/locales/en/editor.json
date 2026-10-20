@@ -200,7 +200,7 @@
 	"openRecordingsFolder": "Open recordings folder",
 	"previewQuality": {
 		"label": "Preview",
-		"balanced": "Balanced (720p)",
+		"balanced": "Balanced (1080p)",
 		"full": "Full display quality",
 		"help": "Preview only; exported quality follows your export settings."
 	}

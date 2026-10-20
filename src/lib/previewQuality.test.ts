@@ -95,9 +95,10 @@ describe("preview quality persistence", () => {
 });
 
 describe("preview resolution budget", () => {
-	it("caps high DPI preview work while retaining CSS geometry", () => {
-		expect(getPreviewResolution(900, 500, 2, "balanced")).toBe(1);
-		expect(getPreviewResolution(2560, 1440, 2, "balanced")).toBe(0.5);
+	it("follows screen scaling but caps preview work near 1080p", () => {
+		expect(getPreviewResolution(900, 500, 2, "balanced")).toBe(2);
+		expect(getPreviewResolution(900, 500, 1.5, "balanced")).toBe(1.5);
+		expect(getPreviewResolution(2560, 1440, 2, "balanced")).toBe(0.75);
 	});
 	it("allows full display density and handles invalid density", () => {
 		expect(getPreviewResolution(900, 500, 2, "full")).toBe(2);

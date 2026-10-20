@@ -111,6 +111,8 @@ test("background swaps use the section fade without sliding or overlapping panel
 }) => {
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");
+	// AI auto edit is the default tab; open Scene first.
+	await page.getByRole("radio", { name: "Scene", exact: true }).click({ timeout: 20000 });
 	await expect(page.locator('[data-background-panel="image"]')).toBeVisible({ timeout: 20000 });
 	for (const name of ["Color", "Gradient", "Video", "Image"]) {
 		await page.getByRole("row", { name, exact: true }).click();

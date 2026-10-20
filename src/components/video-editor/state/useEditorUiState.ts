@@ -45,7 +45,7 @@ export function useEditorUiState(
 	const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
 	const [previewVolume, setPreviewVolume] = useState(1);
 	const [aspectRatio, setAspectRatio] = useState<AspectRatio>(initialPreferences.aspectRatio);
-	const [activeEffectSection, setActiveEffectSection] = useState<EditorEffectSection>("scene");
+	const [activeEffectSection, setActiveEffectSection] = useState<EditorEffectSection>("ai");
 	const [showCropModal, setShowCropModal] = useState(false);
 	const [previewVersion, setPreviewVersion] = useState(0);
 	const [isPreviewReady, setIsPreviewReady] = useState(false);

@@ -303,6 +303,7 @@ interface Window {
 		}>;
 		narrateAutoEditBundled: (
 			plan: import("../src/components/video-editor/auto-edit/plan").EditPlan,
+			language?: "zh" | "en" | "ms",
 		) => Promise<{
 			success: boolean;
 			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;

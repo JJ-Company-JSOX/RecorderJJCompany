@@ -161,6 +161,16 @@ describe("bundled offline narration draft (reuses the AI edition's own model ses
 		const [instruction] = complete.mock.calls[0];
 		expect(instruction).toContain("Simplified Chinese");
 	});
+	it.each([
+		["en", "plain English"],
+		["ms", "Bahasa Melayu"],
+	] as const)("writes %s lines when that language is chosen", async (language, expected) => {
+		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
+		await generateBundledNarration(plan(), complete, language);
+		const [instruction] = complete.mock.calls[0];
+		expect(instruction).toContain(expected);
+		expect(instruction).not.toContain("Simplified Chinese");
+	});
 	it("returns no cues and never calls complete() when every suggestion is blocked", async () => {
 		const blocked = plan();
 		blocked.suggestions[0].blocked = "existing-zoom";

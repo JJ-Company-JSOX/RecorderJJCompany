@@ -453,9 +453,9 @@ test("small screens keep the sidebar workflow usable in Chinese and English", as
 	await panel.locator("[data-hardware-guide] > summary").click();
 	await expect(panel.getByText(/16GB/)).toBeVisible();
 	// Other sidebar tabs swap the AI panel out; the AI tab brings it back.
-	await page.getByRole("button", { name: "Scene", exact: true }).click();
+	await page.getByRole("radio", { name: "Scene", exact: true }).click();
 	await expect(panel).toBeHidden();
-	await page.getByRole("button", { name: "AI auto edit", exact: true }).click();
+	await page.getByRole("radio", { name: "AI auto edit", exact: true }).click();
 	await expect(panel).toBeVisible();
 });
 

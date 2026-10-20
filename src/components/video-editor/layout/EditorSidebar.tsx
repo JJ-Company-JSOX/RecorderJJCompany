@@ -60,7 +60,9 @@ export const EditorSidebar = memo(
 		onAccountClick,
 		aiPanelSlot,
 	}: Props) {
-		const aiActive = !panelContent && activeSection === "ai";
+		// A selected annotation always shows its inspector, whatever tab is open.
+		const aiActive =
+			!panelContent && activeSection === "ai" && !settingsPanelProps.selectedAnnotationId;
 		const [advancedSections, setAdvancedSections] = useState<Record<string, boolean>>({});
 		const advanced = advancedSections[activeSection] ?? false;
 		const hasAdvanced =

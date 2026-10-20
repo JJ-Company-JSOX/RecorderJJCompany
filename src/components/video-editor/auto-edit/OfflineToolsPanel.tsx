@@ -168,6 +168,17 @@ export function OfflineToolsPanel({
 					>
 						{zh ? "试听效果" : "Preview clearer voice"}
 					</Button>
+					{status?.rnnoise.available === false && (
+						<p className="text-sm text-muted-foreground">
+							{zh
+								? "这个版本没有包含人声清理组件，请安装完整的离线版。"
+								: "This version does not include voice cleanup. Install the complete offline edition."}
+							{import.meta.env.DEV &&
+								(zh
+									? "（开发：先运行 npm run prepare:offline-voice）"
+									: " (Developers: run npm run prepare:offline-voice first.)")}
+						</p>
+					)}
 				</div>
 				{import.meta.env.DEV && (
 					<div className="space-y-4 rounded border border-dashed p-3">

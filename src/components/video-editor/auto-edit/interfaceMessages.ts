@@ -13,7 +13,7 @@ export const interfaceMessages = {
 		intro: "Turn a recording into a first draft, then check it before exporting.",
 		steps: ["Start AI editing", "Check the draft", "Export your video"],
 		stepHelp: [
-			"Find repeated speech and add subtitles.",
+			"Cut pauses, speed up quiet parts, zoom on clicks and add subtitles.",
 			"Preview the result. Undo any time.",
 			"Return to the editor and choose Export.",
 		],
@@ -58,7 +58,7 @@ export const interfaceMessages = {
 		intro: "先生成剪辑草稿，检查满意后再导出。",
 		steps: ["开始自动剪辑", "检查剪辑结果", "导出视频"],
 		stepHelp: [
-			"查找重复讲解，并生成字幕。",
+			"剪掉停顿、加速没人说话的片段、按点击缩放，并生成字幕。",
 			"播放检查，随时可以撤销。",
 			"返回编辑器，点击右上角导出。",
 		],
@@ -100,7 +100,7 @@ export const interfaceMessages = {
 		intro: "Hasilkan draf dahulu, semak hasilnya, kemudian eksport.",
 		steps: ["Mulakan suntingan AI", "Semak draf", "Eksport video"],
 		stepHelp: [
-			"Cari pertuturan berulang dan tambah sari kata.",
+			"Potong jeda, percepat bahagian senyap, zum pada klik dan tambah sari kata.",
 			"Pratonton hasil. Buat asal bila-bila masa.",
 			"Kembali ke editor dan pilih Eksport.",
 		],

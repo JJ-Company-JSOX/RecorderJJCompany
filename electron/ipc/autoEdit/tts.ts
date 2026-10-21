@@ -175,11 +175,22 @@ export async function verifyBundledTtsAssets(
 const CHUNK_PAUSE_S = 0.12;
 
 // biome-ignore lint/suspicious/noExplicitAny: sherpa-onnx-node ships no type declarations.
-let cachedEngine: { root: string; tts: any } | null = null;
+type SherpaOnnx = any;
+
+/**
+ * sherpa-onnx-node is CommonJS. In the built app `import()` is native, and Node then exposes
+ * its `module.exports` only as `default` (no named exports), so read it from there.
+ */
+export function sherpaExports(module: SherpaOnnx): SherpaOnnx {
+	return module?.OfflineTts ? module : module?.default;
+}
+const loadSherpa = async (): Promise<SherpaOnnx> => sherpaExports(await import("sherpa-onnx-node"));
+
+let cachedEngine: { root: string; tts: SherpaOnnx } | null = null;
 
 async function loadEngine(root: string, voice: Voice) {
 	if (cachedEngine?.root === root) return cachedEngine.tts;
-	const sherpaOnnx = await import("sherpa-onnx-node");
+	const sherpaOnnx = await loadSherpa();
 	const tts = await sherpaOnnx.OfflineTts.createAsync(voice.config(root));
 	cachedEngine = { root, tts };
 	return tts;
@@ -214,7 +225,7 @@ export async function synthesizeBundledNarration(options: {
 		if (!voice.speaks(cue.text)) throw new Error(voice.wrongLanguage);
 	}
 	const root = await verifyBundledTtsAssets(getBundledTtsRoot(language), signal, language);
-	const sherpaOnnx = await import("sherpa-onnx-node");
+	const sherpaOnnx = await loadSherpa();
 	const tts = await loadEngine(root, voice);
 	// Earlier audio tracks keep pointing at their own files, so never reuse a name.
 	const run = `${language}-${Date.now().toString(36)}`;

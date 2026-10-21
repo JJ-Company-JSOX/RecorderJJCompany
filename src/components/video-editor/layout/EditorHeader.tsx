@@ -2,11 +2,9 @@ import { Separator } from "@heroui/react";
 import type { CSSProperties, FormEvent, RefObject } from "react";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 import { Button } from "@/components/ui/button";
-import { openSocialPublisher } from "@/components/social/socialLauncher";
 import {
 	FilmStrip,
 	House,
-	ShareNetwork,
 	ArrowClockwise as Redo2,
 	ArrowCounterClockwise as Undo2,
 } from "@/components/ui/icons";
@@ -207,15 +205,6 @@ export function EditorHeader(props: Props) {
 				>
 					<FilmStrip weight={props.clipsOpen ? "fill" : "regular"} className="size-4" />
 					Clips
-				</Button>
-				<Button
-					variant="secondary"
-					size="sm"
-					className="h-9 shrink-0 gap-2"
-					onClick={() => openSocialPublisher(exportSession.exportedFilePath)}
-				>
-					<ShareNetwork className="size-4" />
-					Social
 				</Button>
 			</div>
 

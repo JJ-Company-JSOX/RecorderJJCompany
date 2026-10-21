@@ -745,27 +745,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	openExternalUrl: (url: string) => {
 		return ipcRenderer.invoke("open-external-url", url);
 	},
-	getSocialConfig: () => ipcRenderer.invoke("social-get-config"),
-	saveSocialConfig: (baseUrl: string, apiKey: string) =>
-		ipcRenderer.invoke("social-save-config", baseUrl, apiKey),
-	clearSocialConfig: () => ipcRenderer.invoke("social-clear-config"),
-	listSocialChannels: () => ipcRenderer.invoke("social-list-channels"),
-	connectSocialChannel: (identifier: string) =>
-		ipcRenderer.invoke("social-connect-channel", identifier),
-	pickSocialVideo: () => ipcRenderer.invoke("social-pick-video"),
-	checkSocialVideo: (videoPath: string) => ipcRenderer.invoke("social-check-video", videoPath),
-	publishSocialPost: (request: unknown) => ipcRenderer.invoke("social-publish", request),
-	cancelSocialPublish: () => ipcRenderer.invoke("social-cancel-publish"),
-	onSocialPublishProgress: (
-		callback: (stage: "uploading" | "processing" | "posting") => void,
-	) => {
-		const listener = (
-			_: Electron.IpcRendererEvent,
-			stage: "uploading" | "processing" | "posting",
-		) => callback(stage);
-		ipcRenderer.on("social-publish-progress", listener);
-		return () => ipcRenderer.removeListener("social-publish-progress", listener);
-	},
 	getAccessibilityPermissionStatus: () => {
 		return ipcRenderer.invoke("get-accessibility-permission-status");
 	},

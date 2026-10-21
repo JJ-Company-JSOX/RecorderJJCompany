@@ -7,7 +7,6 @@ import {
 	useEffect,
 } from "react";
 import type { useProjectSaveActions } from "./useProjectSaveActions";
-import { onOpenSocialPublisher } from "@/components/social/socialLauncher";
 import { toast } from "@/components/ui/toast";
 import { fromFileUrl, resolveVideoUrl } from "../projectPersistence";
 import type { useAppearanceState } from "../state/useAppearanceState";
@@ -203,14 +202,6 @@ export function useProjectOpenActions({
 		project.videoPath,
 		project.error,
 	]);
-
-	useEffect(
-		() =>
-			onOpenSocialPublisher(() => {
-				if (!project.projectBrowserOpen) void handleOpenProjectBrowser();
-			}),
-		[handleOpenProjectBrowser, project.projectBrowserOpen],
-	);
 
 	useEffect(() => {
 		const openRequestedDashboard = () => {

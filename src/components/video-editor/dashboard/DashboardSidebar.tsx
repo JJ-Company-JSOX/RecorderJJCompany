@@ -1,18 +1,9 @@
-import { ACCOUNTS_ENABLED, CLOUD_SHARE_ENABLED } from "@/lib/productFeatures";
+import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 import { RecordNewButton } from "./RecordNewButton";
 import { SidebarCards } from "./SidebarCards";
 import { FolderRow } from "./FolderRow";
-import {
-	Cloud,
-	File,
-	GearSix,
-	House,
-	Plus,
-	ShareNetwork,
-	UploadSimple,
-	UserCircle,
-} from "@/components/ui/icons";
+import { Cloud, File, GearSix, House, Plus, UploadSimple, UserCircle } from "@/components/ui/icons";
 
 import { Button } from "@/components/ui/button";
 
@@ -78,15 +69,6 @@ export function DashboardSidebar({
 					</Button>
 					<Button
 						variant="ghost"
-						className={navClass(section === "social")}
-						aria-current={section === "social" ? "page" : undefined}
-						onClick={() => setSection("social")}
-					>
-						<ShareNetwork className="size-[18px]" />
-						Social media
-					</Button>
-					<Button
-						variant="ghost"
 						className={navClass(section === "projects")}
 						aria-current={section === "projects" ? "page" : undefined}
 						onClick={() => setSection("projects")}
@@ -94,7 +76,7 @@ export function DashboardSidebar({
 						<House weight="fill" className="size-[18px]" />
 						Home
 					</Button>
-{CLOUD_SHARE_ENABLED && 					<Button
+{ACCOUNTS_ENABLED && 					<Button
 						variant="ghost"
 						className={navClass(section === "shared")}
 						aria-current={section === "shared" ? "page" : undefined}

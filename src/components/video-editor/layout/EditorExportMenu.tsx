@@ -5,7 +5,6 @@ import { LinkSimple } from "@phosphor-icons/react/dist/csr/LinkSimple";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ExportErrorReportButton } from "@/components/feedback/ExportErrorReportButton";
-import { openSocialPublisher } from "@/components/social/socialLauncher";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toast";
@@ -455,19 +454,6 @@ export function EditorExportMenu(props: Props) {
 												{t("editor.cloud.done")}
 											</Button>
 										</div>
-										{/\.mp4$/i.test(exportedFilePath) && (
-											<Button
-												type="button"
-												variant="secondary"
-												onClick={() => {
-													handleExportDropdownClose();
-													openSocialPublisher(exportedFilePath);
-												}}
-												className="mt-2 h-8 w-full text-xs"
-											>
-												Post to social media
-											</Button>
-										)}
 									</Card>
 								) : (
 									<>{settingsForm}</>

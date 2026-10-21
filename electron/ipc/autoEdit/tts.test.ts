@@ -26,6 +26,7 @@ vi.mock("node:fs", async (importOriginal) => {
 import {
 	getBundledTtsRoot,
 	getBundledTtsStatus,
+	mixedParts,
 	previewBundledVoice,
 	sentencePauseS,
 	shapeSentence,
@@ -430,14 +431,16 @@ describe("synthesizing narration", () => {
 			maxNumSentences: 1,
 			silenceScale: 1,
 		});
-		// The whole sentence in one call, with the default Chinese voice and natural pauses.
-		expect(mocks.generateAsync).toHaveBeenCalledWith({
-			text: "点击“Settings”打开设置，然后选择 Dark mode。",
-			sid: 48,
-			speed: 1,
-			enableExternalBuffer: false,
-			generationConfig: { sid: 48, speed: 1, silenceScale: 1 },
-		});
+		// The default Chinese voice with natural pauses; the English words are said on their own.
+		expect(mocks.generateAsync.mock.calls.map(([request]) => request)).toEqual(
+			["点击", "Settings,", "打开设置，然后选择", "Dark mode。"].map((text) => ({
+				text,
+				sid: 48,
+				speed: 1,
+				enableExternalBuffer: false,
+				generationConfig: { sid: 48, speed: 1, silenceScale: 1 },
+			})),
+		);
 		const reads = vi.mocked(createReadStream).mock.calls.length;
 		await synthesizeBundledNarration({
 			cues: [{ id: "suggestion-1", text: "Wait 5 seconds." }],
@@ -567,6 +570,84 @@ describe("speaking a narration line", () => {
 			enableExternalBuffer: false,
 			generationConfig: { sid: 47, speed: 1, silenceScale: 1 },
 		});
+	});
+	it("says the English words of a Chinese line on their own, with short joins", async () => {
+		const tts = engine();
+		const line = await speakLine(tts, "点击“Settings”打开设置。", {
+			speakerId: 48,
+			kokoro: true,
+		});
+		expect(tts.generateAsync.mock.calls.map(([request]) => request.text)).toEqual([
+			"点击",
+			"Settings,",
+			"打开设置。",
+		]);
+		// Three trimmed parts of 1.075 s with 45 ms added between them, still one subtitle.
+		expect(line?.chunks).toEqual([{ text: "点击“Settings”打开设置。", endMs: 3315 }]);
+		// Where the text has a comma, the join is as long as a pause inside a sentence, and
+		// the subtitle changes when the voice resumes.
+		const comma = await speakLine(engine(), "点击“New Project”，输入名称。", {
+			speakerId: 48,
+			kokoro: true,
+		});
+		expect(comma?.durationMs).toBe(3455);
+		expect(comma?.chunks).toEqual([
+			{ text: "点击“New Project”，", endMs: 2400 },
+			{ text: "输入名称。", endMs: 3455 },
+		]);
+		// An English part the voice cannot say is left out; the rest is still spoken.
+		const partly = await speakLine(engine(["Settings,"]), "点击“Settings”打开设置。", {
+			speakerId: 48,
+			kokoro: true,
+		});
+		expect(partly?.durationMs).toBe(2195);
+		// The older Chinese voice and English lines are not split.
+		const vits = engine();
+		await speakLine(vits, "点击“Settings”打开设置。", { speakerId: 0 });
+		expect(vits.generateAsync).toHaveBeenCalledTimes(1);
+		const english = engine();
+		await speakLine(english, "Open Settings.", { speakerId: 3, kokoro: true });
+		expect(english.generateAsync).toHaveBeenCalledTimes(1);
+	});
+	it("splits mixed sentences only around their English words", () => {
+		const spoken = (text: string) => mixedParts(text).map((part) => part.spoken);
+		expect(mixedParts("点击“Settings”打开设置，然后选择 Dark mode。")).toEqual([
+			{ spoken: "点击", pause: false },
+			{ spoken: "Settings,", pause: false },
+			{ spoken: "打开设置，然后选择", pause: false },
+			{ spoken: "Dark mode。", pause: true },
+		]);
+		expect(spoken("打开“Chrome”浏览器，进入“GitHub”页面。")).toEqual([
+			"打开",
+			"Chrome,",
+			"浏览器，进入",
+			"GitHub,",
+			"页面。",
+		]);
+		expect(mixedParts("点击“New Project”，输入项目名称。")).toEqual([
+			{ spoken: "点击", pause: false },
+			{ spoken: "New Project，", pause: true },
+			{ spoken: "输入项目名称。", pause: true },
+		]);
+		// Labels with digits, dots, signs and apostrophes stay whole; a Chinese number does not
+		// start an English part; the last English part ends like a sentence.
+		expect(spoken("在 Windows 11 里打开 github.com，按 Ctrl+S 保存 2.0 版本")).toEqual([
+			"在",
+			"Windows 11,",
+			"里打开",
+			"github.com，",
+			"按",
+			"Ctrl+S,",
+			"保存 2.0 版本",
+		]);
+		expect(spoken("然后点击“Let’s go”")).toEqual(["然后点击", "Let's go."]);
+		expect(spoken("（Settings）、“Edit”和“View”")).toEqual([
+			"Settings、",
+			"Edit,",
+			"和",
+			"View.",
+		]);
+		expect(spoken("先点击设置。")).toEqual(["先点击设置。"]);
 	});
 	it("shows a sentence the voice cannot say with its neighbour instead of failing the line", async () => {
 		const first = await speakLine(engine(["Open “GitHub”."]), "Open “GitHub”. Then save.", {

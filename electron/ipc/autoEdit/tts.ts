@@ -538,6 +538,56 @@ export function sentencePauseS(text: string, index: number) {
 	return Math.min(0.38, Math.max(0.3, base + [0, 0.02, -0.015, 0.01][index % 4]));
 }
 
+const CLAUSE_END = /[，,。.！!？?；;：:、]$/u;
+/**
+ * Latin-letter text inside a Chinese line (usually an on-screen label), with the quotes or
+ * brackets around it and the punctuation after it.
+ */
+const LATIN_RUN =
+	/[“"‘「『（(]*\p{Script=Latin}[\p{Script=Latin}\p{N}_'’.+&/-]*(?: +[\p{Script=Latin}\p{N}_'’.+&/-]+)*[”"’」』）)]*\s*[，,。.！!？?；;：:、]*/gu;
+
+/**
+ * Splits a sentence that mixes Chinese and English into the parts Kokoro says one by one.
+ * sherpa-onnx reads the English through espeak-ng, and a short English word is glued straight
+ * onto the Chinese syllables before it in one model call; the Chinese voices then garble it
+ * (点击“Settings” was heard back as 点击赛). Said on its own and ended like a clause (a comma,
+ * or a full stop at the end) it is understood far more often. Quotes, spaces and letter case
+ * make no difference to what the model receives, so they are only tidied here. `pause` says
+ * whether the text itself pauses after the part.
+ */
+export function mixedParts(text: string) {
+	const parts: Array<{ spoken: string; latin: boolean; pause: boolean }> = [];
+	const add = (piece: string, latin: boolean) => {
+		if (!/[\p{L}\p{N}]/u.test(piece)) return;
+		const spoken = latin
+			? piece
+					.replace(/[“”"「」『』（）()]/g, "")
+					.replace(/[‘’]/g, "'")
+					.trim()
+			: piece.trim();
+		parts.push({ spoken, latin, pause: CLAUSE_END.test(spoken) });
+	};
+	let last = 0;
+	for (const match of text.matchAll(LATIN_RUN)) {
+		add(text.slice(last, match.index), false);
+		add(match[0], true);
+		last = match.index + match[0].length;
+	}
+	add(text.slice(last), false);
+	return parts.map(({ spoken, latin, pause }, i) => ({
+		spoken: latin && !pause ? `${spoken}${i === parts.length - 1 ? "." : ","}` : spoken,
+		pause,
+	}));
+}
+
+/**
+ * Silence put between the parts of a mixed sentence, on top of the margins each part keeps
+ * (75 ms together): about 0.12 s where the text runs straight on, and the usual pause inside
+ * a sentence where it has punctuation.
+ */
+const WORD_JOIN_S = 0.045;
+const CLAUSE_JOIN_S = MAX_INNER_PAUSE_S - LEAD_MARGIN_S - TAIL_MARGIN_S;
+
 const WIDE_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 /** Roughly how long a piece takes to say: a Chinese character, or about three letters. */
 function spokenWeight(text: string) {
@@ -597,6 +647,7 @@ type Engine = {
  * natural intonation instead of sounding like a list of fragments. Each sentence is trimmed
  * and faded, sentences are joined with punctuation-aware pauses, and the line is brought to
  * -16 LUFS with peaks under -1.5 dBFS. Subtitle chunks are timed inside their sentence.
+ * With Kokoro, a sentence that mixes Chinese and English is said in parts (see mixedParts).
  * A sentence the voice cannot say (no word it knows) is shown with its neighbour instead of
  * failing the line; null when nothing at all was spoken.
  */
@@ -637,11 +688,37 @@ export async function speakLine(
 			: null;
 		return audio && shaped ? { ...shaped, sampleRate: audio.sampleRate } : null;
 	};
+	const saySentence = async (text: string) => {
+		if (!kokoro || !HAN.test(text) || !LATIN.test(text)) return say(text);
+		const parts: Array<{ samples: Float32Array; sampleRate: number; pause: boolean }> = [];
+		for (const part of mixedParts(text)) {
+			const audio = await say(part.spoken);
+			if (audio) parts.push({ ...audio, pause: part.pause });
+		}
+		if (!parts.length) return null;
+		const rate = parts[0].sampleRate;
+		const gaps = parts.map((part, i) =>
+			i < parts.length - 1
+				? Math.round((part.pause ? CLAUSE_JOIN_S : WORD_JOIN_S) * rate)
+				: 0,
+		);
+		const joined = new Float32Array(
+			parts.reduce((sum, part, i) => sum + part.samples.length + gaps[i], 0),
+		);
+		let at = 0;
+		parts.forEach((part, i) => {
+			joined.set(part.samples, at);
+			at += part.samples.length + gaps[i];
+		});
+		// Trimmed and faded part by part already; this finds the pauses for the subtitles.
+		const shaped = shapeSentence(joined, rate);
+		return shaped ? { ...shaped, sampleRate: rate } : null;
+	};
 	const sentences: SpokenSentence[] = [];
 	let sampleRate = 0;
 	let unspoken = "";
 	for (const sentence of splitNarrationSentences(line)) {
-		const audio = await say(spoken ? spoken(sentence.text) : sentence.text);
+		const audio = await saySentence(spoken ? spoken(sentence.text) : sentence.text);
 		if (!audio) {
 			const last = sentences[sentences.length - 1];
 			if (last)

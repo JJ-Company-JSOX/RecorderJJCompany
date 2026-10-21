@@ -203,5 +203,9 @@
 		"balanced": "Balanced (1080p)",
 		"full": "Full display quality",
 		"help": "Preview only; exported quality follows your export settings."
+	},
+	"preview": {
+		"fullscreen": "Full screen preview",
+		"exitFullscreen": "Exit full screen (Esc)"
 	}
 }

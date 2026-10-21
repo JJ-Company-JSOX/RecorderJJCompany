@@ -195,5 +195,9 @@
 		"expand": "展開時間軸",
 		"collapse": "摺疊時間軸"
 	},
-	"openRecordingsFolder": "打開錄製資料夾"
+	"openRecordingsFolder": "打開錄製資料夾",
+	"preview": {
+		"fullscreen": "全螢幕預覽",
+		"exitFullscreen": "退出全螢幕 (Esc)"
+	}
 }

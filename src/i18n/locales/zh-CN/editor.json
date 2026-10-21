@@ -203,5 +203,9 @@
 		"balanced": "均衡（1080p）",
 		"full": "完整显示画质",
 		"help": "仅影响预览；导出画质以导出设置为准。"
+	},
+	"preview": {
+		"fullscreen": "全屏预览",
+		"exitFullscreen": "退出全屏 (Esc)"
 	}
 }

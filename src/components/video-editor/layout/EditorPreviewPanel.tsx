@@ -5,11 +5,13 @@ import {
 	CaretDown,
 	Check,
 	Crop,
+	FullScreen,
 	MagicWand,
 	MagnifyingGlassPlus,
 	Pause,
 	Play,
 	Plus,
+	QuitFullScreen,
 	Scissors,
 	SkipBack,
 	SkipForward,
@@ -17,7 +19,16 @@ import {
 	SpeakerLow,
 	SpeakerX,
 } from "@/components/ui/icons";
-import { type Dispatch, type RefObject, type SetStateAction, useMemo } from "react";
+import {
+	type Dispatch,
+	type RefObject,
+	type SetStateAction,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -119,6 +130,42 @@ export function EditorPreviewPanel(props: Props) {
 		setError,
 	} = props;
 
+	// Full screen shows the preview at the size of the display, rendered at its native density.
+	const panelRef = useRef<HTMLDivElement>(null);
+	const [isFullscreen, setIsFullscreen] = useState(false);
+	useEffect(() => {
+		const sync = () => setIsFullscreen(document.fullscreenElement === panelRef.current);
+		document.addEventListener("fullscreenchange", sync);
+		return () => document.removeEventListener("fullscreenchange", sync);
+	}, []);
+	const toggleFullscreen = useCallback(() => {
+		if (document.fullscreenElement) {
+			void document.exitFullscreen().catch(() => undefined);
+			return;
+		}
+		void panelRef.current?.requestFullscreen().catch(() => undefined);
+	}, []);
+	const fullscreenLabel = isFullscreen
+		? t("editor.preview.exitFullscreen", "Exit full screen (Esc)")
+		: t("editor.preview.fullscreen", "Full screen preview");
+	const fullscreenButton = (
+		<Button
+			variant="ghost"
+			size="sm"
+			onClick={toggleFullscreen}
+			className="h-7 gap-1.5 px-2 text-xs"
+			aria-label={fullscreenLabel}
+			title={fullscreenLabel}
+		>
+			{isFullscreen ? (
+				<QuitFullScreen className="h-3.5 w-3.5" />
+			) : (
+				<FullScreen className="h-3.5 w-3.5" />
+			)}
+			<span className="font-medium">{fullscreenLabel}</span>
+		</Button>
+	);
+
 	const previewToolbar = useMemo(
 		() => (
 			<div className="flex h-10 shrink-0 items-center justify-center gap-3">
@@ -184,13 +231,25 @@ export function EditorPreviewPanel(props: Props) {
 		[aspectRatio, t, previewQuality, setAspectRatio, handleOpenCropEditor, isCropped],
 	);
 
+	// Menus and popovers render outside this panel, where a full-screen view cannot show them,
+	// so full screen keeps only the controls that work in place.
 	return (
-		<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+		<div ref={panelRef} className="flex min-h-0 min-w-0 flex-1 flex-col bg-editor-bg">
 			<div className="flex min-h-0 flex-1 flex-col">
 				<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-					{previewToolbar}
+					{isFullscreen ? (
+						<div className="flex h-10 shrink-0 items-center justify-center">
+							{fullscreenButton}
+						</div>
+					) : (
+						<div className="flex shrink-0 items-center justify-center gap-3">
+							{previewToolbar}
+							<div className="h-4 w-px bg-foreground/20" />
+							{fullscreenButton}
+						</div>
+					)}
 					<div
-						className="flex min-h-0 w-full flex-1 items-stretch px-4 py-3"
+						className={`flex min-h-0 w-full flex-1 items-stretch ${isFullscreen ? "p-2" : "px-2 py-2"}`}
 						style={{ flex: "1 1 auto", margin: 0 }}
 					>
 						<div
@@ -252,7 +311,9 @@ export function EditorPreviewPanel(props: Props) {
 			</div>
 
 			<div className="editor-playback relative grid min-h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4">
-				<div className="editor-playback-tools z-10 flex min-w-0 items-center gap-2">
+				<div
+					className={`editor-playback-tools z-10 flex min-w-0 items-center gap-2 ${isFullscreen ? "invisible" : ""}`}
+				>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<Button variant="ghost" size="sm" className="h-9 gap-2 px-3">
@@ -367,7 +428,9 @@ export function EditorPreviewPanel(props: Props) {
 					</div>
 				</div>
 
-				<div className="editor-playback-volume z-10 ml-auto flex items-center">
+				<div
+					className={`editor-playback-volume z-10 ml-auto flex items-center ${isFullscreen ? "invisible" : ""}`}
+				>
 					<Popover>
 						<PopoverTrigger asChild>
 							<Button

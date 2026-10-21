@@ -1,5 +1,6 @@
 import type { Span } from "dnd-timeline";
-import { type RefObject, useCallback } from "react";
+import { type PointerEvent, type RefObject, useCallback, useState } from "react";
+import { loadAppSetting, saveAppSetting } from "@/lib/appSettings";
 import type { useVideoEditorAudio } from "../audio/useVideoEditorAudio";
 import { retimeCaptionFragment } from "../captionTimeline";
 import type { useAnnotationRegionCommands } from "../hooks/useAnnotationRegionCommands";
@@ -35,7 +36,60 @@ type Props = {
 	handleSelectAnnotation: (id: string | null) => void;
 };
 
+const TIMELINE_HEIGHT_KEY = "recordly.timelineHeight";
+const MIN_TIMELINE_HEIGHT = 96;
+/** The preview always keeps at least this share of the editor's height. */
+const MAX_TIMELINE_SHARE = 0.6;
+
+function savedTimelineHeight() {
+	const saved = loadAppSetting<unknown>(TIMELINE_HEIGHT_KEY);
+	return typeof saved === "number" && Number.isFinite(saved) && saved >= MIN_TIMELINE_HEIGHT
+		? saved
+		: null;
+}
+
+/** Dragging the bar above the timeline trades its height for a bigger preview. */
+function useTimelineHeight() {
+	const [height, setHeight] = useState<number | null>(savedTimelineHeight);
+	const startResize = useCallback((event: PointerEvent<HTMLDivElement>) => {
+		const panel = event.currentTarget.parentElement;
+		const editor = panel?.parentElement;
+		if (!panel || !editor || event.button !== 0) return;
+		event.preventDefault();
+		const handle = event.currentTarget;
+		handle.setPointerCapture(event.pointerId);
+		const startY = event.clientY;
+		const startHeight = panel.getBoundingClientRect().height;
+		const maxHeight = Math.max(MIN_TIMELINE_HEIGHT, editor.clientHeight * MAX_TIMELINE_SHARE);
+		let next = startHeight;
+		const move = (moveEvent: globalThis.PointerEvent) => {
+			next = Math.round(
+				Math.min(
+					maxHeight,
+					Math.max(MIN_TIMELINE_HEIGHT, startHeight - (moveEvent.clientY - startY)),
+				),
+			);
+			setHeight(next);
+		};
+		const end = () => {
+			handle.removeEventListener("pointermove", move);
+			handle.removeEventListener("pointerup", end);
+			handle.removeEventListener("pointercancel", end);
+			saveAppSetting(TIMELINE_HEIGHT_KEY, next);
+		};
+		handle.addEventListener("pointermove", move);
+		handle.addEventListener("pointerup", end);
+		handle.addEventListener("pointercancel", end);
+	}, []);
+	const resetHeight = useCallback(() => {
+		setHeight(null);
+		saveAppSetting(TIMELINE_HEIGHT_KEY, null);
+	}, []);
+	return { height, startResize, resetHeight };
+}
+
 export function EditorTimelinePanel(props: Props) {
+	const timelineHeight = useTimelineHeight();
 	const {
 		timelineRef,
 		timeline,
@@ -89,9 +143,25 @@ export function EditorTimelinePanel(props: Props) {
 			ref={props.panelRef}
 			tabIndex={-1}
 			data-timeline-panel
-			className="outline-none flex flex-shrink-0 flex-col bg-transparent px-4 pb-4 pt-2"
-			style={{ height: "22%", minHeight: 180, maxHeight: 280 }}
+			className="outline-none relative flex flex-shrink-0 flex-col bg-transparent px-4 pb-4 pt-2"
+			style={
+				timelineHeight.height === null
+					? { height: "22%", minHeight: 180, maxHeight: 280 }
+					: { height: timelineHeight.height }
+			}
 		>
+			<div
+				role="separator"
+				aria-orientation="horizontal"
+				aria-label="Resize timeline"
+				title="Drag to resize the preview. Double-click to reset."
+				data-timeline-resize
+				className="group absolute inset-x-0 -top-1.5 z-20 flex h-3 cursor-row-resize touch-none items-center justify-center"
+				onPointerDown={timelineHeight.startResize}
+				onDoubleClick={timelineHeight.resetHeight}
+			>
+				<div className="h-1 w-10 rounded-full bg-foreground/15 transition-colors group-hover:bg-foreground/40" />
+			</div>
 			<TimelineEditor
 				ref={timelineRef}
 				videoDuration={projection.timelineDuration}

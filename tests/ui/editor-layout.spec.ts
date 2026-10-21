@@ -153,6 +153,52 @@ test("header name edits in place and saves on blur without a boxed input", async
 	await expect(page.getByRole("button", { name: "Rename project" })).toContainText("Launch demo");
 });
 
+test("dragging the bar above the timeline makes the preview bigger and is remembered", async ({
+	page,
+}) => {
+	await installDesktopBridge(page);
+	await page.addInitScript(() => {
+		const saved: Record<string, unknown> = {};
+		const getAppSetting = window.electronAPI.getAppSetting;
+		window.electronAPI.getAppSetting = (key: string) =>
+			key in saved ? saved[key] : getAppSetting(key);
+		window.electronAPI.setAppSetting = (key: string, value: unknown) => {
+			saved[key] = value;
+			document.documentElement.dataset.timelineHeight = JSON.stringify(
+				saved["recordly.timelineHeight"] ?? null,
+			);
+			return true;
+		};
+	});
+	// A wide, short window, where the preview is limited by height.
+	await page.setViewportSize({ width: 1600, height: 820 });
+	await page.goto("/?windowType=editor");
+	const frame = page.locator(".editor-preview-frame");
+	const timeline = page.locator("[data-timeline-panel]");
+	const handle = page.getByRole("separator", { name: "Resize timeline" });
+	await expect(handle).toBeVisible({ timeout: 20000 });
+	const before = (await frame.boundingBox())!;
+	const timelineBefore = (await timeline.boundingBox())!;
+	const grip = (await handle.boundingBox())!;
+	await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + 400, { steps: 8 });
+	await page.mouse.up();
+	// The timeline stops at its smallest height and the preview takes the space.
+	await expect.poll(async () => (await timeline.boundingBox())!.height).toBe(96);
+	const after = (await frame.boundingBox())!;
+	expect(after.height).toBeGreaterThan(before.height + 40);
+	expect(after.width).toBeGreaterThan(before.width + 70);
+	await expect(page.locator("html")).toHaveAttribute("data-timeline-height", "96");
+	await page.screenshot({ path: "test-results/editor-preview-resized.png", animations: "disabled" });
+	// Double-click puts the default layout back.
+	await handle.dblclick();
+	await expect
+		.poll(async () => Math.round((await timeline.boundingBox())!.height))
+		.toBe(Math.round(timelineBefore.height));
+	await expect(page.locator("html")).toHaveAttribute("data-timeline-height", "null");
+});
+
 test("new zoom blocks default to 1.8x", async ({ page }) => {
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=editor");

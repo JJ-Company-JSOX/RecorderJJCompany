@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -18,6 +19,7 @@ vi.mock("sherpa-onnx-node", () => ({
 import {
 	getBundledTtsRoot,
 	getBundledTtsStatus,
+	sherpaExports,
 	synthesizeBundledNarration,
 	verifyBundledTtsAssets,
 } from "./tts";
@@ -216,16 +218,38 @@ describe("bundled narration voice assets", () => {
 				id: "suggestion-1",
 				audioPath: expect.stringMatching(/narration-zh-[a-z0-9]+-suggestion-1\.wav$/),
 				durationMs: expect.any(Number),
-		
+
 				chunks: [{ text: "这里点击按钮。", endMs: expect.any(Number) }],
 			},
 			{
 				id: "suggestion-2",
 				audioPath: expect.stringMatching(/narration-zh-[a-z0-9]+-suggestion-2\.wav$/),
 				durationMs: expect.any(Number),
-		
+
 				chunks: [{ text: "然后放大显示。", endMs: expect.any(Number) }],
 			},
 		]);
+	});
+});
+
+describe("loading the sherpa-onnx voice engine", () => {
+	it("finds OfflineTts whether import() exposes named exports or only default", async () => {
+		class OfflineTts {}
+		// Vitest (and bundlers) give named exports; native Node import() of this CommonJS
+		// module in the built app gives only `default`.
+		expect(sherpaExports({ OfflineTts }).OfflineTts).toBe(OfflineTts);
+		expect(sherpaExports({ default: { OfflineTts } }).OfflineTts).toBe(OfflineTts);
+	});
+	it("matches what real Node does with the installed package", () => {
+		const out = execFileSync(
+			process.execPath,
+			[
+				"--input-type=module",
+				"-e",
+				"const m = await import('sherpa-onnx-node'); console.log(typeof m.OfflineTts, typeof m.default?.OfflineTts)",
+			],
+			{ encoding: "utf8" },
+		).trim();
+		expect(out).toBe("undefined function");
 	});
 });

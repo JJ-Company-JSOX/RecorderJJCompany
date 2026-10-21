@@ -106,13 +106,14 @@ export async function generateBundledNarration(
 	) => Promise<string>,
 	language: NarrationLanguage = "zh",
 	events: Map<string, ScreenEvent> = new Map(),
-	options: { style?: NarrationStyle; timelineEndMs?: number } = {},
+	options: { style?: NarrationStyle; timelineEndMs?: number; mixedLanguage?: boolean } = {},
 ): Promise<NarrationDraft> {
 	return generateTutorialScript({
 		plan,
 		events,
 		language,
 		style: options.style ?? "tutorial",
+		mixedLanguage: options.mixedLanguage,
 		timelineEndMs:
 			options.timelineEndMs ??
 			Math.max(0, ...plan.suggestions.map((s) => s.endMs)) + OUTRO_FALLBACK_MS,

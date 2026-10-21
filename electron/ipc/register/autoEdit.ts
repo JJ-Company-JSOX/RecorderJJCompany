@@ -17,7 +17,11 @@ import {
 	LocalNarrationGenerator,
 } from "../autoEdit/narrator";
 import { isSubtitleLines, type SubtitleLine, translateSubtitles } from "../autoEdit/translate";
-import { getBundledTtsStatus, synthesizeBundledNarration } from "../autoEdit/tts";
+import {
+	getBundledTtsStatus,
+	previewBundledVoice,
+	synthesizeBundledNarration,
+} from "../autoEdit/tts";
 import { analyzeVideoFrames } from "../autoEdit/vision";
 import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
 import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
@@ -370,6 +374,10 @@ export function registerAutoEditHandlers() {
 								},
 							})
 						: undefined;
+				// The Kokoro voice reads English labels inside Chinese lines; the older one cannot.
+				const { mixedLanguage } = await getBundledTtsStatus().catch(() => ({
+					mixedLanguage: false,
+				}));
 				return {
 					success: true,
 					draft: await generateBundledNarration(
@@ -380,6 +388,7 @@ export function registerAutoEditHandlers() {
 						{
 							style: isNarrationStyle(screen?.style) ? screen.style : "tutorial",
 							timelineEndMs: screen?.timelineEndMs,
+							mixedLanguage,
 						},
 					),
 				};
@@ -441,7 +450,12 @@ export function registerAutoEditHandlers() {
 	ipcMain.handle("auto-edit-tts-status", () => getBundledTtsStatus());
 	ipcMain.handle(
 		"auto-edit-narrate-synthesize",
-		async (event, cues: Array<{ id: string; text: string }>, language?: string) => {
+		async (
+			event,
+			cues: Array<{ id: string; text: string }>,
+			language?: string,
+			speakerId?: number,
+		) => {
 			if (running.has(event.sender.id))
 				return { success: false, error: "Analysis already running" };
 			const controller = new AbortController();
@@ -451,10 +465,14 @@ export function registerAutoEditHandlers() {
 			try {
 				if (!Array.isArray(cues) || !cues.length || cues.length > 200)
 					throw new Error("Invalid narration cues");
+				// Checked again against the installed voice's curated speakers.
+				if (speakerId !== undefined && !Number.isInteger(speakerId))
+					throw new Error("Invalid narration speaker");
 				const clips = await synthesizeBundledNarration({
 					cues,
 					outputDirectory: path.join(app.getPath("userData"), "narration-audio"),
 					language: isNarrationLanguage(language) ? language : "zh",
+					speakerId,
 					signal: controller.signal,
 				});
 				return { success: true, clips };
@@ -462,6 +480,36 @@ export function registerAutoEditHandlers() {
 				return {
 					success: false,
 					error: error instanceof Error ? error.message : "Narration synthesis failed",
+				};
+			} finally {
+				running.delete(event.sender.id);
+				event.sender.removeListener("destroyed", abort);
+			}
+		},
+	);
+	ipcMain.handle(
+		"auto-edit-tts-preview",
+		async (event, language?: string, speakerId?: number) => {
+			if (running.has(event.sender.id))
+				return { success: false, error: "Analysis already running" };
+			const controller = new AbortController();
+			running.set(event.sender.id, controller);
+			const abort = () => controller.abort();
+			event.sender.once("destroyed", abort);
+			try {
+				if (!isNarrationLanguage(language)) throw new Error("Invalid narration language");
+				if (speakerId !== undefined && !Number.isInteger(speakerId))
+					throw new Error("Invalid narration speaker");
+				const { samples, sampleRate } = await previewBundledVoice({
+					language,
+					speakerId,
+					signal: controller.signal,
+				});
+				return { success: true, samples, sampleRate };
+			} catch (error) {
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : "Narration preview failed",
 				};
 			} finally {
 				running.delete(event.sender.id);

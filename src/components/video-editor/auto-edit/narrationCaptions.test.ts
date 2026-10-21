@@ -40,7 +40,7 @@ describe("narration subtitles", () => {
 		);
 	});
 	it("maps narration clips from timeline time to source time, chunk by chunk", () => {
-		const cues = narrationCaptions(
+		const { cues, skipped } = narrationCaptions(
 			state(),
 			[region("s1", 1000, 3000), region("s2", 5000, 6000)],
 			[
@@ -48,6 +48,7 @@ describe("narration subtitles", () => {
 				{ id: "s2", text: "Zoom in." },
 			],
 		);
+		expect(skipped).toBe(0);
 		expect(cues.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }))).toEqual([
 			{ startMs: 1000, endMs: 2000, text: "先点击，" },
 			{ startMs: 2000, endMs: 3000, text: "再保存。" },
@@ -56,16 +57,52 @@ describe("narration subtitles", () => {
 		]);
 		expect(new Set(cues.map((c) => c.id)).size).toBe(cues.length);
 	});
-	it("keeps a line inside the clip where its voice starts and skips existing subtitles", () => {
-		const cues = narrationCaptions(
+	it("times each chunk by when the voice actually finishes saying it", () => {
+		const { cues } = narrationCaptions(
+			state(),
+			[region("s1", 1000, 4000)],
+			[{ id: "s1", text: "先点击设置（Settings），再保存。" }],
+			{
+				s1: [
+					{ text: "先点击设置（Settings），", endMs: 1200 },
+					{ text: "再保存。", endMs: 3000 },
+				],
+			},
+		);
+		expect(cues.map(({ startMs, endMs }) => [startMs, endMs])).toEqual([
+			[1000, 2200],
+			[2200, 4000],
+		]);
+	});
+	it("lets a line cross a cut and skips only the chunks that hit existing subtitles", () => {
+		const { cues, skipped } = narrationCaptions(
 			state({ autoCaptions: [{ id: "x", startMs: 12500, endMs: 13000, text: "Hi" }] }),
 			[region("s1", 3000, 5000), region("s2", 5000, 6000)],
 			[
-				{ id: "s1", text: "Across the cut" },
+				{ id: "s1", text: "Across the cut, into the next clip" },
 				{ id: "s2", text: "Overlaps" },
 			],
+			{
+				s1: [
+					{ text: "Across the cut,", endMs: 1000 },
+					{ text: "into the next clip", endMs: 2000 },
+				],
+			},
 		);
-		expect(cues).toHaveLength(1);
-		expect(cues[0]).toMatchObject({ startMs: 3000, endMs: 4000, text: "Across the cut" });
+		// "into the next clip" starts in clip b (timeline 4 s = source 10 s) and still gets a subtitle.
+		expect(cues.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }))).toEqual([
+			{ startMs: 3000, endMs: 4000, text: "Across the cut," },
+			{ startMs: 10000, endMs: 12000, text: "into the next clip" },
+		]);
+		expect(skipped).toBe(1);
+	});
+	it("skips subtitles for a voice that plays after the video ends", () => {
+		const { cues, skipped } = narrationCaptions(
+			state(),
+			[region("s1", 9000, 9500)],
+			[{ id: "s1", text: "Bye." }],
+		);
+		expect(cues).toEqual([]);
+		expect(skipped).toBe(1);
 	});
 });

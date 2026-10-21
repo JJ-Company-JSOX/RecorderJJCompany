@@ -314,7 +314,14 @@ interface Window {
 			language?: "zh" | "en" | "ms",
 			screen?: {
 				videoPath: string;
-				frames: Array<{ id: string; timeMs: number; focus?: { cx: number; cy: number } }>;
+				frames: Array<{
+				id: string;
+				timeMs: number;
+				focus?: { cx: number; cy: number };
+				action?: boolean;
+			}>;
+			style?: "concise" | "tutorial" | "detailed";
+			timelineEndMs?: number;
 			},
 		) => Promise<{
 			success: boolean;
@@ -331,7 +338,13 @@ interface Window {
 			language?: "zh" | "en" | "ms",
 		) => Promise<{
 			success: boolean;
-			clips?: Array<{ id: string; audioPath: string; durationMs: number }>;
+			clips?: Array<{
+				id: string;
+				audioPath: string;
+				durationMs: number;
+				/** Where each subtitle chunk's speech ends, measured from the clip start. */
+				chunks?: Array<{ text: string; endMs: number }>;
+			}>;
 			error?: string;
 		}>;
 		hudOverlaySetIgnoreMouse: (ignore: boolean) => void;

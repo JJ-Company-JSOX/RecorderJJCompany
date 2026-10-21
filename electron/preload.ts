@@ -225,7 +225,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		language?: "zh" | "en" | "ms",
 		screen?: {
 			videoPath: string;
-			frames: Array<{ id: string; timeMs: number; focus?: { cx: number; cy: number } }>;
+			frames: Array<{
+				id: string;
+				timeMs: number;
+				focus?: { cx: number; cy: number };
+				action?: boolean;
+			}>;
+			style?: "concise" | "tutorial" | "detailed";
+			timelineEndMs?: number;
 		},
 	) => ipcRenderer.invoke("auto-edit-narrate-bundled", plan, language, screen),
 	translateAutoEditSubtitles: (

@@ -16,7 +16,13 @@ const CLICKS = new Set(["click", "double-click", "right-click", "middle-click"])
 export function narrationMoments(
 	state: EditState,
 	cursor: CursorTelemetryPoint[],
+	/** Timeline spans where someone already speaks; the AI voice must not talk over them. */
+	speech: { startMs: number; endMs: number }[] = [],
 ): EditSuggestion[] {
+	const quiet = (m: { startMs: number; endMs: number }) =>
+		!speech.some(
+			(s) => m.startMs < s.endMs + 500 && s.startMs < m.startMs + MIN_NARRATION_GAP_MS,
+		);
 	const clips = sortClipRegions(state.clipRegions);
 	const durationMs = Math.max(0, ...clips.map((c) => c.endMs));
 	if (!durationMs) return [];
@@ -69,11 +75,12 @@ export function narrationMoments(
 	for (const candidate of candidates.sort((a, b) => a.startMs - b.startMs)) {
 		const previous = moments[moments.length - 1];
 		if (previous && candidate.startMs - previous.startMs < MIN_NARRATION_GAP_MS) continue;
+		if (!quiet(candidate)) continue;
 		moments.push(candidate);
 		if (moments.length === MAX_MOMENTS) break;
 	}
-	if (moments.length) return moments;
-	const count = Math.max(1, Math.min(8, Math.floor(durationMs / EVEN_SPACING_MS)));
+	if (moments.length || candidates.length) return moments;
+	const count = Math.max(1, Math.min(MAX_MOMENTS, Math.floor(durationMs / EVEN_SPACING_MS)));
 	return Array.from({ length: count }, (_, i) => {
 		const startMs = Math.round(((i + 0.5) * durationMs) / count) - 500;
 		return {
@@ -83,20 +90,43 @@ export function narrationMoments(
 			startMs: Math.max(0, startMs),
 			endMs: Math.min(durationMs, Math.max(0, startMs) + 1500),
 		};
-	});
+	}).filter(quiet);
 }
 
-/** Places voice clips in order so none starts before the previous one has finished. */
+/**
+ * Places voice clips in order so none starts before the previous one has finished and
+ * none runs past the end of the video. Lines that would overflow are moved earlier; a line
+ * that still has no room is dropped (and returned so the user can be told).
+ */
 export function scheduleNarration<T extends { startMs: number; durationMs: number }>(
 	clips: T[],
+	endMs = Number.POSITIVE_INFINITY,
 	gapMs = 250,
-): (T & { endMs: number })[] {
+): { placed: (T & { endMs: number })[]; dropped: T[] } {
+	const sorted = [...clips].sort((a, b) => a.startMs - b.startMs);
+	const starts: number[] = [];
 	let free = 0;
-	return [...clips]
-		.sort((a, b) => a.startMs - b.startMs)
-		.map((clip) => {
-			const startMs = Math.max(clip.startMs, free);
-			free = startMs + clip.durationMs + gapMs;
-			return { ...clip, startMs, endMs: startMs + clip.durationMs };
-		});
+	for (const clip of sorted) {
+		const start = Math.max(clip.startMs, free);
+		starts.push(start);
+		free = start + clip.durationMs + gapMs;
+	}
+	let limit = endMs;
+	for (let i = sorted.length - 1; i >= 0; i--) {
+		starts[i] = Math.min(starts[i], limit - sorted[i].durationMs);
+		limit = starts[i] - gapMs;
+	}
+	const placed: (T & { endMs: number })[] = [];
+	const dropped: T[] = [];
+	let lastEnd = -gapMs;
+	sorted.forEach((clip, i) => {
+		const startMs = Math.round(starts[i]);
+		if (startMs < 0 || startMs < lastEnd + gapMs) {
+			dropped.push(clip);
+			return;
+		}
+		placed.push({ ...clip, startMs, endMs: startMs + clip.durationMs });
+		lastEnd = startMs + clip.durationMs;
+	});
+	return { placed, dropped };
 }

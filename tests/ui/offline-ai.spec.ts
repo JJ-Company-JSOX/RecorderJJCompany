@@ -154,6 +154,7 @@ test("after applying, AI voice-over drafts, waits for approval and adds an audio
 			document.documentElement.dataset.narrationFrames = JSON.stringify(
 				screen?.frames.map((f) => ({ id: f.id, focused: !!f.focus })),
 			);
+			document.documentElement.dataset.narrationStyle = screen?.style ?? "";
 			return {
 				success: true,
 				draft: {
@@ -194,9 +195,11 @@ test("after applying, AI voice-over drafts, waits for approval and adds an audio
 	await panel.getByRole("button", { name: "Done", exact: true }).click();
 	await panel.getByLabel("Plan language").selectOption("zh");
 	await panel.getByRole("button", { name: "下一步：加 AI 配音" }).click();
+	await panel.getByLabel("解说风格").selectOption("detailed");
 	await panel.getByRole("button", { name: "生成解说稿草稿" }).click();
 	await expect(panel.locator("textarea")).toHaveCount(1);
 	// The AI is shown the zoomed spot of the recording before it writes the line.
+	await expect(page.locator("html")).toHaveAttribute("data-narration-style", "detailed");
 	await expect(page.locator("html")).toHaveAttribute(
 		"data-narration-frames",
 		JSON.stringify([{ id: "zoom-1", focused: true }]),

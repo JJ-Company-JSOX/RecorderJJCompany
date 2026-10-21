@@ -69,9 +69,40 @@ describe("AI voice-over moments", () => {
 				{ id: "b", startMs: 4000, durationMs: 1000 },
 				{ id: "a", startMs: 1000, durationMs: 5000 },
 			]),
+		).toEqual({
+			placed: [
+				{ id: "a", startMs: 1000, durationMs: 5000, endMs: 6000 },
+				{ id: "b", startMs: 6250, durationMs: 1000, endMs: 7250 },
+			],
+			dropped: [],
+		});
+	});
+	it("pulls lines earlier so none runs past the end of the video, dropping what cannot fit", () => {
+		const lines = [
+			{ id: "a", startMs: 1000, durationMs: 3000 },
+			{ id: "b", startMs: 8000, durationMs: 3000 },
+		];
+		// b would end at 11 s in a 10 s video: it moves to 7 s instead.
+		expect(
+			scheduleNarration(lines, 10000).placed.map((l) => [l.id, l.startMs, l.endMs]),
 		).toEqual([
-			{ id: "a", startMs: 1000, durationMs: 5000, endMs: 6000 },
-			{ id: "b", startMs: 6250, durationMs: 1000, endMs: 7250 },
+			["a", 1000, 4000],
+			["b", 7000, 10000],
 		]);
+		// In a 5 s video there is room for only one of them.
+		const tight = scheduleNarration(lines, 5000);
+		expect(tight.placed.map((l) => l.id)).toEqual(["b"]);
+		expect(tight.placed[0].endMs).toBe(5000);
+		expect(tight.dropped.map((l) => l.id)).toEqual(["a"]);
+	});
+	it("never lets the AI voice talk over real speech", () => {
+		const moments = narrationMoments(
+			state(),
+			[click(2000), click(12000)],
+			[{ startMs: 1000, endMs: 6000 }],
+		);
+		expect(moments.map((m) => m.startMs)).toEqual([12000]);
+		// A recording that is all speech gets no fallback moments either.
+		expect(narrationMoments(state(), [], [{ startMs: 0, endMs: 30000 }])).toEqual([]);
 	});
 });

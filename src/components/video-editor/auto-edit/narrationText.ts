@@ -3,8 +3,9 @@ const MAX_CHUNK_CHARS = 28;
 
 /** Splits a narration line at punctuation, then by length, so each subtitle stays short. */
 export function splitNarrationLine(text: string): string[] {
+	// Latin punctuation ends a piece only before a space, so "2.0" and "e.g." stay whole.
 	const pieces = text
-		.split(/(?<=[，。！？；：,.!?;:])\s*/u)
+		.split(/(?<=[，。！？；：])\s*|(?<=[,.!?;:])\s+/u)
 		.map((p) => p.trim())
 		.filter(Boolean);
 	return pieces.flatMap((piece) => {

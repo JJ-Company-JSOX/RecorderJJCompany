@@ -30,6 +30,11 @@ describe("narration subtitles", () => {
 			"然后打开菜单。",
 		]);
 		expect(splitNarrationLine("Click save. Then wait.")).toEqual(["Click save.", "Then wait."]);
+		// A dot inside a number or a word is not the end of a piece.
+		expect(splitNarrationLine("Install 2.0, open github.com")).toEqual([
+			"Install 2.0,",
+			"open github.com",
+		]);
 		const long = splitNarrationLine(
 			"This sentence has many words and should be broken into shorter readable chunks",
 		);

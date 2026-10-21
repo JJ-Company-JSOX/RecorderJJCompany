@@ -12,9 +12,85 @@ type Voice = {
 	files: string[];
 	numSpeakers: number;
 	speaks: (text: string) => boolean;
+	/** Rewrites what the voice reads (never the subtitle) into words its lexicon knows. */
+	spoken?: (text: string) => string;
 	wrongLanguage: string;
 	config: (root: string) => object;
 };
+
+const ONES = [
+	"zero",
+	"one",
+	"two",
+	"three",
+	"four",
+	"five",
+	"six",
+	"seven",
+	"eight",
+	"nine",
+	"ten",
+	"eleven",
+	"twelve",
+	"thirteen",
+	"fourteen",
+	"fifteen",
+	"sixteen",
+	"seventeen",
+	"eighteen",
+	"nineteen",
+];
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const ORDINALS: Record<string, string> = {
+	one: "first",
+	two: "second",
+	three: "third",
+	five: "fifth",
+	eight: "eighth",
+	nine: "ninth",
+	twelve: "twelfth",
+};
+
+function numberWords(n: number): string {
+	if (n < 20) return ONES[n];
+	if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? ` ${ONES[n % 10]}` : "");
+	if (n < 1000)
+		return `${ONES[Math.floor(n / 100)]} hundred${n % 100 ? ` ${numberWords(n % 100)}` : ""}`;
+	const size = n >= 1e6 ? 1e6 : 1e3;
+	const name = size === 1e6 ? "million" : "thousand";
+	return `${numberWords(Math.floor(n / size))} ${name}${n % size ? ` ${numberWords(n % size)}` : ""}`;
+}
+const digitWords = (digits: string) => [...digits].map((d) => ONES[Number(d)]).join(" ");
+const ordinal = (words: string) =>
+	words.replace(
+		/\w+$/,
+		(last) => ORDINALS[last] ?? (last.endsWith("y") ? `${last.slice(0, -1)}ieth` : `${last}th`),
+	);
+
+/**
+ * The English voice's lexicon has no digits (it skips "5", and a piece that is only a
+ * number makes no sound at all) and no curly apostrophes ("you’re"): say them as words.
+ */
+export function spokenEnglish(text: string) {
+	return text
+		.replace(/[‘’]/g, "'")
+		.replace(/(\d),(?=\d{3}(?!\d))/g, "$1")
+		.replace(
+			/(\d+)(?:\.(\d+))?(%|st\b|nd\b|rd\b|th\b)?/gi,
+			(_, whole: string, fraction: string | undefined, suffix = "") => {
+				const words =
+					whole.length > 9 || (whole.length > 1 && whole.startsWith("0"))
+						? digitWords(whole)
+						: numberWords(Number(whole));
+				const decimal = fraction ? ` point ${digitWords(fraction)}` : "";
+				if (suffix === "%") return ` ${words}${decimal} percent `;
+				return ` ${suffix && !fraction ? ordinal(words) : words + decimal} `;
+			},
+		)
+		.replace(/\s+([,.!?;:])/g, "$1")
+		.replace(/\s+/g, " ")
+		.trim();
+}
 const VOICES: Partial<Record<VoiceLanguage, Voice>> = {
 	zh: {
 		directory: "tts",
@@ -55,6 +131,7 @@ const VOICES: Partial<Record<VoiceLanguage, Voice>> = {
 		numSpeakers: 1,
 		// The lexicon has no Chinese entries; such characters would be dropped silently.
 		speaks: (text) => /[A-Za-z]/.test(text) && !HAN.test(text),
+		spoken: spokenEnglish,
 		wrongLanguage: "The bundled English narration voice reads English text only",
 		config: (root) => ({
 			model: {
@@ -174,6 +251,75 @@ export async function verifyBundledTtsAssets(
 /** Short breath between subtitle chunks of one line. */
 const CHUNK_PAUSE_S = 0.12;
 
+const CJK_EDGE = /[\p{Script=Han}　-〿＀-￯]/u;
+const joinText = (a: string, b: string) =>
+	!a || !b ? a || b : CJK_EDGE.test(a[a.length - 1]) || CJK_EDGE.test(b[0]) ? a + b : `${a} ${b}`;
+
+type Engine = {
+	generateAsync(request: object): Promise<{ samples: Float32Array; sampleRate: number }>;
+};
+
+/**
+ * Speaks one narration line, one engine call per subtitle chunk so each subtitle ends
+ * exactly when its words do. A chunk the voice cannot say (no word it knows) is shown
+ * with its neighbour instead of failing the line; null when nothing at all was spoken.
+ */
+export async function speakLine(
+	tts: Engine,
+	line: string,
+	options: { speakerId: number; spoken?: (text: string) => string; signal?: AbortSignal },
+) {
+	const { speakerId, spoken, signal } = options;
+	const parts: Float32Array[] = [];
+	const chunks: Array<{ text: string; endMs: number }> = [];
+	let sampleRate = 0;
+	let total = 0;
+	let unspoken = "";
+	const ms = () => Math.round((total / sampleRate) * 1000);
+	for (const text of splitNarrationLine(line)) {
+		signal?.throwIfAborted();
+		const audio = await tts
+			.generateAsync({
+				text: spoken ? spoken(text) : text,
+				sid: speakerId,
+				speed: 1.0,
+				// The addon's default hands back memory Electron's V8 sandbox refuses, and every
+				// call then fails with "TTS settlement failed". Copy the samples instead.
+				enableExternalBuffer: false,
+			})
+			.catch((error: unknown) => {
+				if (error instanceof Error && error.message.includes("produced no audio"))
+					return null;
+				throw error;
+			});
+		if (!audio?.samples.length) {
+			const last = chunks[chunks.length - 1];
+			if (last) last.text = joinText(last.text, text);
+			else unspoken = joinText(unspoken, text);
+			continue;
+		}
+		if (total) {
+			const pause = new Float32Array(Math.round(sampleRate * CHUNK_PAUSE_S));
+			parts.push(pause);
+			total += pause.length;
+			chunks[chunks.length - 1].endMs = ms();
+		}
+		sampleRate ||= audio.sampleRate;
+		parts.push(audio.samples);
+		total += audio.samples.length;
+		chunks.push({ text: joinText(unspoken, text), endMs: ms() });
+		unspoken = "";
+	}
+	if (!total) return null;
+	const samples = new Float32Array(total);
+	let offset = 0;
+	for (const part of parts) {
+		samples.set(part, offset);
+		offset += part.length;
+	}
+	return { samples, sampleRate, durationMs: ms(), chunks };
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: sherpa-onnx-node ships no type declarations.
 type SherpaOnnx = any;
 
@@ -222,7 +368,8 @@ export async function synthesizeBundledNarration(options: {
 		if (!/^[A-Za-z0-9_-]{1,64}$/.test(cue?.id)) throw new Error("Invalid narration cue id");
 		if (typeof cue.text !== "string" || !cue.text.trim() || cue.text.length > 500)
 			throw new Error(`Invalid narration text for cue ${cue.id}`);
-		if (!voice.speaks(cue.text)) throw new Error(voice.wrongLanguage);
+		if (!voice.speaks(voice.spoken?.(cue.text) ?? cue.text))
+			throw new Error(voice.wrongLanguage);
 	}
 	const root = await verifyBundledTtsAssets(getBundledTtsRoot(language), signal, language);
 	const sherpaOnnx = await loadSherpa();
@@ -237,39 +384,12 @@ export async function synthesizeBundledNarration(options: {
 		chunks: Array<{ text: string; endMs: number }>;
 	}> = [];
 	for (const cue of cues) {
-		// One call per subtitle chunk, so each subtitle ends exactly when its words do.
-		const parts: Float32Array[] = [];
-		const chunks: Array<{ text: string; endMs: number }> = [];
-		let sampleRate = 0;
-		let total = 0;
-		const texts = splitNarrationLine(cue.text);
-		for (const [index, text] of texts.entries()) {
-			signal?.throwIfAborted();
-			const audio = await tts.generateAsync({ text, sid: speakerId, speed: 1.0 });
-			sampleRate ||= audio.sampleRate;
-			parts.push(audio.samples);
-			total += audio.samples.length;
-			if (index < texts.length - 1) {
-				const pause = new Float32Array(Math.round(sampleRate * CHUNK_PAUSE_S));
-				parts.push(pause);
-				total += pause.length;
-			}
-			chunks.push({ text, endMs: Math.round((total / sampleRate) * 1000) });
-		}
-		const samples = new Float32Array(total);
-		let offset = 0;
-		for (const part of parts) {
-			samples.set(part, offset);
-			offset += part.length;
-		}
+		const line = await speakLine(tts, cue.text, { speakerId, spoken: voice.spoken, signal });
+		// Nothing in it the voice can say: left out, and the editor reports it.
+		if (!line) continue;
 		const audioPath = path.join(outputDirectory, `narration-${run}-${cue.id}.wav`);
-		sherpaOnnx.writeWave(audioPath, { samples, sampleRate });
-		results.push({
-			id: cue.id,
-			audioPath,
-			durationMs: Math.round((total / sampleRate) * 1000),
-			chunks,
-		});
+		sherpaOnnx.writeWave(audioPath, { samples: line.samples, sampleRate: line.sampleRate });
+		results.push({ id: cue.id, audioPath, durationMs: line.durationMs, chunks: line.chunks });
 	}
 	return results;
 }

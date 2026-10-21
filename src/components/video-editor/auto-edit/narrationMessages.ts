@@ -8,6 +8,8 @@ export const narrationMessages = {
 		dropped:
 			"{n} lines did not fit before the end of the video and were left out. Shorten some lines and generate again.",
 		skipped: "{n} subtitle pieces would have covered existing subtitles and were left out.",
+		unspoken:
+			"{n} lines had no words the voice could read and were left out. Rewrite them in plain words and generate again.",
 		blankHint: "Empty lines are skipped.",
 		title: "AI narration draft · experimental",
 		info: "The AI on this computer looks at the screen at each zoom or sped-up part, then drafts one narration line for it. Nothing leaves this computer, and transcript text, subtitles and file paths are never sent to the model. The AI can misread the screen, so review and edit every line before approving.",
@@ -31,6 +33,7 @@ export const narrationMessages = {
 		latinHint: "中文句子里的英文会显示在字幕上，但中文配音不会读出来。",
 		dropped: "有 {n} 句放不进视频结尾前，已经略过。可以把句子改短一点再生成。",
 		skipped: "有 {n} 段字幕会盖住原有的字幕，已经略过。",
+		unspoken: "有 {n} 句里没有配音能读出的字，已经略过。请改用普通的字词再生成。",
 		blankHint: "清空的句子会被跳过。",
 		title: "AI 解说稿草稿 · 实验版",
 		info: "本机的 AI 会先看每一处放大或加速时的画面，再为它写一句解说。所有内容都不会离开这台电脑，也不会把转录文字、字幕或文件路径发给模型。AI 可能看错画面，确认前请逐句检查、修改。",
@@ -59,6 +62,8 @@ export const narrationMessages = {
 		dropped:
 			"{n} baris tidak muat sebelum video tamat dan ditinggalkan. Pendekkan beberapa baris dan jana semula.",
 		skipped: "{n} bahagian sari kata akan menutup sari kata sedia ada dan ditinggalkan.",
+		unspoken:
+			"{n} baris tiada perkataan yang boleh dibaca oleh suara dan ditinggalkan. Tulis semula dengan perkataan biasa dan jana semula.",
 		blankHint: "Baris kosong dilangkau.",
 		title: "Draf naratif AI · eksperimen",
 		info: "AI pada komputer ini melihat skrin pada setiap zum atau bahagian dipercepat, kemudian mendraf satu baris naratif untuknya. Tiada apa meninggalkan komputer ini, dan transkrip, sari kata serta laluan fail tidak pernah dihantar kepada model. AI boleh tersalah baca skrin, jadi semak dan sunting setiap baris sebelum meluluskan.",

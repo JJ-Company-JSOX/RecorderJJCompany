@@ -37,7 +37,7 @@
     {
       "from": "vendor/offline-ai/win32-x64",
       "to": "offline-ai",
-      "filter": ["manifest.json", "*.gguf", "*.txt", "runtime-static/**", "speech/**", "tts/**", "tts-en/**"]
+      "filter": ["manifest.json", "*.gguf", "*.txt", "runtime-static/**", "speech/**", "tts-kokoro/**"]
     },
     {
       "from": "vendor/offline-tools/win32-x64",

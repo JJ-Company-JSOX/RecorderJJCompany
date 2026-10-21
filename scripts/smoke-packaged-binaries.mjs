@@ -262,6 +262,35 @@ function verifyNativeHelpers(unpackedRoot) {
 	}
 }
 
+/**
+ * The offline AI edition ships its narration voice as resources/offline-ai/tts-kokoro: every
+ * file its manifest lists (espeak-ng-data has hundreds) must have been packaged at full size.
+ */
+function verifyOfflineNarrationVoice(unpackedRoot) {
+	const offlineAi = path.join(path.dirname(unpackedRoot), "offline-ai");
+	if (!existsSync(offlineAi)) {
+		return;
+	}
+
+	const voiceRoot = path.join(offlineAi, "tts-kokoro");
+	const manifestPath = path.join(voiceRoot, "manifest.json");
+	assertFile(manifestPath, "offline narration voice manifest");
+	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+	for (const entry of manifest.files) {
+		const filePath = path.join(voiceRoot, ...entry.path.split("/"));
+		if (!existsSync(filePath) || statSync(filePath).size !== entry.bytes) {
+			fail(`offline narration voice file is missing or truncated: ${entry.path}`);
+		}
+	}
+	console.log(`[packaged-smoke] offline narration voice: ${manifest.files.length} files`);
+	if (process.platform === "win32") {
+		assertFile(
+			path.join(unpackedRoot, "node_modules", "sherpa-onnx-win-x64", "sherpa-onnx.node"),
+			"narration voice engine addon",
+		);
+	}
+}
+
 const unpackedRoots = findDirectoriesByName(releaseRoot, "app.asar.unpacked");
 
 if (unpackedRoots.length === 0) {
@@ -277,6 +306,7 @@ for (const unpackedRoot of unpackedRoots) {
 	assertPackagedAppExecutable(unpackedRoot);
 	verifyFfmpeg(unpackedRoot);
 	verifyNativeHelpers(unpackedRoot);
+	verifyOfflineNarrationVoice(unpackedRoot);
 }
 
 console.log("[packaged-smoke] packaged binary path smoke passed");

@@ -1,18 +1,26 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Encryption } from "../config";
+import { isPlatform, type Platform } from "../publish";
 
-/** A social account the customer connected straight to Recordly (no Postiz server). */
+/** Electron's safeStorage: encryption tied to the signed-in Windows user. */
+export type Encryption = {
+	isEncryptionAvailable(): boolean;
+	encryptString(text: string): Buffer;
+	decryptString(data: Buffer): string;
+};
+
+/** A social account the customer connected straight to Recordly. */
 export type DirectAccount = {
-	platform: "youtube";
+	platform: Platform;
 	id: string;
 	name: string;
-	email?: string;
+	/** e.g. the Google email, or the Facebook page's category. */
+	detail?: string;
 	picture?: string;
 };
 type Stored = DirectAccount & { token: string };
 
-/** Keeps connected accounts in userData; each refresh token is encrypted by the OS. */
+/** Keeps connected accounts in userData; each account's credential is encrypted by the OS. */
 export class DirectAccountStore {
 	constructor(
 		private readonly file: string,
@@ -25,7 +33,7 @@ export class DirectAccountStore {
 			return Array.isArray(parsed)
 				? parsed.filter(
 						(a) =>
-							a?.platform === "youtube" &&
+							isPlatform(a?.platform) &&
 							typeof a.id === "string" &&
 							typeof a.name === "string" &&
 							typeof a.token === "string",
@@ -43,22 +51,26 @@ export class DirectAccountStore {
 		await fs.rename(temporary, this.file);
 	}
 
-	/** What the page may see: never a token. */
+	/** What the page may see: never a credential. */
 	async list(): Promise<DirectAccount[]> {
 		return (await this.read()).map(({ token: _token, ...account }) => account);
 	}
 
-	async add(account: DirectAccount, refreshToken: string) {
+	/** Adds or replaces accounts (one sign-in can return several, e.g. Facebook pages). */
+	async save(entries: Array<{ account: DirectAccount; credential: string }>) {
 		if (!this.encryption.isEncryptionAvailable())
 			throw new Error("This computer cannot store the sign-in securely.");
-		const token = this.encryption.encryptString(refreshToken).toString("base64");
-		const others = (await this.read()).filter(
-			(a) => !(a.platform === account.platform && a.id === account.id),
-		);
-		await this.write([...others, { ...account, token }]);
+		const key = (a: DirectAccount) => `${a.platform}:${a.id}`;
+		const replaced = new Set(entries.map((e) => key(e.account)));
+		const kept = (await this.read()).filter((a) => !replaced.has(key(a)));
+		const added = entries.map(({ account, credential }) => ({
+			...account,
+			token: this.encryption.encryptString(credential).toString("base64"),
+		}));
+		await this.write([...kept, ...added]);
 	}
 
-	async refreshToken(platform: DirectAccount["platform"], id: string) {
+	async credential(platform: Platform, id: string) {
 		const found = (await this.read()).find((a) => a.platform === platform && a.id === id);
 		if (!found) return null;
 		try {
@@ -68,7 +80,7 @@ export class DirectAccountStore {
 		}
 	}
 
-	async remove(platform: DirectAccount["platform"], id: string) {
+	async remove(platform: Platform, id: string) {
 		await this.write(
 			(await this.read()).filter((a) => !(a.platform === platform && a.id === id)),
 		);

@@ -772,54 +772,39 @@ interface Window {
 			callback: (state: { cursorType: CursorTelemetryPoint["cursorType"] }) => void,
 		) => () => void;
 		openExternalUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
-		getSocialConfig: () => Promise<{ baseUrl: string | null; hasKey: boolean }>;
-		saveSocialConfig: (
-			baseUrl: string,
-			apiKey: string,
-		) => Promise<{ success: boolean; baseUrl?: string; error?: string }>;
-		clearSocialConfig: () => Promise<{ success: boolean }>;
-		listSocialChannels: () => Promise<{
-			success: boolean;
-			channels?: import("./ipc/social/postiz").Channel[];
-			error?: string;
-		}>;
-		connectSocialChannel: (identifier: string) => Promise<{ success: boolean; error?: string }>;
-		pickSocialVideo: () => Promise<string | null>;
-		checkSocialVideo: (
-			videoPath: string,
-		) => Promise<{ success: boolean; path?: string; bytes?: number; error?: string }>;
-		publishSocialPost: (
-			request: Omit<import("./ipc/social/postiz").PublishRequest, "channels"> & {
-				channels: Array<{ id: string; identifier: string; via?: "direct" }>;
-			},
-		) => Promise<{
-			success: boolean;
-			posts?: Array<{ postId: string; integration: string; url?: string }>;
-			failed?: Array<{ account: string; error: string }>;
-			warning?: string;
-			error?: string;
-		}>;
-		getDirectSocialStatus: () => Promise<{
-			platforms: { youtube: boolean };
+		getSocialStatus: () => Promise<{
+			platforms: Record<import("./ipc/social/publish").Platform, boolean>;
 			accounts: import("./ipc/social/direct/accounts").DirectAccount[];
 		}>;
-		connectDirectSocial: (platform: "youtube") => Promise<{
+		connectSocial: (platform: import("./ipc/social/publish").Platform) => Promise<{
 			success: boolean;
 			accounts?: import("./ipc/social/direct/accounts").DirectAccount[];
 			error?: string;
 		}>;
-		cancelDirectSocialConnect: () => Promise<void>;
-		removeDirectSocial: (
-			platform: "youtube",
+		cancelSocialConnect: () => Promise<void>;
+		removeSocial: (
+			platform: import("./ipc/social/publish").Platform,
 			id: string,
 		) => Promise<{
 			success: boolean;
 			accounts: import("./ipc/social/direct/accounts").DirectAccount[];
 		}>;
+		getSocialAccountOptions: (
+			platform: import("./ipc/social/publish").Platform,
+			id: string,
+		) => Promise<{ success: boolean; options?: unknown; error?: string }>;
+		pickSocialVideo: () => Promise<string | null>;
+		checkSocialVideo: (
+			videoPath: string,
+		) => Promise<{ success: boolean; path?: string; bytes?: number; error?: string }>;
+		publishSocialPost: (request: import("./ipc/social/publish").PublishRequest) => Promise<{
+			success: boolean;
+			posts?: Array<{ platform: string; account: string; id: string; url?: string }>;
+			failed?: Array<{ account: string; error: string }>;
+			error?: string;
+		}>;
 		cancelSocialPublish: () => Promise<void>;
-		onSocialPublishProgress: (
-			callback: (stage: "uploading" | "processing" | "posting", account?: string) => void,
-		) => () => void;
+		onSocialPublishProgress: (callback: (account: string) => void) => () => void;
 		getAccessibilityPermissionStatus: () => Promise<{
 			success: boolean;
 			trusted: boolean;

@@ -1,173 +1,98 @@
 import path from "node:path";
 import { BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import { USER_DATA_PATH } from "../../appPaths";
-import { SocialConfigStore } from "../social/config";
 import { DirectAccountStore } from "../social/direct/accounts";
-import { youtubeClient } from "../social/direct/apps";
-import { pkcePair, startLoopback } from "../social/direct/oauth";
+import { ADAPTERS, type ConnectContext } from "../social/direct/platforms";
 import {
-	exchangeYoutubeCode,
-	uploadToYoutube,
-	youtubeAccessToken,
-	youtubeAuthUrl,
-} from "../social/direct/youtube";
-import {
-	type Channel,
 	checkVideoFile,
-	CONNECTABLE_PLATFORMS,
-	createPostBody,
-	isVideoPlatform,
-	normalizeBaseUrl,
-	PostizClient,
+	isPlatform,
+	PLATFORMS,
+	type Platform,
+	parsePublishRequest,
 	publishProblems,
-	type PublishRequest,
-} from "../social/postiz";
+} from "../social/publish";
 
-const failure = (error: unknown) => ({
-	success: false as const,
-	error: error instanceof Error ? error.message : String(error),
-});
-
-function parsePublishRequest(input: unknown): PublishRequest {
-	const value = (input ?? {}) as Record<string, unknown>;
-	const channels = Array.isArray(value.channels) ? value.channels : [];
-	if (
-		channels.length > 20 ||
-		!channels.every(
-			(c) =>
-				c &&
-				typeof c.id === "string" &&
-				c.id.length <= 200 &&
-				isVideoPlatform(c.identifier),
-		)
-	)
-		throw new Error("Invalid accounts");
-	if (typeof value.text !== "string" || value.text.length > 5000) throw new Error("Invalid text");
-	if (typeof value.title !== "string" || value.title.length > 200)
-		throw new Error("Invalid title");
-	if (value.visibility !== "public" && value.visibility !== "private")
-		throw new Error("Invalid visibility");
-	if (value.when !== "now" && value.when !== "schedule" && value.when !== "draft")
-		throw new Error("Invalid publish time");
-	return {
-		videoPath: String(value.videoPath),
-		channels: channels.map((c) => ({
-			id: c.id,
-			identifier: c.identifier,
-			...(c.via === "direct" ? { via: "direct" as const } : {}),
-		})),
-		text: value.text,
-		title: value.title,
-		visibility: value.visibility,
-		when: value.when,
-		date: typeof value.date === "string" ? value.date : undefined,
-		madeWithAi: value.madeWithAi === true,
-	};
-}
-
-type Stage = "uploading" | "processing" | "posting";
+const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const failure = (error: unknown) => ({ success: false as const, error: message(error) });
 
 /**
- * Social publishing, straight to the platform with the developer's built-in app
- * (YouTube) or through Postiz. Every network call here starts from an explicit click
- * in the Social page; recording, editing and the offline AI never use it.
+ * Social publishing straight to each platform, through the developer's own registered
+ * apps: customers sign in with their own accounts in their browser and Recordly posts the
+ * video directly. No server. Every network call here starts from a click on the Social
+ * page; recording, editing and the offline AI never use it.
  */
 export function registerSocialHandlers() {
-	const store = new SocialConfigStore(
-		path.join(USER_DATA_PATH, "social-publisher.json"),
-		safeStorage,
-	);
-	const direct = new DirectAccountStore(
+	const accounts = new DirectAccountStore(
 		path.join(USER_DATA_PATH, "social-accounts.json"),
 		safeStorage,
 	);
 	let publishing: AbortController | null = null;
 	let signingIn: AbortController | null = null;
-	const client = async () => {
-		const credentials = await store.credentials();
-		if (!credentials) throw new Error("Connect Postiz first.");
-		return new PostizClient(credentials.baseUrl, credentials.apiKey);
-	};
 
-	ipcMain.handle("social-get-config", () => store.summary());
+	/**
+	 * A small Recordly window for sign-in flows that cannot redirect to 127.0.0.1 (Facebook).
+	 * Its own persistent session keeps the customer signed in to that platform only.
+	 */
+	const signInWindow: ConnectContext["signInWindow"] = (url, redirectPrefix, signal) =>
+		new Promise((resolve, reject) => {
+			const window = new BrowserWindow({
+				width: 520,
+				height: 720,
+				title: "Sign in",
+				autoHideMenuBar: true,
+				webPreferences: { partition: "persist:recordly-social-signin", sandbox: true },
+			});
+			let done = false;
+			const finish = (error: Error | null, result?: string) => {
+				if (done) return;
+				done = true;
+				signal.removeEventListener("abort", abort);
+				if (!window.isDestroyed()) window.close();
+				if (error) reject(error);
+				else resolve(result as string);
+			};
+			const abort = () => finish(new Error("Sign-in was cancelled."));
+			const check = (target: string) => {
+				if (target.startsWith(redirectPrefix)) finish(null, target);
+			};
+			signal.addEventListener("abort", abort, { once: true });
+			window.webContents.on("will-redirect", (_, target) => check(target));
+			window.webContents.on("did-navigate", (_, target) => check(target));
+			window.webContents.setWindowOpenHandler(({ url: popup }) => {
+				void shell.openExternal(popup);
+				return { action: "deny" };
+			});
+			window.on("closed", () => finish(new Error("Sign-in was cancelled.")));
+			void window.loadURL(url);
+		});
+	const available = () =>
+		Object.fromEntries(PLATFORMS.map((p) => [p, ADAPTERS[p].available()])) as Record<
+			Platform,
+			boolean
+		>;
 
-	ipcMain.handle("social-save-config", async (_, baseUrl: unknown, apiKey: unknown) => {
-		try {
-			if (typeof baseUrl !== "string" || baseUrl.length > 500)
-				throw new Error("Invalid address");
-			const normalized = normalizeBaseUrl(baseUrl);
-			let key = typeof apiKey === "string" ? apiKey.trim() : "";
-			if (!key) {
-				// Changing only the address keeps the saved key.
-				key = (await store.credentials())?.apiKey ?? "";
-				if (!key) throw new Error("Paste your Postiz API key.");
-			}
-			if (key.length > 500) throw new Error("Invalid API key");
-			if (!(await new PostizClient(normalized, key).isConnected()))
-				throw new Error("Postiz did not accept the API key.");
-			await store.save(normalized, key);
-			return { success: true as const, baseUrl: normalized };
-		} catch (error) {
-			return failure(error);
-		}
-	});
-
-	ipcMain.handle("social-clear-config", async () => {
-		await store.clear();
-		return { success: true as const };
-	});
-
-	ipcMain.handle("social-list-channels", async () => {
-		try {
-			const channels: Channel[] = await (await client()).channels();
-			return { success: true as const, channels };
-		} catch (error) {
-			return failure(error);
-		}
-	});
-
-	ipcMain.handle("social-connect-channel", async (_, identifier: unknown) => {
-		try {
-			if (
-				!CONNECTABLE_PLATFORMS.includes(
-					identifier as (typeof CONNECTABLE_PLATFORMS)[number],
-				)
-			)
-				throw new Error("Unsupported platform");
-			// The user signs in on the platform's own page in their browser, never inside Recordly.
-			await shell.openExternal(await (await client()).connectUrl(identifier as string));
-			return { success: true as const };
-		} catch (error) {
-			return failure(error);
-		}
-	});
-
-	ipcMain.handle("social-direct-status", async () => ({
-		platforms: { youtube: Boolean(youtubeClient()) },
-		accounts: await direct.list(),
+	ipcMain.handle("social-status", async () => ({
+		platforms: available(),
+		accounts: await accounts.list(),
 	}));
 
-	ipcMain.handle("social-direct-connect", async (_, platform: unknown) => {
+	ipcMain.handle("social-connect", async (_, platform: unknown) => {
 		try {
-			if (platform !== "youtube") throw new Error("Unsupported platform");
-			const app = youtubeClient();
-			if (!app) throw new Error("YouTube posting is not set up in this build.");
+			const adapter = isPlatform(platform) ? ADAPTERS[platform] : undefined;
+			if (!adapter?.available())
+				throw new Error("This platform is not set up in this build.");
 			signingIn?.abort();
 			const controller = new AbortController();
 			signingIn = controller;
-			const pkce = pkcePair();
-			const loopback = await startLoopback(pkce.state, { signal: controller.signal });
-			// The customer signs in on Google's own page in their browser, never inside Recordly.
-			await shell.openExternal(youtubeAuthUrl(app, loopback.redirectUri, pkce));
-			const code = await loopback.code;
-			const { account, refreshToken } = await exchangeYoutubeCode(
-				app,
-				code,
-				pkce.verifier,
-				loopback.redirectUri,
-			);
-			await direct.add({ platform: "youtube", ...account }, refreshToken);
-			return { success: true as const, accounts: await direct.list() };
+			// Customers sign in on the platform's own page in their browser, never inside Recordly.
+			const connected = await adapter.connect({
+				openExternal: (url) => shell.openExternal(url),
+				signInWindow,
+				signal: controller.signal,
+			});
+			if (!connected.length) throw new Error("No account was found to post to.");
+			await accounts.save(connected);
+			return { success: true as const, accounts: await accounts.list() };
 		} catch (error) {
 			return failure(error);
 		} finally {
@@ -175,13 +100,35 @@ export function registerSocialHandlers() {
 		}
 	});
 
-	ipcMain.handle("social-direct-cancel-connect", () => {
+	ipcMain.handle("social-cancel-connect", () => {
 		signingIn?.abort();
 	});
 
-	ipcMain.handle("social-direct-remove", async (_, platform: unknown, id: unknown) => {
-		if (platform === "youtube" && typeof id === "string") await direct.remove(platform, id);
-		return { success: true as const, accounts: await direct.list() };
+	ipcMain.handle("social-remove", async (_, platform: unknown, id: unknown) => {
+		if (isPlatform(platform) && typeof id === "string") await accounts.remove(platform, id);
+		return { success: true as const, accounts: await accounts.list() };
+	});
+
+	/** What the platform allows this account right now (e.g. TikTok's privacy choices). */
+	ipcMain.handle("social-account-options", async (_, platform: unknown, id: unknown) => {
+		try {
+			const adapter = isPlatform(platform) ? ADAPTERS[platform] : undefined;
+			const credential =
+				isPlatform(platform) && typeof id === "string"
+					? await accounts.credential(platform, id)
+					: null;
+			if (!adapter?.options || !credential) throw new Error("Connect this account again.");
+			const result = await adapter.options(credential, AbortSignal.timeout(30_000));
+			if (result.credential) {
+				const account = (await accounts.list()).find(
+					(a) => a.platform === platform && a.id === id,
+				);
+				if (account) await accounts.save([{ account, credential: result.credential }]);
+			}
+			return { success: true as const, options: result.options };
+		} catch (error) {
+			return failure(error);
+		}
 	});
 
 	ipcMain.handle("social-pick-video", async (event) => {
@@ -209,79 +156,61 @@ export function registerSocialHandlers() {
 		if (publishing) return failure(new Error("A post is already being published."));
 		const controller = new AbortController();
 		publishing = controller;
-		const progress = (stage: Stage, account?: string) => {
-			if (!event.sender.isDestroyed())
-				event.sender.send("social-publish-progress", stage, account);
+		const progress = (account: string) => {
+			if (!event.sender.isDestroyed()) event.sender.send("social-publish-progress", account);
 		};
-		const posts: Array<{ postId: string; integration: string; url?: string }> = [];
+		const posts: Array<{ platform: Platform; account: string; id: string; url?: string }> = [];
 		const failed: Array<{ account: string; error: string }> = [];
-		let warning: string | undefined;
 		try {
 			const request = parsePublishRequest(input);
 			const problems = publishProblems(request);
 			if (problems.length) throw new Error(problems.join(" "));
 			await checkVideoFile(request.videoPath);
-			const accounts = await direct.list();
-			for (const channel of request.channels.filter((c) => c.via === "direct")) {
-				const account = accounts.find(
-					(a) => a.platform === channel.identifier && a.id === channel.id,
+			const { accounts: _chosen, ...video } = request;
+			const known = await accounts.list();
+			for (const target of request.accounts) {
+				const account = known.find(
+					(a) => a.platform === target.platform && a.id === target.id,
 				);
-				const name = account?.name ?? channel.identifier;
+				const name = account ? `${account.name} (${target.platform})` : target.platform;
 				try {
-					const app = youtubeClient();
-					const token = await direct.refreshToken("youtube", channel.id);
-					if (!app || !token) throw new Error("Connect this YouTube account again.");
-					progress("uploading", name);
-					const video = await uploadToYoutube(
-						await youtubeAccessToken(app, token),
-						{
-							videoPath: request.videoPath,
-							title: request.title,
-							description: request.text,
-							// YouTube has no drafts: a draft is kept as a private video.
-							visibility: request.when === "draft" ? "private" : request.visibility,
-							publishAt:
-								request.when === "schedule"
-									? new Date(request.date as string).toISOString()
-									: undefined,
-							madeWithAi: request.madeWithAi,
-						},
-						{ signal: controller.signal },
-					);
-					posts.push({ postId: video.id, integration: channel.id, url: video.url });
+					const adapter = ADAPTERS[target.platform];
+					const credential = await accounts.credential(target.platform, target.id);
+					if (!adapter || !account || !credential)
+						throw new Error("Connect this account again.");
+					progress(name);
+					const posted = await adapter
+						.publish(credential, video, {
+							signal: controller.signal,
+							signInWindow,
+							accountId: target.id,
+						})
+						.catch(async (error) => {
+							// A refresh token used before the failure was already replaced.
+							const rotated = (error as { rotatedCredential?: string })
+								.rotatedCredential;
+							if (rotated) await accounts.save([{ account, credential: rotated }]);
+							throw error;
+						});
+					if (posted.credential)
+						await accounts.save([{ account, credential: posted.credential }]);
+					posts.push({
+						platform: target.platform,
+						account: name,
+						id: posted.id,
+						url: posted.url,
+					});
 				} catch (error) {
 					if (controller.signal.aborted) throw error;
-					failed.push({ account: name, error: failure(error).error });
+					failed.push({ account: name, error: message(error) });
 				}
 			}
-			const viaPostiz = request.channels.filter((c) => c.via !== "direct");
-			if (viaPostiz.length) {
-				try {
-					const postiz = await client();
-					progress("uploading", "Postiz");
-					const media = await postiz.upload(request.videoPath, controller.signal);
-					if (!media.ready) {
-						progress("processing");
-						({ warning } = await postiz.waitUntilReady(media.id, controller.signal));
-					}
-					progress("posting");
-					posts.push(
-						...(await postiz.createPost(
-							createPostBody({ ...request, channels: viaPostiz }, media),
-							controller.signal,
-						)),
-					);
-				} catch (error) {
-					if (controller.signal.aborted) throw error;
-					failed.push({ account: "Postiz", error: failure(error).error });
-				}
-			}
-			if (!posts.length && failed.length)
+			if (!posts.length)
 				return {
 					...failure(new Error(failed.map((f) => `${f.account}: ${f.error}`).join(" "))),
 					failed,
 				};
-			return { success: true as const, posts, failed, warning };
+			return { success: true as const, posts, failed };
 		} catch (error) {
 			if (controller.signal.aborted) return failure(new Error("Publishing was cancelled."));
 			return failure(error);

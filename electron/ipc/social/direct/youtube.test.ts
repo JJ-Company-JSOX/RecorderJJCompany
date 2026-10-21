@@ -223,26 +223,40 @@ describe("connected accounts", () => {
 		encryptString: (text: string) => Buffer.from(`enc:${text}`),
 		decryptString: (data: Buffer) => data.toString().replace(/^enc:/, ""),
 	};
-	it("keeps refresh tokens encrypted and never lists them", async () => {
+	it("keeps credentials encrypted, never lists them, and replaces an account on reconnect", async () => {
 		const file = path.join(dir, "accounts.json");
 		const store = new DirectAccountStore(file, encryption);
-		await store.add({ platform: "youtube", id: "g-1", name: "Jsox Studio" }, "secret-refresh");
-		await store.add({ platform: "youtube", id: "g-1", name: "Jsox Studio 2" }, "newer");
+		await store.save([
+			{
+				account: { platform: "youtube", id: "g-1", name: "Jsox Studio" },
+				credential: "secret-refresh",
+			},
+			{ account: { platform: "facebook", id: "p-1", name: "Jsox Page" }, credential: "page" },
+		]);
+		await store.save([
+			{
+				account: { platform: "youtube", id: "g-1", name: "Jsox Studio 2" },
+				credential: "newer",
+			},
+		]);
 		expect(readFileSync(file, "utf8")).not.toContain("secret-refresh");
 		expect(await store.list()).toEqual([
+			{ platform: "facebook", id: "p-1", name: "Jsox Page" },
 			{ platform: "youtube", id: "g-1", name: "Jsox Studio 2" },
 		]);
-		expect(await store.refreshToken("youtube", "g-1")).toBe("newer");
+		expect(await store.credential("youtube", "g-1")).toBe("newer");
 		await store.remove("youtube", "g-1");
-		expect(await store.list()).toEqual([]);
+		expect((await store.list()).map((a) => a.platform)).toEqual(["facebook"]);
 	});
 	it("refuses to save a sign-in it cannot encrypt", async () => {
 		const store = new DirectAccountStore(path.join(dir, "plain.json"), {
 			...encryption,
 			isEncryptionAvailable: () => false,
 		});
-		await expect(store.add({ platform: "youtube", id: "1", name: "n" }, "rt")).rejects.toThrow(
-			/securely/,
-		);
+		await expect(
+			store.save([
+				{ account: { platform: "youtube", id: "1", name: "n" }, credential: "rt" },
+			]),
+		).rejects.toThrow(/securely/);
 	});
 });

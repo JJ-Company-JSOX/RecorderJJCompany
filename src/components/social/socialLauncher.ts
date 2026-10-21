@@ -11,28 +11,6 @@ export function onOpenSocialPublisher(handler: (videoPath?: string) => void) {
 	return () => window.removeEventListener(OPEN_SOCIAL, listener);
 }
 
-/** Video platforms Recordly can post to, matching the main process list. */
-export const VIDEO_PLATFORMS = new Set([
-	"youtube",
-	"tiktok",
-	"instagram",
-	"instagram-standalone",
-	"facebook",
-	"x",
-	"threads",
-	"linkedin",
-	"linkedin-page",
-	"bluesky",
-]);
-export const LINKABLE_PLATFORMS = [
-	"youtube",
-	"tiktok",
-	"instagram",
-	"facebook",
-	"x",
-	"threads",
-	"linkedin",
-] as const;
-export const POSTIZ_CLOUD_URL = "https://api.postiz.com/public/v1";
-/** A build can point customers at the company's own open-source Postiz server. */
-export const PRESET_POSTIZ_SERVER = (import.meta.env.VITE_POSTIZ_SERVER_URL ?? "").trim();
+/** Platforms in the order they are offered; Instagram signs in through Facebook. */
+export const SOCIAL_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];

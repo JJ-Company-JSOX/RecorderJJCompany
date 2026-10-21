@@ -745,31 +745,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	openExternalUrl: (url: string) => {
 		return ipcRenderer.invoke("open-external-url", url);
 	},
-	getSocialConfig: () => ipcRenderer.invoke("social-get-config"),
-	saveSocialConfig: (baseUrl: string, apiKey: string) =>
-		ipcRenderer.invoke("social-save-config", baseUrl, apiKey),
-	clearSocialConfig: () => ipcRenderer.invoke("social-clear-config"),
-	listSocialChannels: () => ipcRenderer.invoke("social-list-channels"),
-	connectSocialChannel: (identifier: string) =>
-		ipcRenderer.invoke("social-connect-channel", identifier),
+	getSocialStatus: () => ipcRenderer.invoke("social-status"),
+	connectSocial: (platform: string) => ipcRenderer.invoke("social-connect", platform),
+	cancelSocialConnect: () => ipcRenderer.invoke("social-cancel-connect"),
+	removeSocial: (platform: string, id: string) =>
+		ipcRenderer.invoke("social-remove", platform, id),
+	getSocialAccountOptions: (platform: string, id: string) =>
+		ipcRenderer.invoke("social-account-options", platform, id),
 	pickSocialVideo: () => ipcRenderer.invoke("social-pick-video"),
 	checkSocialVideo: (videoPath: string) => ipcRenderer.invoke("social-check-video", videoPath),
 	publishSocialPost: (request: unknown) => ipcRenderer.invoke("social-publish", request),
 	cancelSocialPublish: () => ipcRenderer.invoke("social-cancel-publish"),
-	getDirectSocialStatus: () => ipcRenderer.invoke("social-direct-status"),
-	connectDirectSocial: (platform: string) =>
-		ipcRenderer.invoke("social-direct-connect", platform),
-	cancelDirectSocialConnect: () => ipcRenderer.invoke("social-direct-cancel-connect"),
-	removeDirectSocial: (platform: string, id: string) =>
-		ipcRenderer.invoke("social-direct-remove", platform, id),
-	onSocialPublishProgress: (
-		callback: (stage: "uploading" | "processing" | "posting", account?: string) => void,
-	) => {
-		const listener = (
-			_: Electron.IpcRendererEvent,
-			stage: "uploading" | "processing" | "posting",
-			account?: string,
-		) => callback(stage, account);
+	onSocialPublishProgress: (callback: (account: string) => void) => {
+		const listener = (_: Electron.IpcRendererEvent, account: string) => callback(account);
 		ipcRenderer.on("social-publish-progress", listener);
 		return () => ipcRenderer.removeListener("social-publish-progress", listener);
 	},

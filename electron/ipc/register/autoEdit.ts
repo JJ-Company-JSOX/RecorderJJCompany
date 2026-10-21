@@ -10,6 +10,7 @@ import {
 	isNarrationFrame,
 	type NarrationFrame,
 } from "../autoEdit/narrationFrames";
+import type { OcrEngine } from "../autoEdit/ocrTypes";
 import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
 import {
 	generateBundledNarration,
@@ -31,7 +32,15 @@ import { normalizeVideoSourcePath } from "../utils";
 import { registerOfflineTools } from "./offlineTools";
 import { protectSilenceWithVad } from "../captions/vadProtection";
 
-export function registerAutoEditHandlers() {
+export type AutoEditHandlerOptions = {
+	/**
+	 * Opens the bundled OCR engine for one voice-over job, or resolves undefined when this build
+	 * has none. With it, click labels are exact screen text; without it the vision model reads them.
+	 */
+	openOcr?: (signal: AbortSignal) => Promise<OcrEngine | undefined>;
+};
+
+export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 	const bundledRoot = () =>
 		app.isPackaged
 			? path.join(process.resourcesPath, "offline-ai")
@@ -326,6 +335,7 @@ export function registerAutoEditHandlers() {
 			const abort = () => controller.abort();
 			event.sender.once("destroyed", abort);
 			let session: Awaited<ReturnType<typeof startBundledAi>> | undefined;
+			let ocr: OcrEngine | undefined;
 			try {
 				if (
 					!plan ||
@@ -352,14 +362,27 @@ export function registerAutoEditHandlers() {
 				if (screen && !approved)
 					throw new Error("Select an approved local recording first");
 				session = await startBundledAi(bundledRoot(), controller.signal);
+				if (screen && approved && frames.length && options.openOcr)
+					try {
+						ocr = await options.openOcr(controller.signal);
+					} catch (error) {
+						// OCR only sharpens labels; the vision model still reads the screen without it.
+						controller.signal.throwIfAborted();
+						console.warn(
+							"[auto-edit-narration] OCR unavailable:",
+							error instanceof Error ? error.message : error,
+						);
+					}
 				// Look at the screen at each narrated moment first, so lines can name what is shown.
 				const screens =
 					screen && approved
 						? await describeNarrationFrames({
 								videoPath: approved,
 								ffmpegPath: getFfmpegBinaryPath(),
+								ffprobePath: getFfprobeBinaryPath(),
 								frames,
 								look: session.look,
+								ocr,
 								signal: controller.signal,
 								onProgress: (completed, total) => {
 									if (!event.sender.isDestroyed())
@@ -390,6 +413,7 @@ export function registerAutoEditHandlers() {
 						error instanceof Error ? error.message : "Bundled narration draft failed",
 				};
 			} finally {
+				await ocr?.dispose().catch(() => undefined);
 				await session?.close();
 				running.delete(event.sender.id);
 				event.sender.removeListener("destroyed", abort);

@@ -31,13 +31,30 @@ npm run prepare:offline-tts
 npm run build:win:offline
 ```
 
-完整离线 AI 包同时内置语音识别（Whisper small，约 190 MB）和 AI 解说配音（中文 AISHELL-3 VITS，约 33 MB，Apache-2.0；英文 LJSpeech VITS，约 118 MB，MIT／公有领域数据）。`prepare:offline-voice` 准备语音边界检测（Silero VAD，按句子边界剪停顿时需要）和“让人声更清楚”（RNNoise），必须在 `prepare:offline-speech` 之后运行，因为它会用到那一步下载的编译工具。打包前依次执行 `verify:offline-ai`、`verify:offline-speech`、`verify:offline-voice`、`verify:offline-tts`，任何一项缺失或损坏都会停止打包。AI 解说稿和配音跟随界面选的语言：中文、英文都有内置配音；马来文目前只能生成解说稿，没有找到许可证清楚、可商用的离线马来文声音，所以暂不内置。开发时先完成上面三个准备命令，再用 `npm run dev` 直接测试，无需打包。
+完整离线 AI 包同时内置语音识别（Whisper small，约 190 MB）和 AI 解说配音（Kokoro-82M v1.0 多语言版，一个模型读普通话、英语和中英混读，约 363 MB，权重 Apache-2.0；详见下面“AI 解说配音”）。`prepare:offline-voice` 准备语音边界检测（Silero VAD，按句子边界剪停顿时需要）和“让人声更清楚”（RNNoise），必须在 `prepare:offline-speech` 之后运行，因为它会用到那一步下载的编译工具。打包前依次执行 `verify:offline-ai`、`verify:offline-speech`、`verify:offline-voice`、`verify:offline-tts`，任何一项缺失或损坏都会停止打包。AI 解说稿和配音跟随界面选的语言：中文、英文都有内置配音；马来文目前只能生成解说稿，没有找到许可证清楚、可商用的离线马来文声音，所以暂不内置。开发时先完成上面三个准备命令，再用 `npm run dev` 直接测试，无需打包。
 
 准备脚本将校验后的官方模型及便携构建工具放进 Git 忽略目录，编译固定源码版本的独立 CPU 组件，检查其 Windows DLL 依赖，并生成随包清单。构建工具只在开发机 `.tmp`，模型及成品组件在 `vendor/offline-ai`；顾客包只包含运行所需文件。正式打包前执行 `verify:offline-ai`，缺失或损坏时失败，不生成“看似支持 AI、实际要求顾客另行配置”的完整版本。
 
 开发机网络中断支持断点续传，最终仍须通过完整 SHA-256 校验。顾客安装和首次 AI 分析均不执行这些开发机脚本。
 
 开发机可自动执行实际 App 录屏检查：`node scripts/smoke-app-recording.mjs --run`。它只启动自己的隔离实例，通过整个屏幕选择、录制、停止和编辑器预览，记录五秒合成动画及当前任务栏，文件留在忽略目录 `.tmp`；默认不录麦克风、系统音频或摄像头。先运行 `--help` 可查看范围而不开始录屏。此检查还记录源动画供帧、编码时间戳间隔和帧数，不能把变帧率或重复画面直接当成有效运动帧率。
+
+## AI 解说配音
+
+顾客反映 AI 配音听起来像机器人。原因有四个：中文声音是 8 kHz 的 AISHELL-3 VITS “low” 模型（电话音质）；每个字幕片段（逗号处、28 字处）单独合成，每段都有自己的句尾降调，中间固定停 0.12 秒；中文句子里的英文按钮名直接被吞掉；没有任何响度处理，每句音量都不一样。本轮改成：
+
+- **新声音**：Kokoro-82M v1.0 多语言版，sherpa-onnx 转换的 fp32 版本（int8 版在 x86 上慢约 3 倍，不用），通过已随包的 sherpa-onnx-node 1.13.8 的 kokoro 模型类型运行，24 kHz。一个模型同时负责中文和英文，中文句子里可以直接保留英文按钮名，例如 点击“Settings”。v1.1-zh 的权重许可证无法从作者处核实，所以用作者 GitHub README 明确写明 Apache 许可的 v1.0。
+- **声音选择**：解说风格旁边多了“配音声音”和“试听”。中文 2 女 2 男：晓伊（默认）、晓晓、云希、云健；英文 2 女 2 男：Heart（默认）、Bella、Michael、George。说话人编号取自模型自带的说话人表，主进程只接受这 8 个。选择按语言记在应用设置里；“试听”用所选声音读一句固定的话。默认值：中文选语音识别回听最清楚、且不需要限幅就能到 -16 LUFS 的晓伊；英文选模型作者示例里一直使用的 Heart。
+- **整句合成**：每行只在 。！？；!?; 和“. ”处分句，每句一次合成，逗号不再切开；2.0、github.com 这类不会被拆开。每句去掉首尾静音（-45 dBFS，前留 25 ms、后留 50 ms），首尾 8 ms 淡入淡出；句与句之间按标点停 0.30–0.38 秒（问号、感叹号略长，分号略短，按句子序号固定地略有变化）。sherpa-onnx 默认把句中停顿压到 20%（silenceScale 0.2），现在设为 1.0 保留自然停顿；但 Kokoro 在中英切换和长分句处会分段合成，段间留约 1.1 秒，所以句内超过 0.26 秒的停顿缩短到 0.26 秒。
+- **响度**：每一行用纯 TypeScript 的 ITU-R BS.1770-4 积分响度表测量（按模型采样率计算 K 加权滤波器，400 ms 块，-70 LUFS 绝对门限和 -10 LU 相对门限），整行统一到 -16 LUFS，采样峰值不超过 -1.5 dBFS。少数响亮音节用 5 ms 前瞻限幅器压下去，最多压 4 dB；还不够时整行降低增益，绝不硬削波。
+- **中英混读**：sherpa-onnx 1.13.8 把句子里的非中文部分一律交给 espeak-ng 转音素（模型元数据写的是 `en-us`，所以 `lexicon-us-en.txt` 实际用不上；Kokoro v1.0 训练时用的是 misaki 音素，O、A、I 这类双元音记号 espeak 给不出来）。更糟的是，一个短英文词会被直接接在前一段中文音节后面，用同一次模型调用读出，连前面的中文也一起读坏：“点击“Settings””被语音识别听成“点击赛”“点辑 SIN”。用真模型逐个试过：去掉中文引号、英文前后加空格、改大小写、调换两个词典的顺序，送进模型的音素序列逐字节相同，完全没有作用；改用英式 espeak 音素、放慢英文语速也没有改善。现在中文句子里的每段英文单独合成一次，末尾补逗号（在句末则补句号）当作一个小分句来读，与前后中文之间只留约 0.12 秒（原文在那里有标点时约 0.26 秒）。这只改变配音读的文字，字幕仍显示原文。
+- **字幕**：仍用原来的 28 字切分显示，`{text, endMs}` 结构不变；每段的结束时间按该句里实际读出的字数比例分配，附近有停顿时对齐到停顿。
+- **回退**：只装了旧 VITS 声音的开发目录（`tts`、`tts-en`）仍能用，读法同样改为整句合成和响度处理，但没有声音选择，也不能读中文句子里的英文，解说稿提示仍要求“设置（Settings）”写法。
+- **校验**：manifest 不再限制 32 个文件，espeak-ng-data（355 个文件）可以逐个校验；整包约 380 MB 的 SHA-256 每次打开 App 只算一次（按路径、大小、修改时间缓存），之后合成不再重复计算。线程数按 CPU 取 2–4。Electron 里仍关闭外部缓冲区（enableExternalBuffer: false）。
+
+构建机上 `npm run prepare:offline-tts` 下载 sherpa-onnx GitHub 发布页的 `kokoro-multi-lang-v1_0.tar.bz2`（349,906,910 字节，SHA-256 `c5f7e2d2caf082bc1d20fb70334a61d99d20b484500aad32e7cf84c128ea3298`），有大小上限、重试和断点续传，压缩包留在 `.tmp/offline-tts`。Windows 10/11 用系统自带的 `System32\tar.exe` 解压（Linux/macOS 用 tar），解压失败会给出明确提示。脚本只把 `scripts/offline-tts.lock.json` 里列出的 363 个文件（model.onnx、voices.bin、tokens.txt、两个词典、三个中文规则 FST、espeak-ng-data）复制到 `vendor/offline-ai/win32-x64/tts-kokoro`，逐个核对大小和 SHA-256，再写入 MODEL-LICENSE.txt（Apache-2.0、pypinyin 的 MIT、espeak-ng-data 的 GPL-3.0 全文，均从固定提交下载并核对 SHA-256）、NOTICE.txt 和 manifest.json。目录里多出未列出的文件会停止。jieba 词典目录（dict）不复制：sherpa-onnx 1.12.15 起 kokoro 不再使用它。`verify:offline-tts` 不联网，重新计算每个文件的 SHA-256。打包只带 `tts-kokoro`，旧的 `tts`、`tts-en` 不再进安装包（声音部分从约 151 MB 变成约 363 MB）；`--legacy-vits` 只给需要测试回退的开发者下载旧声音。`smoke:packaged-binaries` 会检查安装包里 manifest 列出的每个声音文件都在且大小正确。
+
+实测（Linux 4 vCPU Xeon 2.1 GHz 沙盒，其他任务同时在跑；同一版本 sherpa-onnx 1.13.8 的 linux-x64 插件，另用项目自带的 Electron 43.1.0 运行时跑通同一流程）：首次合成前的完整校验约 1 秒，模型加载约 3–4 秒；3 线程实时率 0.32–0.53（合成 10 秒语音约 3–5 秒），2 线程 0.4–0.7。8 个声音读中文、英文和中英混读句子后，响度 -16.0 至 -18.4 LUFS（男声和英文声音峰值较高，限幅 4 dB 后仍略低于 -16），峰值 ≤ -1.5 dBFS，ffmpeg ebur128 复核相差不超过 0.1 LU。句间停顿约 0.38–0.42 秒（含首尾保留边距），句内逗号处约 0.2–0.26 秒（原来约 1.1 秒），中文与英文按钮名之间约 0.1 秒。用另一个离线语音识别模型回听：中文字错误率 5–9%（多为“首先”声调和同音字），英文词错误率 6–8%；中英混读：24 句带英文按钮名的中文解说（4 个中文声音，共 144 个英文词）走完整合成流程后回听，英文单独合成前后对比，英文词被听出的比例从 28% 提高到 38%，中文音节错误率（按拼音比较，不计同音字）从 13.9% 降到 10.0%，4 个声音都有改善，耗时没有明显增加；OK、Notifications、Delete 明显变好，但 Settings、Chrome、GitHub 仍然难听清（Settings 被听成“塞灵”）。中文声音读英文口音仍重：根源是 sherpa-onnx 1.13.8 只用 espeak 音素读英文，要根本解决需要插件让英文走 Kokoro 自己的 misaki 词典，或换用专门训练过中英混读的模型。原来的 8 kHz 声音同一句识别错误明显更多，响度只有 -27.7 LUFS。没有在 Windows 机器和真实客户视频上测试，也没有人耳试听；Electron 的 V8 沙盒里，开启外部缓冲区仍会报 “TTS settlement failed”，关闭后正常。
 
 ## 实测状态
 

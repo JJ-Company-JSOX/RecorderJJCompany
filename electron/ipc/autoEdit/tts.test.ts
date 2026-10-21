@@ -20,6 +20,8 @@ import {
 	getBundledTtsRoot,
 	getBundledTtsStatus,
 	sherpaExports,
+	speakLine,
+	spokenEnglish,
 	synthesizeBundledNarration,
 	verifyBundledTtsAssets,
 } from "./tts";
@@ -229,6 +231,74 @@ describe("bundled narration voice assets", () => {
 				chunks: [{ text: "然后放大显示。", endMs: expect.any(Number) }],
 			},
 		]);
+	});
+});
+
+describe("speaking a narration line", () => {
+	// Behaves like the real addon inside Electron, whose V8 sandbox refuses the addon's
+	// default external buffers ("TTS settlement failed"), and which cannot say some pieces.
+	const engine = (silent: string[] = []) => ({
+		generateAsync: vi.fn(async (request: { text: string; enableExternalBuffer?: boolean }) => {
+			if (request.enableExternalBuffer !== false) throw new Error("TTS settlement failed");
+			if (silent.includes(request.text)) throw new Error("TTS generation produced no audio");
+			return { samples: new Float32Array(1000).fill(0.1), sampleRate: 1000 };
+		}),
+	});
+	it("copies the audio out instead of using buffers Electron refuses, timing each chunk", async () => {
+		const line = await speakLine(engine(), "Click save. Then wait.", { speakerId: 3 });
+		// One second per chunk, with a 0.12 s breath between them.
+		expect(line?.chunks).toEqual([
+			{ text: "Click save.", endMs: 1120 },
+			{ text: "Then wait.", endMs: 2120 },
+		]);
+		expect(line?.durationMs).toBe(2120);
+		expect(line?.samples).toHaveLength(2120);
+		expect(line?.samples[1050]).toBe(0);
+	});
+	it("shows a piece the voice cannot say with its neighbour instead of failing the line", async () => {
+		const first = await speakLine(engine(["Open “GitHub”."]), "Open “GitHub”. Then save.", {
+			speakerId: 0,
+		});
+		expect(first?.chunks).toEqual([{ text: "Open “GitHub”. Then save.", endMs: 1000 }]);
+		const zh = await speakLine(
+			engine(["（Settings），"]),
+			"先点击设置，（Settings），然后保存。",
+			{
+				speakerId: 0,
+			},
+		);
+		expect(zh?.chunks.map((c) => c.text)).toEqual(["先点击设置，（Settings），", "然后保存。"]);
+		expect(await speakLine(engine(["Hmm."]), "Hmm.", { speakerId: 0 })).toBeNull();
+	});
+	it("still fails on a real engine error, and reads the rewritten text", async () => {
+		const broken = { generateAsync: vi.fn().mockRejectedValue(new Error("model crashed")) };
+		await expect(speakLine(broken, "Hello.", { speakerId: 0 })).rejects.toThrow(
+			"model crashed",
+		);
+		const tts = engine();
+		const line = await speakLine(tts, "Wait 5 seconds.", {
+			speakerId: 0,
+			spoken: spokenEnglish,
+		});
+		expect(tts.generateAsync).toHaveBeenCalledWith(
+			expect.objectContaining({ text: "Wait five seconds.", sid: 0 }),
+		);
+		// The subtitle keeps the line as written.
+		expect(line?.chunks[0].text).toBe("Wait 5 seconds.");
+	});
+	it("says numbers and curly apostrophes in words the English voice knows", () => {
+		expect(spokenEnglish("Step 2.")).toBe("Step two.");
+		expect(spokenEnglish("Version 2.0 uses 1,250 MB")).toBe(
+			"Version two point zero uses one thousand two hundred fifty MB",
+		);
+		expect(spokenEnglish("the 3rd and 21st tabs, 40th row")).toBe(
+			"the third and twenty first tabs, fortieth row",
+		);
+		expect(spokenEnglish("50% done in 1080p")).toBe(
+			"fifty percent done in one thousand eighty p",
+		);
+		expect(spokenEnglish("Room 007")).toBe("Room zero zero seven");
+		expect(spokenEnglish("That’s it, you’re done.")).toBe("That's it, you're done.");
 	});
 });
 

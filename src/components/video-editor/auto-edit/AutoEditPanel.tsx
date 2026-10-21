@@ -71,6 +71,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const [narrationReport, setNarrationReport] = useState<{
 		dropped: number;
 		skipped: number;
+		unspoken: number;
 	} | null>(null);
 	const [ttsStatus, setTtsStatus] = useState<{
 		available: boolean;
@@ -504,7 +505,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				autoCaptions: [...base.autoCaptions, ...captions.cues],
 			});
 			setNarrationBaseline(baselineFor(base, source));
-			setNarrationReport({ dropped: dropped.length, skipped: captions.skipped });
+			setNarrationReport({
+				dropped: dropped.length,
+				skipped: captions.skipped,
+				// The voice returns no clip for a line with nothing in it that it can say.
+				unspoken: cues.length - result.clips.length,
+			});
 			setNarrationApproved(false);
 			setNarrationAudioReady(true);
 		} catch (e) {
@@ -1204,6 +1210,14 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 											{n.dropped.replace(
 												"{n}",
 												String(narrationReport.dropped),
+											)}
+										</p>
+									)}
+									{narrationAudioReady && !!narrationReport?.unspoken && (
+										<p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-sm">
+											{n.unspoken.replace(
+												"{n}",
+												String(narrationReport.unspoken),
 											)}
 										</p>
 									)}

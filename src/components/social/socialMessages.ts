@@ -2,6 +2,15 @@ export type SocialLanguage = "en" | "zh" | "ms";
 
 export const socialMessages = {
 	en: {
+		direct: "Connect your accounts",
+		directHelp:
+			"Sign in with your own account. Recordly posts straight to the platform: no server and no monthly fee.",
+		connectYoutube: "Connect YouTube",
+		finishInBrowser: "Finish signing in in your browser…",
+		remove: "Remove",
+		directNotSetUp: "YouTube posting is not set up in this build yet.",
+		moreSoon:
+			"TikTok, Facebook, Instagram and X are coming next. Until then you can post to them through Postiz below.",
 		title: "Social media",
 		intro: "Post your exported video to YouTube, TikTok, Instagram, Facebook, X and more. Recording, editing and the AI stay offline; only this page goes online, and only when you click.",
 		language: "Page language",
@@ -10,7 +19,7 @@ export const socialMessages = {
 		signIn: "Sign in or create an account",
 		accountsOff:
 			"Recordly accounts are not set up in this build. You can still post through Postiz below.",
-		postiz: "Posting service (Postiz)",
+		postiz: "More platforms through Postiz (optional)",
 		postizHelp:
 			"Postiz connects your social accounts and publishes for you. Choose how to use it:",
 		openPostiz: "Open Postiz to get the API key",
@@ -53,16 +62,25 @@ export const socialMessages = {
 		publish: "Post to {n} accounts",
 		publishOne: "Post to 1 account",
 		cancel: "Cancel",
-		uploading: "Uploading the video to Postiz…",
+		uploading: "Uploading the video…",
 		processing: "Postiz is preparing the video for each platform…",
 		posting: "Creating the posts…",
-		done: "Sent to Postiz. {n} posts created.",
+		done: "Posted. {n} posts created.",
+		doneOne: "Posted. 1 post created.",
 		doneHelp: "Postiz now publishes them. Check Postiz for each platform's result.",
 		tiktokPrivate:
 			"TikTok: until TikTok approves the Postiz app, posts may be visible only to you.",
 		xLimit: "X: {n}/280 characters",
 	},
 	zh: {
+		direct: "连接你的账号",
+		directHelp: "用你自己的账号登录，Recordly 直接发到平台上：不用服务器，也没有月费。",
+		connectYoutube: "连接 YouTube",
+		finishInBrowser: "请在浏览器里完成登录…",
+		remove: "移除",
+		directNotSetUp: "这个版本还没有设置 YouTube 发布。",
+		moreSoon:
+			"TikTok、Facebook、Instagram 和 X 接下来会加入。在那之前，可以通过下面的 Postiz 发到这些平台。",
 		title: "社交媒体",
 		intro: "把导出的视频发到 YouTube、TikTok、Instagram、Facebook、X 等平台。录制、剪辑和 AI 依然离线；只有这个页面会联网，而且只在你点击时才联网。",
 		language: "页面语言",
@@ -70,7 +88,7 @@ export const socialMessages = {
 		signedInAs: "已登录：{name}",
 		signIn: "登录或注册账号",
 		accountsOff: "这个版本还没有设置 Recordly 账号。你仍然可以通过下面的 Postiz 发布。",
-		postiz: "发布服务（Postiz）",
+		postiz: "通过 Postiz 发到更多平台（可选）",
 		postizHelp: "Postiz 负责连接你的社交账号并帮你发布。请选择使用方式：",
 		openPostiz: "打开 Postiz 拿 API key",
 		address: "Postiz 地址",
@@ -110,15 +128,25 @@ export const socialMessages = {
 		publish: "发布到 {n} 个账号",
 		publishOne: "发布到 1 个账号",
 		cancel: "取消",
-		uploading: "正在把视频上传到 Postiz…",
+		uploading: "正在上传视频…",
 		processing: "Postiz 正在为各平台处理视频…",
 		posting: "正在创建帖子…",
-		done: "已交给 Postiz，创建了 {n} 个帖子。",
+		done: "已发布，创建了 {n} 个帖子。",
+		doneOne: "已发布，创建了 1 个帖子。",
 		doneHelp: "接下来由 Postiz 发布。各平台的结果请在 Postiz 里查看。",
 		tiktokPrivate: "TikTok：在 TikTok 审核通过 Postiz 应用之前，帖子可能只有你自己看得到。",
 		xLimit: "X：{n}/280 字",
 	},
 	ms: {
+		direct: "Sambungkan akaun anda",
+		directHelp:
+			"Log masuk dengan akaun anda sendiri. Recordly menyiarkan terus ke platform: tiada pelayan dan tiada yuran bulanan.",
+		connectYoutube: "Sambung YouTube",
+		finishInBrowser: "Selesaikan log masuk dalam pelayar anda…",
+		remove: "Buang",
+		directNotSetUp: "Siaran YouTube belum disediakan dalam binaan ini.",
+		moreSoon:
+			"TikTok, Facebook, Instagram dan X akan datang. Sementara itu, anda boleh menyiarkan ke platform itu melalui Postiz di bawah.",
 		title: "Media sosial",
 		intro: "Siarkan video yang dieksport ke YouTube, TikTok, Instagram, Facebook, X dan lain-lain. Rakaman, suntingan dan AI kekal luar talian; hanya halaman ini menggunakan internet, dan hanya apabila anda klik.",
 		language: "Bahasa halaman",
@@ -127,7 +155,7 @@ export const socialMessages = {
 		signIn: "Log masuk atau cipta akaun",
 		accountsOff:
 			"Akaun Recordly belum disediakan dalam binaan ini. Anda masih boleh menyiarkan melalui Postiz di bawah.",
-		postiz: "Perkhidmatan siaran (Postiz)",
+		postiz: "Lebih banyak platform melalui Postiz (pilihan)",
 		postizHelp:
 			"Postiz menyambungkan akaun sosial anda dan menyiarkan untuk anda. Pilih cara menggunakannya:",
 		openPostiz: "Buka Postiz untuk dapatkan kunci API",
@@ -171,10 +199,11 @@ export const socialMessages = {
 		publish: "Siar ke {n} akaun",
 		publishOne: "Siar ke 1 akaun",
 		cancel: "Batal",
-		uploading: "Memuat naik video ke Postiz…",
+		uploading: "Memuat naik video…",
 		processing: "Postiz sedang menyediakan video untuk setiap platform…",
 		posting: "Mencipta siaran…",
-		done: "Dihantar ke Postiz. {n} siaran dicipta.",
+		done: "Disiarkan. {n} siaran dicipta.",
+		doneOne: "Disiarkan. 1 siaran dicipta.",
 		doneHelp: "Postiz kini menyiarkannya. Semak Postiz untuk keputusan setiap platform.",
 		tiktokPrivate:
 			"TikTok: sehingga TikTok meluluskan aplikasi Postiz, siaran mungkin hanya kelihatan kepada anda.",

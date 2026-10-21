@@ -52,7 +52,8 @@ export type Channel = {
 export type Visibility = "public" | "private";
 export type PublishRequest = {
 	videoPath: string;
-	channels: Array<{ id: string; identifier: VideoPlatform }>;
+	/** `via: "direct"` posts with Recordly's own app instead of Postiz. */
+	channels: Array<{ id: string; identifier: VideoPlatform; via?: "direct" }>;
 	text: string;
 	title: string;
 	visibility: Visibility;

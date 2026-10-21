@@ -10,6 +10,10 @@ import {
 } from "./socialLauncher";
 import { PLATFORM_LABELS, type SocialLanguage, socialMessages } from "./socialMessages";
 
+type DirectAccount = Awaited<
+	ReturnType<typeof window.electronAPI.getDirectSocialStatus>
+>["accounts"][number];
+
 type Channel = NonNullable<
 	Awaited<ReturnType<typeof window.electronAPI.listSocialChannels>>["channels"]
 >[number];
@@ -57,7 +61,19 @@ export function SocialPanel({
 	const [busy, setBusy] = useState<"connect" | "channels" | "publish" | null>(null);
 	const [stage, setStage] = useState<Stage | null>(null);
 	const [error, setError] = useState("");
-	const [result, setResult] = useState<{ count: number; warning?: string } | null>(null);
+	const [result, setResult] = useState<{
+		count: number;
+		warning?: string;
+		viaPostiz: boolean;
+		links: string[];
+		failed: Array<{ account: string; error: string }>;
+	} | null>(null);
+	const [stageAccount, setStageAccount] = useState<string | undefined>();
+	const [direct, setDirect] = useState<{
+		platforms: { youtube: boolean };
+		accounts: DirectAccount[];
+	}>({ platforms: { youtube: false }, accounts: [] });
+	const [signingIn, setSigningIn] = useState(false);
 
 	const connected = Boolean(config?.baseUrl && config.hasKey) && !editing;
 	/** Where the customer signs in to Postiz to copy an API key. */
@@ -77,7 +93,11 @@ export function SocialPanel({
 		setBusy(null);
 		if (!reply.success) return setError(reply.error ?? "");
 		setChannels(reply.channels ?? []);
-		setSelected((current) => current.filter((id) => reply.channels?.some((c) => c.id === id)));
+		setSelected((current) =>
+			current.filter(
+				(key) => key.startsWith("direct:") || reply.channels?.some((c) => c.id === key),
+			),
+		);
 	}, []);
 
 	useEffect(() => {
@@ -89,7 +109,11 @@ export function SocialPanel({
 			}
 			if (next.baseUrl && next.hasKey) void loadChannels();
 		});
-		return window.electronAPI.onSocialPublishProgress(setStage);
+		void window.electronAPI.getDirectSocialStatus().then(setDirect);
+		return window.electronAPI.onSocialPublishProgress((next, account) => {
+			setStage(next);
+			setStageAccount(account);
+		});
 	}, [loadChannels]);
 
 	useEffect(() => {
@@ -125,6 +149,25 @@ export function SocialPanel({
 		const reply = await window.electronAPI.connectSocialChannel(platform);
 		if (!reply.success) setError(reply.error ?? "");
 	};
+	const connectDirect = async () => {
+		setSigningIn(true);
+		setError("");
+		const reply = await window.electronAPI.connectDirectSocial("youtube");
+		setSigningIn(false);
+		if (!reply.success) return setError(reply.error ?? "");
+		const accounts = reply.accounts ?? [];
+		// A newly connected account is ready to post to.
+		const added = accounts.find((a) => !direct.accounts.some((d) => d.id === a.id));
+		setDirect((current) => ({ ...current, accounts }));
+		if (added) setSelected((current) => [...current, `direct:${added.id}`]);
+	};
+	const removeDirect = async (account: DirectAccount) => {
+		const reply = await window.electronAPI.removeDirectSocial(account.platform, account.id);
+		setDirect((current) => ({ ...current, accounts: reply.accounts }));
+		setSelected((current) => current.filter((key) => key !== `direct:${account.id}`));
+	};
+	const toggle = (key: string, on: boolean) =>
+		setSelected((current) => (on ? [...current, key] : current.filter((k) => k !== key)));
 	const chooseVideo = async () => {
 		const picked = await window.electronAPI.pickSocialVideo();
 		if (!picked) return;
@@ -134,11 +177,21 @@ export function SocialPanel({
 		setVideo({ path: picked, bytes: reply.bytes ?? 0 });
 	};
 
-	const chosen = channels.filter((c) => selected.includes(c.id));
+	const targets = [
+		...direct.accounts.map((a) => ({
+			key: `direct:${a.id}`,
+			id: a.id,
+			identifier: a.platform as string,
+			via: "direct" as const,
+		})),
+		...(connected ? channels : [])
+			.filter((c) => !c.disabled && VIDEO_PLATFORMS.has(c.identifier))
+			.map((c) => ({ key: c.id, id: c.id, identifier: c.identifier, via: undefined })),
+	];
+	const chosen = targets.filter((t) => selected.includes(t.key));
 	const has = (platform: string) => chosen.some((c) => c.identifier === platform);
 	const xLength = [...text].length;
 	const canPublish =
-		connected &&
 		Boolean(video) &&
 		chosen.length > 0 &&
 		busy === null &&
@@ -153,7 +206,11 @@ export function SocialPanel({
 		setStage(null);
 		const reply = await window.electronAPI.publishSocialPost({
 			videoPath: video.path,
-			channels: chosen.map((c) => ({ id: c.id, identifier: c.identifier })),
+			channels: chosen.map((c) => ({
+				id: c.id,
+				identifier: c.identifier,
+				...(c.via ? { via: c.via } : {}),
+			})),
 			text,
 			title: title.trim(),
 			visibility,
@@ -164,7 +221,13 @@ export function SocialPanel({
 		setBusy(null);
 		setStage(null);
 		if (!reply.success) return setError(reply.error ?? "");
-		setResult({ count: reply.posts?.length ?? chosen.length, warning: reply.warning });
+		setResult({
+			count: reply.posts?.length ?? chosen.length,
+			warning: reply.warning,
+			viaPostiz: chosen.some((c) => !c.via),
+			links: (reply.posts ?? []).flatMap((p) => (p.url ? [p.url] : [])),
+			failed: reply.failed ?? [],
+		});
 	};
 
 	return (
@@ -203,6 +266,80 @@ export function SocialPanel({
 							{m.signIn}
 						</Button>
 					)}
+				</div>
+
+				<div className={card} data-social-direct>
+					<h2 className="font-semibold">{m.direct}</h2>
+					<p className="text-sm text-muted-foreground">{m.directHelp}</p>
+					{direct.accounts.length > 0 && (
+						<ul className="space-y-2">
+							{direct.accounts.map((account) => (
+								<li
+									key={account.id}
+									className="flex items-center gap-3 rounded-xl border border-border bg-background p-2 text-sm"
+								>
+									<label className="flex min-w-0 flex-1 items-center gap-3">
+										<input
+											type="checkbox"
+											checked={selected.includes(`direct:${account.id}`)}
+											onChange={(event) =>
+												toggle(`direct:${account.id}`, event.target.checked)
+											}
+										/>
+										{account.picture && (
+											<img
+												src={account.picture}
+												alt=""
+												className="size-7 rounded-full"
+											/>
+										)}
+										<span className="truncate">
+											<span className="font-medium">{account.name}</span>
+											<span className="text-muted-foreground">
+												{" "}
+												· {PLATFORM_LABELS[account.platform]}
+											</span>
+										</span>
+									</label>
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => void removeDirect(account)}
+									>
+										{m.remove}
+									</Button>
+								</li>
+							))}
+						</ul>
+					)}
+					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							disabled={!direct.platforms.youtube || signingIn}
+							onClick={() => void connectDirect()}
+						>
+							{m.connectYoutube}
+						</Button>
+						{signingIn && (
+							<>
+								<span role="status" className="text-sm">
+									{m.finishInBrowser}
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() =>
+										void window.electronAPI.cancelDirectSocialConnect()
+									}
+								>
+									{m.cancel}
+								</Button>
+							</>
+						)}
+					</div>
+					{!direct.platforms.youtube && (
+						<p className="text-xs text-muted-foreground">{m.directNotSetUp}</p>
+					)}
+					<p className="text-xs text-muted-foreground">{m.moreSoon}</p>
 				</div>
 
 				<div className={card}>
@@ -320,13 +457,7 @@ export function SocialPanel({
 													disabled={!usable}
 													checked={selected.includes(channel.id)}
 													onChange={(event) =>
-														setSelected((current) =>
-															event.target.checked
-																? [...current, channel.id]
-																: current.filter(
-																		(id) => id !== channel.id,
-																	),
-														)
+														toggle(channel.id, event.target.checked)
 													}
 												/>
 												{channel.picture && (
@@ -381,7 +512,7 @@ export function SocialPanel({
 					</div>
 				)}
 
-				{connected && (
+				{(connected || direct.accounts.length > 0) && (
 					<div className={card}>
 						<div className="space-y-2">
 							<h2 className="font-semibold">{m.video}</h2>
@@ -488,14 +619,42 @@ export function SocialPanel({
 								</Button>
 							)}
 						</div>
-						{busy === "publish" && stage && <p role="status">{m[stage]}</p>}
+						{busy === "publish" && stage && (
+							<p role="status">
+								{m[stage]}
+								{stageAccount ? ` · ${stageAccount}` : ""}
+							</p>
+						)}
 						{result && (
 							<div
 								role="status"
 								className="rounded-xl border border-success/40 bg-success/5 p-3 text-sm"
 							>
-								<p className="font-medium">{fill(m.done, { n: result.count })}</p>
-								<p className="text-muted-foreground">{m.doneHelp}</p>
+								<p className="font-medium">
+									{result.count === 1
+										? m.doneOne
+										: fill(m.done, { n: result.count })}
+								</p>
+								{result.links.map((link) => (
+									<button
+										key={link}
+										type="button"
+										className="block text-primary underline"
+										onClick={() =>
+											void window.electronAPI.openExternalUrl(link)
+										}
+									>
+										{link}
+									</button>
+								))}
+								{result.failed.map((f) => (
+									<p key={f.account} className="text-danger">
+										{f.account}: {f.error}
+									</p>
+								))}
+								{result.viaPostiz && (
+									<p className="text-muted-foreground">{m.doneHelp}</p>
+								)}
 								{result.warning && (
 									<p className="text-muted-foreground">{result.warning}</p>
 								)}

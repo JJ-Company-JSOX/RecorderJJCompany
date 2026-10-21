@@ -756,13 +756,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	checkSocialVideo: (videoPath: string) => ipcRenderer.invoke("social-check-video", videoPath),
 	publishSocialPost: (request: unknown) => ipcRenderer.invoke("social-publish", request),
 	cancelSocialPublish: () => ipcRenderer.invoke("social-cancel-publish"),
+	getDirectSocialStatus: () => ipcRenderer.invoke("social-direct-status"),
+	connectDirectSocial: (platform: string) =>
+		ipcRenderer.invoke("social-direct-connect", platform),
+	cancelDirectSocialConnect: () => ipcRenderer.invoke("social-direct-cancel-connect"),
+	removeDirectSocial: (platform: string, id: string) =>
+		ipcRenderer.invoke("social-direct-remove", platform, id),
 	onSocialPublishProgress: (
-		callback: (stage: "uploading" | "processing" | "posting") => void,
+		callback: (stage: "uploading" | "processing" | "posting", account?: string) => void,
 	) => {
 		const listener = (
 			_: Electron.IpcRendererEvent,
 			stage: "uploading" | "processing" | "posting",
-		) => callback(stage);
+			account?: string,
+		) => callback(stage, account);
 		ipcRenderer.on("social-publish-progress", listener);
 		return () => ipcRenderer.removeListener("social-publish-progress", listener);
 	},

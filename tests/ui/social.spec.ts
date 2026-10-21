@@ -35,6 +35,10 @@ test("Social page connects Postiz, lists accounts and posts the video to the tic
 			record("socialLinked", identifier);
 			return { success: true };
 		};
+		window.electronAPI.getDirectSocialStatus = async () => ({
+			platforms: { youtube: false },
+			accounts: [],
+		});
 		window.electronAPI.pickSocialVideo = async () => "C:\\Videos\\tutorial.mp4";
 		window.electronAPI.checkSocialVideo = async (path) => ({
 			success: true,
@@ -58,6 +62,11 @@ test("Social page connects Postiz, lists accounts and posts the video to the tic
 	await expect(social).toBeVisible();
 	// Recordly accounts stay off unless the build turns them on.
 	await expect(social.getByText(/Recordly accounts are not set up/)).toBeVisible();
+	// A build without the developer's YouTube app says so instead of offering a broken button.
+	await expect(social.getByRole("button", { name: "Connect YouTube" })).toBeDisabled();
+	await expect(
+		social.getByText("YouTube posting is not set up in this build yet."),
+	).toBeVisible();
 
 	await social.getByLabel("API key", { exact: true }).fill("bad-key");
 	await social.getByRole("button", { name: "Connect", exact: true }).click();
@@ -97,7 +106,7 @@ test("Social page connects Postiz, lists accounts and posts the video to the tic
 	await expect(post).toHaveText("Post to 2 accounts");
 	await page.screenshot({ path: "test-results/social-page.png" });
 	await post.click();
-	await expect(social.getByText("Sent to Postiz. 2 posts created.")).toBeVisible();
+	await expect(social.getByText("Posted. 2 posts created.")).toBeVisible();
 	const published = JSON.parse(
 		(await page.locator("html").getAttribute("data-social-published")) ?? "{}",
 	);
@@ -113,4 +122,78 @@ test("Social page connects Postiz, lists accounts and posts the video to the tic
 		when: "now",
 		madeWithAi: true,
 	});
+});
+
+test("customers connect YouTube with their own Google account and post with no server", async ({
+	page,
+}) => {
+	await installDesktopBridge(page, "filmstrip.mp4");
+	await installDesktopBridgeOverrides(page, () => {
+		const record = (key: string, value: unknown) => {
+			document.documentElement.dataset[key] = JSON.stringify(value);
+		};
+		const account = {
+			platform: "youtube" as const,
+			id: "g-1",
+			name: "Jsox Studio",
+			email: "studio@example.com",
+		};
+		let accounts: (typeof account)[] = [];
+		let finishSignIn = () => undefined as void;
+		window.electronAPI.getSocialConfig = async () => ({ baseUrl: null, hasKey: false });
+		window.electronAPI.getDirectSocialStatus = async () => ({
+			platforms: { youtube: true },
+			accounts,
+		});
+		window.electronAPI.connectDirectSocial = () =>
+			new Promise((resolve) => {
+				// The customer finishes on Google's page in the browser.
+				finishSignIn = () => {
+					accounts = [account];
+					resolve({ success: true, accounts });
+				};
+			});
+		Object.assign(window, { finishSignIn: () => finishSignIn() });
+		window.electronAPI.removeDirectSocial = async () => {
+			accounts = [];
+			return { success: true, accounts };
+		};
+		window.electronAPI.pickSocialVideo = async () => "C:\\Videos\\tutorial.mp4";
+		window.electronAPI.checkSocialVideo = async (path) => ({
+			success: true,
+			path,
+			bytes: 1048576,
+		});
+		window.electronAPI.onSocialPublishProgress = () => () => undefined;
+		window.electronAPI.publishSocialPost = async (request) => {
+			record("socialPublished", request);
+			return {
+				success: true,
+				posts: [{ postId: "VID123", integration: "g-1", url: "https://youtu.be/VID123" }],
+				failed: [],
+			};
+		};
+	});
+	await page.goto("/?windowType=editor");
+	await expect(page.locator('[data-variant="clip"]').first()).toBeVisible({ timeout: 60000 });
+	await page.getByRole("button", { name: "Social", exact: true }).click();
+	const social = page.locator("[data-social-panel]");
+	await social.getByRole("button", { name: "Connect YouTube" }).click();
+	await expect(social.getByText("Finish signing in in your browser…")).toBeVisible();
+	await page.evaluate(() => (window as unknown as { finishSignIn: () => void }).finishSignIn());
+	// The new account is listed and ticked, ready to post to.
+	await expect(social.getByRole("checkbox", { name: /Jsox Studio/ })).toBeChecked();
+	await social.getByRole("button", { name: "Choose MP4…" }).click();
+	await social.getByLabel("Title (YouTube, TikTok, Facebook)").fill("Export a video");
+	await social.getByLabel("Caption and hashtags").fill("How to export #tutorial");
+	await page.screenshot({ path: "test-results/social-direct-youtube.png" });
+	await social.getByRole("button", { name: "Post to 1 account" }).click();
+	await expect(social.getByText("Posted. 1 post created.")).toBeVisible();
+	await expect(social.getByRole("button", { name: "https://youtu.be/VID123" })).toBeVisible();
+	const published = JSON.parse(
+		(await page.locator("html").getAttribute("data-social-published")) ?? "{}",
+	);
+	expect(published.channels).toEqual([{ id: "g-1", identifier: "youtube", via: "direct" }]);
+	await social.getByRole("button", { name: "Remove" }).click();
+	await expect(social.getByRole("checkbox", { name: /Jsox Studio/ })).toHaveCount(0);
 });

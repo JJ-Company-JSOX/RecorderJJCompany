@@ -790,17 +790,35 @@ interface Window {
 		) => Promise<{ success: boolean; path?: string; bytes?: number; error?: string }>;
 		publishSocialPost: (
 			request: Omit<import("./ipc/social/postiz").PublishRequest, "channels"> & {
-				channels: Array<{ id: string; identifier: string }>;
+				channels: Array<{ id: string; identifier: string; via?: "direct" }>;
 			},
 		) => Promise<{
 			success: boolean;
-			posts?: Array<{ postId: string; integration: string }>;
+			posts?: Array<{ postId: string; integration: string; url?: string }>;
+			failed?: Array<{ account: string; error: string }>;
 			warning?: string;
 			error?: string;
 		}>;
+		getDirectSocialStatus: () => Promise<{
+			platforms: { youtube: boolean };
+			accounts: import("./ipc/social/direct/accounts").DirectAccount[];
+		}>;
+		connectDirectSocial: (platform: "youtube") => Promise<{
+			success: boolean;
+			accounts?: import("./ipc/social/direct/accounts").DirectAccount[];
+			error?: string;
+		}>;
+		cancelDirectSocialConnect: () => Promise<void>;
+		removeDirectSocial: (
+			platform: "youtube",
+			id: string,
+		) => Promise<{
+			success: boolean;
+			accounts: import("./ipc/social/direct/accounts").DirectAccount[];
+		}>;
 		cancelSocialPublish: () => Promise<void>;
 		onSocialPublishProgress: (
-			callback: (stage: "uploading" | "processing" | "posting") => void,
+			callback: (stage: "uploading" | "processing" | "posting", account?: string) => void,
 		) => () => void;
 		getAccessibilityPermissionStatus: () => Promise<{
 			success: boolean;

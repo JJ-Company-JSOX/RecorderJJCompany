@@ -100,6 +100,8 @@ import { FolderOpenIcon as FolderOpenLinear } from "@solar-icons/react/linear/fo
 import { FolderOpenIcon as FolderOpenBold } from "@solar-icons/react/bold/folder-open";
 import { FullScreenIcon as FullScreenLinear } from "@solar-icons/react/linear/full-screen";
 import { FullScreenIcon as FullScreenBold } from "@solar-icons/react/bold/full-screen";
+import { QuitFullScreenIcon as QuitFullScreenLinear } from "@solar-icons/react/linear/quit-full-screen";
+import { QuitFullScreenIcon as QuitFullScreenBold } from "@solar-icons/react/bold/quit-full-screen";
 import { GalleryIcon as GalleryLinear } from "@solar-icons/react/linear/gallery";
 import { GalleryIcon as GalleryBold } from "@solar-icons/react/bold/gallery";
 import { HomeIcon as HomeLinear } from "@solar-icons/react/linear/home";
@@ -210,6 +212,8 @@ export const ArrowRight = solar(ArrowRightLinear, ArrowRightBold);
 export const ArrowSquareOut = solar(SquareTopDownLinear, SquareTopDownBold);
 export const BookmarkSimple = solar(BookmarkLinear, BookmarkBold);
 export const BoundingBox = solar(FullScreenLinear, FullScreenBold);
+export const FullScreen = solar(FullScreenLinear, FullScreenBold);
+export const QuitFullScreen = solar(QuitFullScreenLinear, QuitFullScreenBold);
 export const Camera = solar(CameraLinear, CameraBold);
 export const CaretDown = solar(AltArrowDownLinear, AltArrowDownBold);
 export const CaretUpIcon = solar(AltArrowUpLinear, AltArrowUpBold);

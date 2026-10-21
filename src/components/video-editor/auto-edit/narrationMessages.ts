@@ -1,5 +1,14 @@
 export const narrationMessages = {
 	en: {
+		style: "Narration style",
+		styles: { concise: "Concise", tutorial: "Step-by-step tutorial", detailed: "Detailed" },
+		cancel: "Cancel",
+		latinHint:
+			"English words in Chinese lines appear in the subtitles but are not spoken by the Chinese voice.",
+		dropped:
+			"{n} lines did not fit before the end of the video and were left out. Shorten some lines and generate again.",
+		skipped: "{n} subtitle pieces would have covered existing subtitles and were left out.",
+		blankHint: "Empty lines are skipped.",
 		title: "AI narration draft · experimental",
 		info: "The AI on this computer looks at the screen at each zoom or sped-up part, then drafts one narration line for it. Nothing leaves this computer, and transcript text, subtitles and file paths are never sent to the model. The AI can misread the screen, so review and edit every line before approving.",
 		looking: "AI is looking at the screen",
@@ -16,6 +25,13 @@ export const narrationMessages = {
 		result: "Narration drafted",
 	},
 	zh: {
+		style: "解说风格",
+		styles: { concise: "简洁", tutorial: "一步一步教学", detailed: "详细" },
+		cancel: "取消",
+		latinHint: "中文句子里的英文会显示在字幕上，但中文配音不会读出来。",
+		dropped: "有 {n} 句放不进视频结尾前，已经略过。可以把句子改短一点再生成。",
+		skipped: "有 {n} 段字幕会盖住原有的字幕，已经略过。",
+		blankHint: "清空的句子会被跳过。",
 		title: "AI 解说稿草稿 · 实验版",
 		info: "本机的 AI 会先看每一处放大或加速时的画面，再为它写一句解说。所有内容都不会离开这台电脑，也不会把转录文字、字幕或文件路径发给模型。AI 可能看错画面，确认前请逐句检查、修改。",
 		looking: "AI 正在看画面",
@@ -31,6 +47,19 @@ export const narrationMessages = {
 		result: "已生成解说稿",
 	},
 	ms: {
+		style: "Gaya naratif",
+		styles: {
+			concise: "Ringkas",
+			tutorial: "Tutorial langkah demi langkah",
+			detailed: "Terperinci",
+		},
+		cancel: "Batal",
+		latinHint:
+			"Perkataan Inggeris dalam baris Cina dipaparkan dalam sari kata tetapi tidak disebut oleh suara Cina.",
+		dropped:
+			"{n} baris tidak muat sebelum video tamat dan ditinggalkan. Pendekkan beberapa baris dan jana semula.",
+		skipped: "{n} bahagian sari kata akan menutup sari kata sedia ada dan ditinggalkan.",
+		blankHint: "Baris kosong dilangkau.",
 		title: "Draf naratif AI · eksperimen",
 		info: "AI pada komputer ini melihat skrin pada setiap zum atau bahagian dipercepat, kemudian mendraf satu baris naratif untuknya. Tiada apa meninggalkan komputer ini, dan transkrip, sari kata serta laluan fail tidak pernah dihantar kepada model. AI boleh tersalah baca skrin, jadi semak dan sunting setiap baris sebelum meluluskan.",
 		looking: "AI sedang melihat skrin",

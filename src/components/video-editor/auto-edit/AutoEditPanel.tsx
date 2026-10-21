@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
+import { projectCaptionCues } from "../captionTimeline";
 import { applyEditPlan } from "./apply";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { guideMessages } from "./guideMessages";
@@ -63,6 +64,14 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const [narrationEdits, setNarrationEdits] = useState<Record<string, string>>({});
 	const [narrationApproved, setNarrationApproved] = useState(false);
 	const [narrationAudioReady, setNarrationAudioReady] = useState(false);
+	const [narrationStyle, setNarrationStyle] = useState<"concise" | "tutorial" | "detailed">(
+		"tutorial",
+	);
+	const [narrationBaseline, setNarrationBaseline] = useState<string | null>(null);
+	const [narrationReport, setNarrationReport] = useState<{
+		dropped: number;
+		skipped: number;
+	} | null>(null);
 	const [ttsStatus, setTtsStatus] = useState<{
 		available: boolean;
 		voices?: Record<PlanLanguage, boolean>;
@@ -178,9 +187,13 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		narrationLanguage === "zh"
 			? /\p{Script=Han}/u.test(text)
 			: /[A-Za-z]/.test(text) && !/\p{Script=Han}/u.test(text);
-	const narrationSpeakable =
-		!!narrationDraft?.cues.length &&
-		narrationDraft.cues.every((c) => speaks(narrationEdits[c.id] ?? c.text));
+	// Emptied lines are skipped; every remaining line must suit the chosen voice.
+	const narrationLines = (narrationDraft?.cues ?? [])
+		.map((c) => (narrationEdits[c.id] ?? c.text).trim())
+		.filter(Boolean);
+	const narrationSpeakable = narrationLines.length > 0 && narrationLines.every(speaks);
+	const narrationHasLatin =
+		narrationLanguage === "zh" && narrationLines.some((line) => /[A-Za-z]/.test(line));
 	const voiceInstalled = !!ttsStatus?.voices?.[narrationLanguage];
 	const stages = ["media", "transcribe", "understand", "vision"] as const;
 	const activeStage = stages.indexOf(speechStage as (typeof stages)[number]);
@@ -264,12 +277,26 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		setDecisions({});
 		setApplied(true);
 	};
+	// Earlier AI voice-over is replaced, never stacked, and never counts as the user's own work.
+	const withoutNarration = (s: EditState): EditState => ({
+		...s,
+		audioRegions: s.audioRegions.filter((r) => !r.id.startsWith("narration-")),
+		autoCaptions: s.autoCaptions.filter((c) => !c.id.startsWith("narration-")),
+	});
+	/** Timeline spans of real speech (its subtitles), which the AI voice must not talk over. */
+	const speechSpans = (s: EditState) =>
+		projectCaptionCues(withoutNarration(s).autoCaptions, s.clipRegions).map(
+			({ startMs, endMs }) => ({
+				startMs,
+				endMs,
+			}),
+		);
 	const narrationPlan = (s: EditState): EditPlan => ({
 		version: 1,
 		id: crypto.randomUUID(),
 		coordinateSpace: "timeline-ms",
 		baseline: baselineFor(s, source),
-		suggestions: narrationMoments(s, cursor),
+		suggestions: narrationMoments(s, cursor, speechSpans(s)),
 		warnings: [],
 		reviewer: "rules",
 	});
@@ -383,27 +410,37 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		setNarrationAudioReady(false);
 		try {
 			const draftLanguage = language;
-			const { clipRegions } = currentState.current.state;
-			// The AI looks at the source frame just after each zoom or sped-up part begins.
-			const frames = voicePlan.suggestions.map((s) => ({
-				id: s.id,
-				timeMs: Math.max(
-					0,
-					mapTimelineTimeToSourceTime(
-						s.startMs + Math.min(500, (s.endMs - s.startMs) / 2),
-						clipRegions,
-					),
-				),
-				...(s.focus ? { focus: s.focus } : {}),
-			}));
+			const draftState = currentState.current.state;
+			const { clipRegions } = draftState;
+			// A click is compared before/after its exact time (an AI zoom starts 350 ms before it);
+			// other moments are read just after they begin.
+			const frames = voicePlan.suggestions.map((s) => {
+				const action = !!s.focus && (s.kind === "zoom" || s.reason === "click");
+				const atMs = action
+					? s.startMs + (s.kind === "zoom" ? 350 : 0)
+					: s.startMs + Math.min(500, (s.endMs - s.startMs) / 2);
+				return {
+					id: s.id,
+					timeMs: Math.max(0, mapTimelineTimeToSourceTime(atMs, clipRegions)),
+					...(s.focus ? { focus: s.focus } : {}),
+					...(action ? { action } : {}),
+				};
+			});
 			const result = await window.electronAPI.narrateAutoEditBundled(
 				voicePlan,
 				draftLanguage,
-				{ videoPath: source, frames },
+				{
+					videoPath: source,
+					frames,
+					style: narrationStyle,
+					timelineEndMs: Math.max(1, ...clipRegions.map((c) => c.endMs)),
+				},
 			);
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
 			setNarrationLanguage(draftLanguage);
+			setNarrationBaseline(baselineFor(withoutNarration(draftState), source));
+			setNarrationReport(null);
 			setNarrationDraft(result.draft);
 			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
 		} catch (e) {
@@ -419,26 +456,30 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		setBusy("synthesize");
 		setError("");
 		try {
-			const cues = narrationDraft.cues.map((cue) => ({
-				id: cue.id,
-				text: narrationEdits[cue.id] ?? cue.text,
-			}));
+			const { state: latestState } = currentState.current;
+			// Lines were placed on the timeline as it was when drafted.
+			if (baselineFor(withoutNarration(latestState), source) !== narrationBaseline)
+				throw Error(m.stale);
+			const cues = narrationDraft.cues
+				.map((cue) => ({ id: cue.id, text: (narrationEdits[cue.id] ?? cue.text).trim() }))
+				.filter((cue) => cue.text);
 			const result = await window.electronAPI.synthesizeAutoEditNarration(
 				cues,
 				narrationLanguage,
 			);
 			if (run !== generation.current) return;
 			if (!result.success || !result.clips) throw new Error(result.error);
-			const { state: latestState } = currentState.current;
-			const trackIndex =
-				Math.max(-1, ...latestState.audioRegions.map((r) => r.trackIndex ?? 0)) + 1;
-			// Each line waits for the previous one, so voices never talk over each other.
-			const regions: AudioRegion[] = scheduleNarration(
+			const base = withoutNarration(currentState.current.state);
+			const trackIndex = Math.max(-1, ...base.audioRegions.map((r) => r.trackIndex ?? 0)) + 1;
+			// Each line waits for the previous one and none runs past the end of the video.
+			const { placed, dropped } = scheduleNarration(
 				result.clips.flatMap((clip) => {
 					const cue = narrationDraft.cues.find((c) => c.id === clip.id);
 					return cue ? [{ ...clip, startMs: cue.startMs }] : [];
 				}),
-			).map((clip) => ({
+				Math.max(0, ...base.clipRegions.map((c) => c.endMs)),
+			);
+			const regions: AudioRegion[] = placed.map((clip) => ({
 				id: `narration-${clip.id}`,
 				startMs: clip.startMs,
 				endMs: clip.endMs,
@@ -447,15 +488,24 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				normalize: false,
 				trackIndex,
 			}));
+			// Silent recordings have no subtitles; the approved narration lines become them,
+			// timed by when each piece is actually spoken.
+			const captions = narrationCaptions(
+				base,
+				regions,
+				cues,
+				Object.fromEntries(
+					placed.flatMap((clip) => (clip.chunks ? [[clip.id, clip.chunks]] : [])),
+				),
+			);
 			onApply({
-				...latestState,
-				audioRegions: [...latestState.audioRegions, ...regions],
-				// Silent recordings have no subtitles; the approved narration lines become them.
-				autoCaptions: [
-					...latestState.autoCaptions,
-					...narrationCaptions(latestState, regions, cues),
-				],
+				...base,
+				audioRegions: [...base.audioRegions, ...regions],
+				autoCaptions: [...base.autoCaptions, ...captions.cues],
 			});
+			setNarrationBaseline(baselineFor(base, source));
+			setNarrationReport({ dropped: dropped.length, skipped: captions.skipped });
+			setNarrationApproved(false);
 			setNarrationAudioReady(true);
 		} catch (e) {
 			if (run === generation.current)
@@ -495,14 +545,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	};
 	const canUndoRun =
 		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
-	const voiceMoments = narrationPlan(state).suggestions;
-	// Recordings with speech get subtitles from the speech; an extra AI voice would talk over it.
-	const voiceActions =
-		silentFallback ||
-		!state.autoCaptions.length ||
-		voiceMoments.some((moment) => moment.kind !== "caption")
-			? voiceMoments.length
-			: 0;
+	// Moments already avoid real speech, so a narrated recording only gets lines in its pauses.
+	const voiceActions = narrationPlan(state).suggestions.length;
 	const translateText = async () => {
 		const before = currentState.current.state;
 		const lines = before.autoCaptions
@@ -1037,23 +1081,62 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 						{voiceActions === 0 ? (
 							<p className="rounded-lg border p-3 text-sm">{w.voiceNothing}</p>
 						) : (
-							<Button
-								disabled={!bundledStatus?.available || !!busy}
-								onClick={() => void narrateBundled()}
-							>
-								{busy === "narrate"
-									? progress.total && progress.completed < progress.total
-										? `${n.looking} ${progress.completed}/${progress.total}`
-										: n.busy
-									: n.draft}
-							</Button>
+							<div className="space-y-3">
+								<label className="flex flex-wrap items-center gap-2 text-sm">
+									{n.style}
+									<select
+										value={narrationStyle}
+										disabled={!!busy}
+										onChange={(e) =>
+											setNarrationStyle(
+												e.target.value as typeof narrationStyle,
+											)
+										}
+										className="rounded-lg border border-separator bg-background px-2 py-1.5 text-sm text-foreground"
+									>
+										{(["concise", "tutorial", "detailed"] as const).map(
+											(style) => (
+												<option key={style} value={style}>
+													{n.styles[style]}
+												</option>
+											),
+										)}
+									</select>
+								</label>
+								<div className="flex flex-wrap gap-2">
+									<Button
+										disabled={!bundledStatus?.available || !!busy}
+										onClick={() => void narrateBundled()}
+									>
+										{busy === "narrate"
+											? progress.total && progress.completed < progress.total
+												? `${n.looking} ${progress.completed}/${progress.total}`
+												: n.busy
+											: n.draft}
+									</Button>
+									{(busy === "narrate" || busy === "synthesize") && (
+										<Button
+											variant="secondary"
+											onClick={() => {
+												generation.current++;
+												void window.electronAPI.cancelAutoEditAnalysis?.();
+												setBusy(null);
+											}}
+										>
+											{n.cancel}
+										</Button>
+									)}
+								</div>
+							</div>
 						)}
 						{narrationDraft &&
 							(narrationDraft.cues.length === 0 ? (
 								<p className="text-sm">{n.empty}</p>
 							) : (
 								<div className="space-y-3">
-									<p className="text-sm">{n.editHint}</p>
+									<p className="text-sm">
+										{n.editHint} {n.blankHint}
+									</p>
 									<ol className="space-y-2">
 										{narrationDraft.cues.map((cue) => (
 											<li key={cue.id} className="flex items-start gap-2">
@@ -1108,8 +1191,29 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									>
 										{busy === "synthesize" ? n.synthesizing : n.generateAudio}
 									</Button>
+									{narrationHasLatin && (
+										<p className="text-xs text-muted-foreground">
+											{n.latinHint}
+										</p>
+									)}
 									{narrationAudioReady && (
 										<p className="text-sm font-medium">{n.audioReady}</p>
+									)}
+									{narrationAudioReady && !!narrationReport?.dropped && (
+										<p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-sm">
+											{n.dropped.replace(
+												"{n}",
+												String(narrationReport.dropped),
+											)}
+										</p>
+									)}
+									{narrationAudioReady && !!narrationReport?.skipped && (
+										<p className="text-xs text-muted-foreground">
+											{n.skipped.replace(
+												"{n}",
+												String(narrationReport.skipped),
+											)}
+										</p>
 									)}
 								</div>
 							))}

@@ -4,6 +4,7 @@ import { BUNDLED_MODEL_ID } from "../../../src/components/video-editor/auto-edit
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
 import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bundled";
 import { analyzeLocalMedia } from "../autoEdit/media";
+import { isNarrationStyle } from "../autoEdit/tutorialScript";
 import {
 	describeNarrationFrames,
 	isNarrationFrame,
@@ -311,7 +312,12 @@ export function registerAutoEditHandlers() {
 			event,
 			plan: EditPlan,
 			language?: string,
-			screen?: { videoPath: string; frames: NarrationFrame[] },
+			screen?: {
+				videoPath: string;
+				frames: NarrationFrame[];
+				style?: string;
+				timelineEndMs?: number;
+			},
 		) => {
 			if (running.has(event.sender.id))
 				return { success: false, error: "Analysis already running" };
@@ -334,9 +340,13 @@ export function registerAutoEditHandlers() {
 						typeof screen.videoPath !== "string" ||
 						!Array.isArray(screen.frames) ||
 						screen.frames.length > 5000 ||
-						!screen.frames.every(isNarrationFrame))
+						(screen.style !== undefined && !isNarrationStyle(screen.style)) ||
+						(screen.timelineEndMs !== undefined &&
+							!(Number.isFinite(screen.timelineEndMs) && screen.timelineEndMs > 0)))
 				)
 					throw new Error("Invalid narration frames");
+				// A malformed moment only loses its screen detail, never the whole draft.
+				const frames = screen?.frames.filter(isNarrationFrame) ?? [];
 				const normalized = screen && normalizeVideoSourcePath(screen.videoPath);
 				const approved = normalized && (await resolveApprovedLocalMediaPath(normalized));
 				if (screen && !approved)
@@ -348,7 +358,7 @@ export function registerAutoEditHandlers() {
 						? await describeNarrationFrames({
 								videoPath: approved,
 								ffmpegPath: getFfmpegBinaryPath(),
-								frames: screen.frames,
+								frames,
 								look: session.look,
 								signal: controller.signal,
 								onProgress: (completed, total) => {
@@ -367,6 +377,10 @@ export function registerAutoEditHandlers() {
 						session.complete,
 						isNarrationLanguage(language) ? language : "zh",
 						screens,
+						{
+							style: isNarrationStyle(screen?.style) ? screen.style : "tutorial",
+							timelineEndMs: screen?.timelineEndMs,
+						},
 					),
 				};
 			} catch (error) {

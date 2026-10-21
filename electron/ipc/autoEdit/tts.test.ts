@@ -216,11 +216,15 @@ describe("bundled narration voice assets", () => {
 				id: "suggestion-1",
 				audioPath: expect.stringMatching(/narration-zh-[a-z0-9]+-suggestion-1\.wav$/),
 				durationMs: expect.any(Number),
+		
+				chunks: [{ text: "这里点击按钮。", endMs: expect.any(Number) }],
 			},
 			{
 				id: "suggestion-2",
 				audioPath: expect.stringMatching(/narration-zh-[a-z0-9]+-suggestion-2\.wav$/),
 				durationMs: expect.any(Number),
+		
+				chunks: [{ text: "然后放大显示。", endMs: expect.any(Number) }],
 			},
 		]);
 	});

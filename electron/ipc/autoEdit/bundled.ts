@@ -287,7 +287,12 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 		return {
 			pid: child.pid,
 			close,
-			async complete(instruction: string, question: string, schema: object): Promise<string> {
+			async complete(
+				instruction: string,
+				question: string,
+				schema: object,
+				maxTokens = 768,
+			): Promise<string> {
 				if (instruction.length + question.length > 12_000)
 					throw Error("Speech analysis window is too large");
 				const raw = (await request(
@@ -296,7 +301,7 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 					"/v1/chat/completions",
 					{
 						temperature: 0,
-						max_tokens: 768,
+						max_tokens: maxTokens,
 						response_format: { type: "json_object", schema },
 						messages: [
 							{ role: "system", content: instruction },

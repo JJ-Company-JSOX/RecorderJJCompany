@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
+import type { ScreenEvent } from "./narrationFrames";
 import { generateBundledNarration, LocalNarrationGenerator } from "./narrator";
 
 const mock = vi.hoisted(() => ({
@@ -129,68 +130,135 @@ describe("local-only narration draft (mock service, no inference claim)", () => 
 	});
 });
 
-describe("bundled offline narration draft (reuses the AI edition's own model session)", () => {
-	it("drafts a narration cue per unblocked suggestion via the given complete() call", async () => {
+describe("bundled offline narration draft (Stage B: one coherent script)", () => {
+	const twoSteps = (): EditPlan => ({
+		...plan(),
+		suggestions: [
+			{ id: "click-1", kind: "caption", reason: "click", startMs: 4000, endMs: 5500 },
+			{
+				id: "speed-1",
+				kind: "speed",
+				reason: "silent-moving",
+				startMs: 9000,
+				endMs: 12000,
+				speed: 2,
+			},
+		],
+	});
+	const events = new Map<string, ScreenEvent>([
+		[
+			"click-1",
+			{
+				kind: "action",
+				clicked: "Save",
+				element: "button",
+				result: "Saved",
+				confidence: "high",
+				scope: "small",
+			},
+		],
+	]);
+	it("writes intro, linked steps and outro from the ordered events in one call", async () => {
 		const complete = vi.fn(async () =>
 			JSON.stringify({
-				cues: [{ id: "rule-1", text: "Clicking here to zoom in on the detail." }],
+				intro: "This video shows how to save.",
+				s1: "First, click “Save”, and “Saved” appears.",
+				s2: "Then this part plays faster.",
+				outro: "That's it.",
 			}),
 		);
-		const draft = await generateBundledNarration(plan(), complete);
+		const draft = await generateBundledNarration(twoSteps(), complete, "en", events, {
+			style: "tutorial",
+			timelineEndMs: 20000,
+		});
 		expect(draft.cues).toEqual([
+			{ id: "intro", startMs: 0, endMs: 4000, text: "This video shows how to save." },
 			{
-				id: "rule-1",
-				startMs: 1000,
-				endMs: 2000,
-				text: "Clicking here to zoom in on the detail.",
+				id: "click-1",
+				startMs: 4000,
+				endMs: 5500,
+				text: "First, click “Save”, and “Saved” appears.",
 			},
+			{ id: "speed-1", startMs: 9000, endMs: 12000, text: "Then this part plays faster." },
+			{ id: "outro", startMs: 9001, endMs: 20000, text: "That's it." },
 		]);
 		expect(complete).toHaveBeenCalledOnce();
+		const [instruction, question, schema, maxTokens] = complete.mock.calls[0];
+		expect(instruction).toContain("TUTORIAL");
+		expect(JSON.parse(question)).toEqual([
+			{ id: "s1", do: "click", target: "Save", after: "“Saved” appears", max_chars: 63 },
+			{ id: "s2", do: "sped up", max_chars: 90 },
+		]);
+		expect(Object.keys((schema as { properties: object }).properties)).toEqual([
+			"intro",
+			"s1",
+			"s2",
+			"outro",
+		]);
+		expect(maxTokens).toBe(1536);
 	});
 	it("never sends suggestion text, transcript content or file paths through complete()", async () => {
-		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
+		const complete = vi.fn(async () => JSON.stringify({}));
 		await generateBundledNarration(plan(), complete);
 		const [, question] = complete.mock.calls[0];
 		expect(question).not.toContain("PRIVATE_TRANSCRIPT");
 		expect(question).not.toContain("/local/user.mp4");
 		expect(question).not.toContain("baseline");
 	});
-	it("adds what the vision pass read on screen, only for the matching action", async () => {
-		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
-		await generateBundledNarration(
-			plan(),
-			complete,
-			"en",
-			new Map([["rule-1", "Settings page, Save button in the middle"]]),
-		);
-		const [instruction, question] = complete.mock.calls[0];
-		expect(instruction).toContain('"screen" note');
-		expect(JSON.parse(question)).toEqual([
-			expect.objectContaining({
-				id: "rule-1",
-				screen: "Settings page, Save button in the middle",
-			}),
-		]);
-		complete.mockClear();
-		await generateBundledNarration(plan(), complete, "en");
-		expect(complete.mock.calls[0][0]).not.toContain('"screen" note');
-		expect(complete.mock.calls[0][1]).not.toContain("screen");
-	});
-	it("asks for Mandarin lines, the only language the bundled voice can read", async () => {
-		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
+	it("asks Chinese lines to name English labels in Chinese, which the voice can read", async () => {
+		const complete = vi.fn(async () => JSON.stringify({}));
 		await generateBundledNarration(plan(), complete);
 		const [instruction] = complete.mock.calls[0];
 		expect(instruction).toContain("Simplified Chinese");
+		expect(instruction).toContain("“设置（Settings）”");
 	});
 	it.each([
 		["en", "plain English"],
 		["ms", "Bahasa Melayu"],
 	] as const)("writes %s lines when that language is chosen", async (language, expected) => {
-		const complete = vi.fn(async () => JSON.stringify({ cues: [] }));
+		const complete = vi.fn(async () => JSON.stringify({}));
 		await generateBundledNarration(plan(), complete, language);
 		const [instruction] = complete.mock.calls[0];
 		expect(instruction).toContain(expected);
 		expect(instruction).not.toContain("Simplified Chinese");
+	});
+	it("uses an unreadable click only as a generic step and a screen note for other moments", async () => {
+		const complete = vi.fn(async () => JSON.stringify({}));
+		await generateBundledNarration(
+			{
+				...plan(),
+				suggestions: [
+					{ id: "click-1", kind: "caption", reason: "click", startMs: 1000, endMs: 2500 },
+					{
+						id: "moment-1",
+						kind: "caption",
+						reason: "vision",
+						startMs: 9000,
+						endMs: 10500,
+					},
+				],
+			},
+			complete,
+			"en",
+			new Map<string, ScreenEvent>([
+				[
+					"click-1",
+					{
+						kind: "action",
+						clicked: "Sav",
+						element: "button",
+						result: "",
+						confidence: "low",
+						scope: "none",
+					},
+				],
+				["moment-1", { kind: "screen", screen: "Settings page" }],
+			]),
+		);
+		expect(JSON.parse(complete.mock.calls[0][1])).toEqual([
+			{ id: "s1", do: "click", max_chars: 90 },
+			{ id: "s2", do: "show", screen: "Settings page", max_chars: 56 },
+		]);
 	});
 	it("returns no cues and never calls complete() when every suggestion is blocked", async () => {
 		const blocked = plan();
@@ -200,14 +268,22 @@ describe("bundled offline narration draft (reuses the AI edition's own model ses
 		expect(draft.cues).toEqual([]);
 		expect(complete).not.toHaveBeenCalled();
 	});
-	it("rejects a cue id the plan never offered", async () => {
+	it("skips missing or empty lines and leaves no room for intro or outro when there is none", async () => {
 		const complete = vi.fn(async () =>
-			JSON.stringify({ cues: [{ id: "unknown-id", text: "Made up." }] }),
+			JSON.stringify({ intro: "Hi.", s1: "  ", outro: "Bye." }),
 		);
-		await expect(generateBundledNarration(plan(), complete)).rejects.toThrow();
+		const draft = await generateBundledNarration(plan(), complete, "en", new Map(), {
+			timelineEndMs: 3000,
+		});
+		expect(draft.cues).toEqual([]);
 	});
-	it("rejects empty or missing cue text", async () => {
-		const complete = vi.fn(async () => JSON.stringify({ cues: [{ id: "rule-1", text: "" }] }));
-		await expect(generateBundledNarration(plan(), complete)).rejects.toThrow();
+	it("removes stray Chinese characters a small model leaks into Malay or English lines", async () => {
+		const complete = vi.fn(async () =>
+			JSON.stringify({ s1: "Nota dihantar secara elek舎tronik." }),
+		);
+		const draft = await generateBundledNarration(plan(), complete, "ms", new Map(), {
+			timelineEndMs: 3000,
+		});
+		expect(draft.cues[0].text).toBe("Nota dihantar secara elektronik.");
 	});
 });

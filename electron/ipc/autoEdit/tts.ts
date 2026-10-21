@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
+import { splitNarrationLine } from "../../../src/components/video-editor/auto-edit/narrationText";
 
 export type VoiceLanguage = "zh" | "en" | "ms";
 const HAN = /\p{Script=Han}/u;
@@ -170,6 +171,9 @@ export async function verifyBundledTtsAssets(
 	return result.canonicalRoot;
 }
 
+/** Short breath between subtitle chunks of one line. */
+const CHUNK_PAUSE_S = 0.12;
+
 // biome-ignore lint/suspicious/noExplicitAny: sherpa-onnx-node ships no type declarations.
 let cachedEngine: { root: string; tts: any } | null = null;
 
@@ -215,16 +219,45 @@ export async function synthesizeBundledNarration(options: {
 	// Earlier audio tracks keep pointing at their own files, so never reuse a name.
 	const run = `${language}-${Date.now().toString(36)}`;
 	await fs.mkdir(outputDirectory, { recursive: true });
-	const results: Array<{ id: string; audioPath: string; durationMs: number }> = [];
+	const results: Array<{
+		id: string;
+		audioPath: string;
+		durationMs: number;
+		chunks: Array<{ text: string; endMs: number }>;
+	}> = [];
 	for (const cue of cues) {
-		signal?.throwIfAborted();
-		const audio = await tts.generateAsync({ text: cue.text, sid: speakerId, speed: 1.0 });
+		// One call per subtitle chunk, so each subtitle ends exactly when its words do.
+		const parts: Float32Array[] = [];
+		const chunks: Array<{ text: string; endMs: number }> = [];
+		let sampleRate = 0;
+		let total = 0;
+		const texts = splitNarrationLine(cue.text);
+		for (const [index, text] of texts.entries()) {
+			signal?.throwIfAborted();
+			const audio = await tts.generateAsync({ text, sid: speakerId, speed: 1.0 });
+			sampleRate ||= audio.sampleRate;
+			parts.push(audio.samples);
+			total += audio.samples.length;
+			if (index < texts.length - 1) {
+				const pause = new Float32Array(Math.round(sampleRate * CHUNK_PAUSE_S));
+				parts.push(pause);
+				total += pause.length;
+			}
+			chunks.push({ text, endMs: Math.round((total / sampleRate) * 1000) });
+		}
+		const samples = new Float32Array(total);
+		let offset = 0;
+		for (const part of parts) {
+			samples.set(part, offset);
+			offset += part.length;
+		}
 		const audioPath = path.join(outputDirectory, `narration-${run}-${cue.id}.wav`);
-		sherpaOnnx.writeWave(audioPath, { samples: audio.samples, sampleRate: audio.sampleRate });
+		sherpaOnnx.writeWave(audioPath, { samples, sampleRate });
 		results.push({
 			id: cue.id,
 			audioPath,
-			durationMs: Math.round((audio.samples.length / audio.sampleRate) * 1000),
+			durationMs: Math.round((total / sampleRate) * 1000),
+			chunks,
 		});
 	}
 	return results;

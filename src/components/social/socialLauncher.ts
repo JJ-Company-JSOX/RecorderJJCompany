@@ -34,3 +34,5 @@ export const LINKABLE_PLATFORMS = [
 	"linkedin",
 ] as const;
 export const POSTIZ_CLOUD_URL = "https://api.postiz.com/public/v1";
+/** A build can point customers at the company's own open-source Postiz server. */
+export const PRESET_POSTIZ_SERVER = (import.meta.env.VITE_POSTIZ_SERVER_URL ?? "").trim();

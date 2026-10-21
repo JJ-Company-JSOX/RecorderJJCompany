@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
-import { LINKABLE_PLATFORMS, POSTIZ_CLOUD_URL, VIDEO_PLATFORMS } from "./socialLauncher";
+import {
+	LINKABLE_PLATFORMS,
+	POSTIZ_CLOUD_URL,
+	PRESET_POSTIZ_SERVER,
+	VIDEO_PLATFORMS,
+} from "./socialLauncher";
 import { PLATFORM_LABELS, type SocialLanguage, socialMessages } from "./socialMessages";
 
 type Channel = NonNullable<
@@ -37,8 +42,8 @@ export function SocialPanel({
 
 	const [config, setConfig] = useState<{ baseUrl: string | null; hasKey: boolean } | null>(null);
 	const [editing, setEditing] = useState(false);
-	const [server, setServer] = useState<"cloud" | "self">("cloud");
-	const [address, setAddress] = useState("");
+	const [server, setServer] = useState<"cloud" | "self">(PRESET_POSTIZ_SERVER ? "self" : "cloud");
+	const [address, setAddress] = useState(PRESET_POSTIZ_SERVER);
 	const [apiKey, setApiKey] = useState("");
 	const [channels, setChannels] = useState<Channel[]>([]);
 	const [selected, setSelected] = useState<string[]>([]);
@@ -55,6 +60,15 @@ export function SocialPanel({
 	const [result, setResult] = useState<{ count: number; warning?: string } | null>(null);
 
 	const connected = Boolean(config?.baseUrl && config.hasKey) && !editing;
+	/** Where the customer signs in to Postiz to copy an API key. */
+	const postizSite = () => {
+		if (server === "cloud") return "https://platform.postiz.com";
+		try {
+			return new URL(address.trim()).origin;
+		} catch {
+			return "https://postiz.com";
+		}
+	};
 
 	const loadChannels = useCallback(async () => {
 		setBusy("channels");
@@ -208,17 +222,29 @@ export function SocialPanel({
 						</div>
 					) : (
 						<div className="space-y-3">
-							<fieldset className="flex flex-wrap gap-4 text-sm">
+							<fieldset className="grid gap-2 sm:grid-cols-2">
 								<legend className="sr-only">{m.address}</legend>
-								{(["cloud", "self"] as const).map((option) => (
-									<label key={option} className="flex items-center gap-2">
+								{(["self", "cloud"] as const).map((option) => (
+									<label
+										key={option}
+										className={`flex cursor-pointer gap-2 rounded-xl border bg-background p-3 text-sm ${server === option ? "border-primary" : "border-border"}`}
+									>
 										<input
 											type="radio"
 											name="postiz-server"
 											checked={server === option}
 											onChange={() => setServer(option)}
 										/>
-										{option === "cloud" ? m.cloud : m.selfHosted}
+										<span className="space-y-1">
+											<span className="block font-medium">
+												{option === "cloud" ? m.cloud : m.selfHosted}
+											</span>
+											<span className="block text-xs text-muted-foreground">
+												{option === "cloud"
+													? m.cloudHelp
+													: m.selfHostedHelp}
+											</span>
+										</span>
 									</label>
 								))}
 							</fieldset>
@@ -254,9 +280,7 @@ export function SocialPanel({
 								<Button
 									variant="ghost"
 									onClick={() =>
-										void window.electronAPI.openExternalUrl(
-											"https://postiz.com",
-										)
+										void window.electronAPI.openExternalUrl(postizSite())
 									}
 								>
 									{m.openPostiz}

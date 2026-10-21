@@ -59,13 +59,18 @@ test("Social page connects Postiz, lists accounts and posts the video to the tic
 	// Recordly accounts stay off unless the build turns them on.
 	await expect(social.getByText(/Recordly accounts are not set up/)).toBeVisible();
 
-	await social.getByLabel("API key").fill("bad-key");
+	await social.getByLabel("API key", { exact: true }).fill("bad-key");
 	await social.getByRole("button", { name: "Connect", exact: true }).click();
 	await expect(social.getByRole("alert")).toContainText("did not accept");
-	await social.getByLabel("API key").fill("good-key");
+	// Customers choose the paid cloud or the cheaper open-source server.
+	await expect(social.getByText(/from US\$29 a month/)).toBeVisible();
+	await social.getByRole("radio", { name: /Open-source Postiz server/ }).check();
+	await social.getByLabel("Postiz address").fill("https://postiz.mycompany.com");
+	await page.screenshot({ path: "test-results/social-choose-server.png" });
+	await social.getByLabel("API key", { exact: true }).fill("good-key");
 	await social.getByRole("button", { name: "Connect", exact: true }).click();
 	await expect(social.locator("[data-social-connected]")).toContainText(
-		"https://api.postiz.com/public/v1",
+		"https://postiz.mycompany.com",
 	);
 
 	// Pinterest is listed but cannot take a video post.

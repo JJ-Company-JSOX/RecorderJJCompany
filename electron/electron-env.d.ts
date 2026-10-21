@@ -315,13 +315,13 @@ interface Window {
 			screen?: {
 				videoPath: string;
 				frames: Array<{
-				id: string;
-				timeMs: number;
-				focus?: { cx: number; cy: number };
-				action?: boolean;
-			}>;
-			style?: "concise" | "tutorial" | "detailed";
-			timelineEndMs?: number;
+					id: string;
+					timeMs: number;
+					focus?: { cx: number; cy: number };
+					action?: boolean;
+				}>;
+				style?: "concise" | "tutorial" | "detailed";
+				timelineEndMs?: number;
 			},
 		) => Promise<{
 			success: boolean;
@@ -772,6 +772,36 @@ interface Window {
 			callback: (state: { cursorType: CursorTelemetryPoint["cursorType"] }) => void,
 		) => () => void;
 		openExternalUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
+		getSocialConfig: () => Promise<{ baseUrl: string | null; hasKey: boolean }>;
+		saveSocialConfig: (
+			baseUrl: string,
+			apiKey: string,
+		) => Promise<{ success: boolean; baseUrl?: string; error?: string }>;
+		clearSocialConfig: () => Promise<{ success: boolean }>;
+		listSocialChannels: () => Promise<{
+			success: boolean;
+			channels?: import("./ipc/social/postiz").Channel[];
+			error?: string;
+		}>;
+		connectSocialChannel: (identifier: string) => Promise<{ success: boolean; error?: string }>;
+		pickSocialVideo: () => Promise<string | null>;
+		checkSocialVideo: (
+			videoPath: string,
+		) => Promise<{ success: boolean; path?: string; bytes?: number; error?: string }>;
+		publishSocialPost: (
+			request: Omit<import("./ipc/social/postiz").PublishRequest, "channels"> & {
+				channels: Array<{ id: string; identifier: string }>;
+			},
+		) => Promise<{
+			success: boolean;
+			posts?: Array<{ postId: string; integration: string }>;
+			warning?: string;
+			error?: string;
+		}>;
+		cancelSocialPublish: () => Promise<void>;
+		onSocialPublishProgress: (
+			callback: (stage: "uploading" | "processing" | "posting") => void,
+		) => () => void;
 		getAccessibilityPermissionStatus: () => Promise<{
 			success: boolean;
 			trusted: boolean;

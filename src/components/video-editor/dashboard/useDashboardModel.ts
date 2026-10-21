@@ -1,6 +1,7 @@
 import { removeProjectShareLinks } from "../cloud/projectShareLinks";
 import { useRawLibrary } from "./useRawLibrary";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { onOpenSocialPublisher } from "@/components/social/socialLauncher";
 import { toast } from "@/components/ui/toast";
 import type { ProjectLibraryEntry } from "../ProjectBrowserDialog";
 import type { DashboardProps } from "./types";
@@ -41,9 +42,24 @@ export function useDashboardModel({
 	const [sort, setSort] = useState("recent");
 	const [section, changeSection] = useState("projects");
 	const [library, setLibrary] = useState("projects");
+	const [socialVideo, setSocialVideo] = useState<string | null>(null);
+	// Opening the dashboard from "Post to social media" lands on the Social page.
+	const socialRequested = useRef(false);
+	const isOpen = useRef(open);
+	isOpen.current = open;
+	useEffect(
+		() =>
+			onOpenSocialPublisher((videoPath) => {
+				if (videoPath) setSocialVideo(videoPath);
+				changeSection("social");
+				socialRequested.current = !isOpen.current;
+			}),
+		[],
+	);
 	useEffect(() => {
 		if (!open) return;
-		changeSection("projects");
+		changeSection(socialRequested.current ? "social" : "projects");
+		socialRequested.current = false;
 		setLibrary("projects");
 		setQuery("");
 		setSelecting(false);
@@ -151,6 +167,7 @@ export function useDashboardModel({
 		setSort,
 		section,
 		setSection,
+		socialVideo,
 		busy,
 		folders,
 		save,

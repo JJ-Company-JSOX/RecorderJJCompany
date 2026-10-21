@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { narrationCaptions, splitNarrationLine } from "./narrationCaptions";
+import { splitNarrationSentences } from "./narrationText";
 import type { EditState } from "./plan";
 
 const state = (overrides: Partial<EditState> = {}): EditState => ({
@@ -43,6 +44,28 @@ describe("narration subtitles", () => {
 		expect(long.join(" ")).toBe(
 			"This sentence has many words and should be broken into shorter readable chunks",
 		);
+	});
+	it("groups the subtitle chunks into whole sentences for the voice", () => {
+		expect(splitNarrationSentences("先点击设置，然后打开菜单。接着保存！")).toEqual([
+			{ text: "先点击设置，然后打开菜单。", chunks: ["先点击设置，", "然后打开菜单。"] },
+			{ text: "接着保存！", chunks: ["接着保存！"] },
+		]);
+		// Decimals and web addresses do not end a sentence; a semicolon does.
+		expect(splitNarrationSentences("Install 2.0, open github.com; then wait. Done")).toEqual([
+			{
+				text: "Install 2.0, open github.com;",
+				chunks: ["Install 2.0,", "open github.com;"],
+			},
+			{ text: "then wait.", chunks: ["then wait."] },
+			{ text: "Done", chunks: ["Done"] },
+		]);
+		expect(splitNarrationSentences("点击“Settings”打开设置，然后选择 Dark mode。")).toEqual([
+			{
+				text: "点击“Settings”打开设置，然后选择 Dark mode。",
+				chunks: ["点击“Settings”打开设置，", "然后选择 Dark mode。"],
+			},
+		]);
+		expect(splitNarrationSentences("  ")).toEqual([]);
 	});
 	it("maps narration clips from timeline time to source time, chunk by chunk", () => {
 		const { cues, skipped } = narrationCaptions(

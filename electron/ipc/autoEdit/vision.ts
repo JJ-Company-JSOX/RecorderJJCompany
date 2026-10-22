@@ -25,6 +25,17 @@ export function sampleTimes(durationMs: number, count = 8): number[] {
 	);
 }
 
+/** The vision model itself failed (stopped, crashed, unreachable, timed out), not one sample. */
+class ModelFailure extends Error {
+	constructor(readonly failure: unknown) {
+		super("visual model request failed");
+	}
+}
+const modelCall = <T>(call: Promise<T>) =>
+	call.catch((error: unknown) => {
+		throw new ModelFailure(error);
+	});
+
 export async function analyzeVideoFrames(options: {
 	videoPath: string;
 	model: string;
@@ -84,6 +95,8 @@ export async function analyzeVideoFrames(options: {
 	const out = fitSize(rect, SAMPLE_OUT.w, SAMPLE_OUT.h);
 	// Per-job, exact-byte reuse only. At most 12 entries; never written to disk or shared.
 	const bundledReplies = options.bundled ? new Map<string, string>() : undefined;
+	let skipped = 0;
+	let lastProblem = "";
 	for (const [index, timeMs] of sampledTimesMs.entries()) {
 		options.signal.throwIfAborted();
 		try {
@@ -104,31 +117,35 @@ export async function analyzeVideoFrames(options: {
 				const digest = createHash("sha256").update(image).digest("hex");
 				content = bundledReplies.get(digest);
 				if (content === undefined) {
-					content = await options.bundled.describe(image, VISUAL_INSTRUCTION, question);
+					content = await modelCall(
+						options.bundled.describe(image, VISUAL_INSTRUCTION, question),
+					);
 					bundledReplies.set(digest, content);
 				}
 			} else {
-				const response = (await localRequest(
-					"/api/chat",
-					{
-						model: options.model,
-						stream: false,
-						format: "json",
-						keep_alive: index === sampledTimesMs.length - 1 ? 0 : "2m",
-						options: { temperature: 0, num_predict: 120, num_ctx: 4096 },
-						messages: [
-							{
-								role: "system",
-								content: VISUAL_INSTRUCTION,
-							},
-							{
-								role: "user",
-								content: question,
-								images: [image.toString("base64")],
-							},
-						],
-					},
-					options.signal,
+				const response = (await modelCall(
+					localRequest(
+						"/api/chat",
+						{
+							model: options.model,
+							stream: false,
+							format: "json",
+							keep_alive: index === sampledTimesMs.length - 1 ? 0 : "2m",
+							options: { temperature: 0, num_predict: 120, num_ctx: 4096 },
+							messages: [
+								{
+									role: "system",
+									content: VISUAL_INSTRUCTION,
+								},
+								{
+									role: "user",
+									content: question,
+									images: [image.toString("base64")],
+								},
+							],
+						},
+						options.signal,
+					),
 				)) as { message?: { content?: string } };
 				content = response.message?.content;
 			}
@@ -143,15 +160,20 @@ export async function analyzeVideoFrames(options: {
 			}
 			observations.push(parseVisualReply(reply, timeMs));
 		} catch (error) {
-			// One unreadable sample or reply only loses that sample's zoom suggestion.
 			options.signal.throwIfAborted();
-			log(
-				`sample at ${timeMs} ms skipped: ${error instanceof Error ? error.message : "failed"}`,
-			);
+			// A stopped or unreachable model fails the pass with its own message, instead of
+			// looking like a recording with nothing worth zooming into.
+			if (error instanceof ModelFailure) throw error.failure;
+			// One unreadable frame or reply only loses that sample's zoom suggestion.
+			skipped += 1;
+			lastProblem = error instanceof Error ? error.message : "failed";
+			log(`sample at ${timeMs} ms skipped: ${lastProblem}`);
 		}
 		options.onProgress?.(index + 1, sampledTimesMs.length, timeMs);
 		options.signal.throwIfAborted();
 	}
+	if (skipped === sampledTimesMs.length)
+		throw Error(`No video sample could be analyzed (${lastProblem})`);
 	return {
 		observations,
 		sampledTimesMs,

@@ -27,7 +27,14 @@ OpenAI Whisper small multilingual weights (MIT), llama.cpp (MIT), whisper.cpp
 public domain), sherpa-onnx and its prebuilt
 `sherpa-onnx-node` / `sherpa-onnx-win-x64` Node addon (Apache-2.0) and the ONNX
 Runtime library bundled with that addon (MIT), plus Silero VAD (MIT), RNNoise
-(BSD-3-Clause) and the shared sherpa-onnx C API runtime with its MSVC notices. Exact revisions, asset hashes and model notices are recorded in
+(BSD-3-Clause) and the shared sherpa-onnx C API runtime with its MSVC notices.
+Its screen-text reader adds the PaddleOCR PP-OCRv6 small detection and
+recognition weights (Apache-2.0, Baidu / PaddleOCR rights holders) in the ONNX
+conversion distributed with RapidOCR 3.10.0 (Apache-2.0, copyright 2021 RapidOCR
+Authors), whose pre- and post-processing `electron/ipc/autoEdit/ocr/` ports to
+TypeScript with the upstream notices kept and the changes stated, and ONNX
+Runtime Web 1.30.0 with onnxruntime-common (MIT, Microsoft Corporation; the
+WebAssembly runtime ships with ONNX Runtime's `ThirdPartyNotices.txt`). Exact revisions, asset hashes and model notices are recorded in
 [MODEL_LICENSES.md](MODEL_LICENSES.md) and the build lock files under `scripts/`.
 The Windows resource bundles contain the complete model/runtime license texts,
 embedded component notices and LLVM-MinGW toolchain notices. These permissive

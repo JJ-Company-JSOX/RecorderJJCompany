@@ -28,6 +28,7 @@ npm run prepare:offline-ai
 npm run prepare:offline-speech
 npm run prepare:offline-voice
 npm run prepare:offline-tts
+npm run prepare:offline-ocr
 npm run build:win:offline
 ```
 
@@ -60,11 +61,45 @@ npm run build:win:offline
 
 模型、安装包、详细日志和录屏均不提交 Git；仓库提交的是实现、构建锁定文件、测试及脱敏验证说明。
 
+## 屏幕文字识别（OCR）
+
+完整离线 AI 包内置屏幕文字识别，给 AI 解说提供画面上的原文（按钮、菜单、对话框标题、表单、状态栏，中文、英文和数字），解说稿才能说出界面上真实的名称，而不是模型猜的字。
+
+- **模型**：PaddleOCR PP-OCRv6 small 文字检测（9,929,594 字节）和识别（21,234,383 字节）模型，RapidOCR 转换的 ONNX 版本，Apache-2.0。两个文件原样取自 PyPI 上固定版本的 rapidocr 3.10.0 wheel（27,288,134 字节，SHA-256 `2fc34e26cd0f48514804a94f8832283039c7334076bff60768b1fed9ad068050`）；wheel 内的 `MODEL_LICENSES.md` 以相同的 SHA-256 列出这两个模型，说明权重版权属于百度／PaddleOCR 权利人，按 Apache-2.0 发布，没有附加限制。识别模型的字符表（18,708 个字）存在模型元数据里，准备脚本原样取出为 `keys.txt`。旋转文字的方向分类模型没有内置：界面文字都是横排。
+- **运行方式**：ONNX Runtime Web 1.30.0（MIT，WebAssembly SIMD + 多线程版本，约 14 MB）在单独的 worker 线程里运行，不用原生的 onnxruntime-node：sherpa-onnx 已经在主进程加载了它自带的 `onnxruntime.dll`，Windows 按模块名复用已加载的 DLL，再加载另一个版本会互相冲突。第一次识别时才启动 worker（`dist-electron/ocr-worker.cjs`），启动时按清单检查全部文件的大小和 SHA-256，然后加载模型；`dispose()` 结束 worker，释放内存。线程数取逻辑处理器数减 1，最多 4 个。识别请求逐个送进 worker，单张超过 120 秒视为卡住：结束 worker，下次识别重新启动。
+- **处理流程**：按 RapidOCR 3.10.0 源码逐步移植到 TypeScript（`electron/ipc/autoEdit/ocr/`，保留上游版权声明并注明改动）：检测输入短边放大到 736、宽高取 32 的倍数，按模型训练时的方式转成 BGR 并归一化到 −1～1；DB 后处理（阈值 0.3、框阈值 0.5、扩张系数 1.6、最小尺寸 3），界面文字都是横排，所以框取轴对齐矩形，不需要 OpenCV、pyclipper；从上到下、从左到右排序；识别输入高 48 像素、保持宽高比、不足 320 宽的补齐，按宽高比每 6 个一批；CTC 贪心解码，每行置信度取保留字符概率的平均值，低于 0.5 的行丢弃。图像缩放逐位复现 OpenCV `cv2.resize` 的双线性插值，模型看到的像素和 RapidOCR 相同。另外加了一步 RapidOCR 没有的处理：检测模型常把只隔着空白的菜单项、标签页（“文件　编辑　视图”）连成一行，同一行里的空白宽于文字高度时就切开，分别识别。
+- **接口**：`createBundledOcrEngine()` 实现 `electron/ipc/autoEdit/ocrTypes.ts` 的 `OcrEngine`，返回输入图像像素坐标的文字行；`getBundledOcrStatus()` 只检查清单和文件大小，不加载模型。开发时文件在 `vendor/offline-ai/win32-x64/ocr`，打包后在 `resources/offline-ai/ocr`，worker 从 app.asar 解包到 `app.asar.unpacked/dist-electron/ocr-worker.cjs`（worker 线程只能从磁盘加载入口文件）。`vite build` 和 `npm run dev` 都会生成这个 worker。接入 AI 解说由视频理解部分负责。
+
+构建机上 `npm run prepare:offline-ocr` 下载 wheel（限制大小、失败重试、校验 SHA-256，缓存在 `.tmp/ocr-downloads`），只取出两个模型和许可文件；从已安装的 onnxruntime-web 复制 WASM 运行文件（版本必须是锁定的 1.30.0，否则先 `npm ci`），再从 ONNX Runtime GitHub 固定版本下载许可和第三方声明。每个文件都按 `scripts/offline-ocr.lock.json` 校验大小和 SHA-256，最后生成 `manifest.json` 和 `NOTICE.txt`；`MODEL-LICENSE.txt` 是 wheel 里的 Apache-2.0 原文，`RAPIDOCR-MODEL-LICENSES.md` 是 RapidOCR 的模型来源和署名说明。这些都是跨平台文件，可以在任何系统上准备，整个目录约 46 MB。`npm run verify:offline-ocr` 不联网，只做校验；`package:win:offline` 在打包前会执行它，缺失或损坏时停止打包。
+
+实测（Linux 4 vCPU Xeon 2.1 GHz 沙盒，没有其他任务；Node 22）：用 Pillow 绘制 12 个合成软件截图（中文、英文、中英混排各 4 个，浅色、深色主题各半；Noto Sans SC、Inter、Liberation Sans、DejaVu Sans、Carlito、文泉驿正黑等字体；12–20 px 的菜单、侧栏、按钮、对话框标题、表单、提示框和状态栏），每个截图生成下面 5 种输入，共 60 张、1,726 个文字项：
+
+| 输入 | 文字项 | 完全正确（不计空格） | 字符正确率 | 每张耗时，4 线程（中位数／P90） |
+| --- | --- | --- | --- | --- |
+| 点击处裁剪 768×432 | 204 | 100% | 100% | 1.35／1.88 秒 |
+| 150% 缩放录屏的点击处裁剪 1152×648 | 199 | 100% | 100% | 1.28／2.02 秒 |
+| 整帧 1280×720 | 441 | 100% | 100% | 2.18／2.48 秒 |
+| 1080p（150% 缩放）整帧缩到 1280×720 | 441 | 100% | 100% | 2.20／2.34 秒 |
+| 压力测试：整帧缩到 853×480，文字只有 8–9 px | 441 | 99.5% | 99.94% | 2.18／2.40 秒 |
+| 合计 | 1,726 | 99.9% | 99.98% | 2.06／2.34 秒 |
+
+- 只有 2 个错误，都在 8–9 px 的压力测试里，各错一个字母（“Language”读成“Languge”，“Check for Updates”读成“Check for Updlates”）；没有漏读的文字项。裁剪边缘被切掉一半的文字也会读出（40 张裁剪里 24 行，不计入上表），另有 1 处把边框读成“_”。
+- 空格：英文单词之间的空格 99% 读出；中文和英文／数字之间的空格有 28% 读不出（如“上传 Upload”读成“上传Upload”），RapidOCR 原版同样如此。连空格一起比较时完全正确率为 92.4%，所以拿识别结果和候选文字比较时要忽略空白。
+- 线程数（20 张，同一张图依次用不同线程数运行，中位数）：768×432 裁剪 1／2／3／4 线程分别 4.0／2.1／1.5／1.3 秒；1280×720 整帧 6.7／3.7／2.5／2.4 秒。第一次识别还要启动 worker、校验约 46 MB 文件并加载模型，约多 1–2 秒。
+- 内存：运行时整个进程比空闲时多约 0.5 GB（峰值 648 MB，空闲 122 MB），主要是 WebAssembly 内存；`dispose()` 后大部分释放。
+- 和 RapidOCR 3.10.0 原版（Python、原生 onnxruntime 1.31.0 CPU、相同模型、4 线程）对比：关掉上面的切分步骤时，60 张图的 1,742 行中，每行的框相差不超过 3 像素，1,725 行文字完全相同，其余 17 行只差中英文之间的一个空格，说明移植忠实。打开切分后完全正确率 99.9%，原版 98.9%（原版把相邻菜单项连成一行，9 项因此读不出单独的结果）。原生 onnxruntime 更快：每张中位数 0.68 秒，WASM 版 2.06 秒，约慢 3 倍；4 线程下每张裁剪仍在 2.5 秒以内，所以继续使用 WASM，避免两个 `onnxruntime.dll` 冲突。
+- Electron：打包目录（`electron-builder --linux --dir`，配置同 `electron-builder.offline.json5`）里 `resources/offline-ai/ocr` 的 11 个文件和解包出来的 worker 都在；在 Electron 43.1.0 主进程里用真实的 `bundledOcr` 模块读取这个打包目录，两次运行中第一次识别 2.4–3.4 秒、之后 1.4–1.6 秒（默认 3 线程），768×432 测试图的 16 行全部正确。
+
+未验证：真实录屏（视频压缩噪点、Windows ClearType 子像素字体）、Windows 真机速度、繁体中文、竖排文字（不支持）以及 12 px 以下、低对比度的文字。
+
 ## 来源
 
 - [Qwen 官方 GGUF 文件](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/tree/52d6c8ffea26cc873ac5ad116f8631268d7eb503)
 - [Qwen 项目许可](https://github.com/QwenLM/Qwen3-VL/blob/96588727e44c78b25ba03ea03b8e12f7e64fd0da/LICENSE)
 - [llama.cpp 固定源码](https://github.com/ggml-org/llama.cpp/tree/848bbda9041decd87904f7eb5a2990863ecce03b)
 - [LLVM-MinGW 官方项目](https://github.com/mstorsjo/llvm-mingw)
+- [rapidocr 3.10.0 wheel（PyPI）](https://pypi.org/project/rapidocr/3.10.0/)、[RapidOCR 项目](https://github.com/RapidAI/RapidOCR)
+- [PaddleOCR 项目及许可](https://github.com/PaddlePaddle/PaddleOCR)
+- [ONNX Runtime 1.30.0 源码及许可](https://github.com/microsoft/onnxruntime/tree/v1.30.0)
 
 运行组件源码和锁定的构建工具版本在脚本中记录。模型 Apache-2.0、llama.cpp MIT、LLVM 及工具链声明和本项目 AGPL 文本随包保留；这不是商业发行许可的法律认证。

@@ -13,6 +13,7 @@ The installed `ffmpeg-static` package supplies `ffmpeg version 6.1.1-essentials_
 - `scripts/offline-ai.lock.json`, `scripts/offline-ai-build.lock.json`: pinned Qwen/llama artifacts and portable compiler. Full model/runtime licenses accompany `resources/offline-ai`.
 - `scripts/offline-speech.lock.json`: OpenAI Whisper multilingual small Q5_1, immutable conversion revision and SHA; MIT model notice separately from whisper.cpp code.
 - `scripts/build-offline-whisper-runtime.mjs`: pinned whisper.cpp source, static Windows CPU build, bundled MIT/toolchain/embedded component notices. No copied proprietary Canvid implementation.
+- `scripts/offline-ocr.lock.json`: PP-OCRv6 small detection/recognition ONNX (Apache-2.0) from the pinned `rapidocr` 3.10.0 wheel, the extracted character dictionary and the ONNX Runtime Web 1.30.0 WASM runtime (MIT) with its license and third-party notices; `resources/offline-ai/ocr` carries the model license, RapidOCR's model notice and a NOTICE.
 - Per-bundle manifests validate filenames, canonical paths, size and SHA. Source and build scripts stay in Git; weights/executables and private media stay ignored.
 
 Preserve `THIRD_PARTY_NOTICES.md`, font/icon licenses, existing upstream notices and model licenses. Review all production/transitive dependency versions with an SBOM before a commercial release; the candidate research matrix is not a full npm/native/codec compliance certification. Deferred models must be separately reviewed before download/distribution; no gated model credentials or acceptance may be silently bypassed.

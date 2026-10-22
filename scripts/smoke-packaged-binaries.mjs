@@ -291,6 +291,46 @@ function verifyOfflineNarrationVoice(unpackedRoot) {
 	}
 }
 
+/** What electron/ipc/autoEdit/ocr/bundledOcr.ts needs before it offers the OCR engine. */
+const OCR_REQUIRED = [
+	"PP-OCRv6_det_small.onnx",
+	"PP-OCRv6_rec_small.onnx",
+	"keys.txt",
+	"runtime/ort-wasm-simd-threaded.mjs",
+	"runtime/ort-wasm-simd-threaded.wasm",
+];
+
+/**
+ * The offline AI edition reads on-screen text with resources/offline-ai/ocr (models, character
+ * list and the ONNX Runtime WASM files its manifest lists) in a worker thread whose entry is
+ * unpacked from app.asar. Without them voice-over quietly falls back to the labels the vision
+ * model reads on its own, so a packaging mistake must fail here.
+ */
+function verifyOfflineOcr(unpackedRoot) {
+	const offlineAi = path.join(path.dirname(unpackedRoot), "offline-ai");
+	if (!existsSync(offlineAi)) {
+		return;
+	}
+
+	const ocrRoot = path.join(offlineAi, "ocr");
+	const manifestPath = path.join(ocrRoot, "manifest.json");
+	assertFile(manifestPath, "offline OCR manifest");
+	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+	for (const name of OCR_REQUIRED) {
+		if (!manifest.files.some((entry) => entry.path === name)) {
+			fail(`offline OCR manifest does not list ${name}`);
+		}
+	}
+	for (const entry of manifest.files) {
+		const filePath = path.join(ocrRoot, ...entry.path.split("/"));
+		if (!existsSync(filePath) || statSync(filePath).size !== entry.bytes) {
+			fail(`offline OCR file is missing or truncated: ${entry.path}`);
+		}
+	}
+	console.log(`[packaged-smoke] offline OCR: ${manifest.files.length} files`);
+	assertFile(path.join(unpackedRoot, "dist-electron", "ocr-worker.cjs"), "offline OCR worker");
+}
+
 const unpackedRoots = findDirectoriesByName(releaseRoot, "app.asar.unpacked");
 
 if (unpackedRoots.length === 0) {
@@ -307,6 +347,7 @@ for (const unpackedRoot of unpackedRoots) {
 	verifyFfmpeg(unpackedRoot);
 	verifyNativeHelpers(unpackedRoot);
 	verifyOfflineNarrationVoice(unpackedRoot);
+	verifyOfflineOcr(unpackedRoot);
 }
 
 console.log("[packaged-smoke] packaged binary path smoke passed");

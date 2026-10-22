@@ -269,7 +269,7 @@ export function createBundledOcrEngine(
 /**
  * Opens the bundled OCR engine for one voice-over job. Without a complete OCR bundle (developer
  * checkouts, older offline packages) it resolves undefined and the vision model reads the labels
- * on its own; a bundle whose worker entry is missing is a broken build and throws once, instead
+ * on its own (an installed build says so in the log); a bundle whose worker entry is missing is a broken build and throws once, instead
  * of failing every click. Nothing loads here: the worker starts on the first recognize(), and
  * the caller disposes the engine when the job ends.
  */
@@ -280,7 +280,11 @@ export async function openBundledOcr(
 	const root = options.root ?? getBundledOcrRoot();
 	const status = await getBundledOcrStatus(root);
 	signal?.throwIfAborted();
-	if (!status.available) return undefined;
+	if (!status.available) {
+		// Normal in a developer checkout; in an installed offline build it is a packaging fault.
+		if (app.isPackaged) console.warn("[bundled-ocr] No complete OCR bundle at", root);
+		return undefined;
+	}
 	const workerPath = options.workerPath ?? getOcrWorkerPath();
 	await fs.access(workerPath).catch(() => {
 		throw new Error("The OCR worker is missing from this build.");

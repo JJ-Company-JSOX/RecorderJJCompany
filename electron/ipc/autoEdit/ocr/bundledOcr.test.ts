@@ -283,15 +283,22 @@ describe("bundled OCR engine", () => {
 });
 
 describe("opening the bundled OCR engine for a voice-over job", () => {
-	it("opens nothing, silently, when the build has no OCR bundle", async () => {
+	it("opens nothing when the build has no OCR bundle, and logs it only in an installed build", async () => {
 		const { root, workerPath, starts } = await bundle((m) => {
 			m.files = m.files.filter((f) => f.path !== "PP-OCRv6_rec_small.onnx");
 		});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		expect(await openBundledOcr(undefined, { root, workerPath })).toBeUndefined();
 		expect(
 			await openBundledOcr(undefined, { root: path.join(root, "nope"), workerPath }),
 		).toBeUndefined();
 		expect(await starts()).toBe(0);
+		expect(warn).not.toHaveBeenCalled();
+		// An installed build that lacks it was packaged wrong: that goes to the log.
+		mocks.isPackaged = true;
+		expect(await openBundledOcr(undefined, { root, workerPath })).toBeUndefined();
+		expect(warn).toHaveBeenCalledWith("[bundled-ocr] No complete OCR bundle at", root);
+		warn.mockRestore();
 	});
 
 	it("finds the bundle and worker on its own and starts the worker on the first call", async () => {

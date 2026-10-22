@@ -267,12 +267,13 @@ function verifyNativeHelpers(unpackedRoot) {
  * file its manifest lists (espeak-ng-data has hundreds) must have been packaged at full size.
  */
 function verifyOfflineNarrationVoice(unpackedRoot) {
-	const offlineAi = path.join(path.dirname(unpackedRoot), "offline-ai");
-	if (!existsSync(offlineAi)) {
+	// Other editions (Offline Tools) ship resources/offline-ai without a voice; which editions
+	// must ship one is enforced on the builder configs by electron/packagingGates.test.ts.
+	const voiceRoot = path.join(path.dirname(unpackedRoot), "offline-ai", "tts-kokoro");
+	if (!existsSync(voiceRoot)) {
 		return;
 	}
 
-	const voiceRoot = path.join(offlineAi, "tts-kokoro");
 	const manifestPath = path.join(voiceRoot, "manifest.json");
 	assertFile(manifestPath, "offline narration voice manifest");
 	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -307,12 +308,11 @@ const OCR_REQUIRED = [
  * model reads on its own, so a packaging mistake must fail here.
  */
 function verifyOfflineOcr(unpackedRoot) {
-	const offlineAi = path.join(path.dirname(unpackedRoot), "offline-ai");
-	if (!existsSync(offlineAi)) {
+	const ocrRoot = path.join(path.dirname(unpackedRoot), "offline-ai", "ocr");
+	if (!existsSync(ocrRoot)) {
 		return;
 	}
 
-	const ocrRoot = path.join(offlineAi, "ocr");
 	const manifestPath = path.join(ocrRoot, "manifest.json");
 	assertFile(manifestPath, "offline OCR manifest");
 	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

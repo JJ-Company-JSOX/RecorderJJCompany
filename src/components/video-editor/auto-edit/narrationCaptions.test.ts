@@ -36,6 +36,16 @@ describe("narration subtitles", () => {
 			"Install 2.0,",
 			"open github.com",
 		]);
+		// A quoted on-screen label is one piece, in Chinese and English lines.
+		expect(splitNarrationLine("接着点击“Dark mode”，出现“Theme: Dark”。好。")).toEqual([
+			"接着点击“Dark mode”，",
+			"出现“Theme: Dark”。",
+			"好。",
+		]);
+		expect(splitNarrationLine('Choose "Theme: Dark", then close.')).toEqual([
+			'Choose "Theme: Dark",',
+			"then close.",
+		]);
 		const long = splitNarrationLine(
 			"This sentence has many words and should be broken into shorter readable chunks",
 		);

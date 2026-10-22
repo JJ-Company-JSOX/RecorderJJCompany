@@ -4,10 +4,18 @@ const MAX_CHUNK_CHARS = 28;
 /** Splits a narration line at punctuation, then by length, so each subtitle stays short. */
 export function splitNarrationLine(text: string): string[] {
 	// Latin punctuation ends a piece only before a space, so "2.0" and "e.g." stay whole.
-	const pieces = text
+	const split = text
 		.split(/(?<=[，。！？；：])\s*|(?<=[,.!?;:])\s+/u)
 		.map((p) => p.trim())
 		.filter(Boolean);
+	// A quoted label such as “Theme: Dark” stays in one piece.
+	const pieces: string[] = [];
+	for (const piece of split) {
+		const last = pieces[pieces.length - 1];
+		if (last !== undefined && insideQuote(last))
+			pieces[pieces.length - 1] = joinNarrationText(last, piece);
+		else pieces.push(piece);
+	}
 	return pieces.flatMap((piece) => {
 		if (piece.length <= MAX_CHUNK_CHARS) return [piece];
 		const words = /\s/.test(piece) ? piece.split(/\s+/) : [...piece];
@@ -25,6 +33,11 @@ export function splitNarrationLine(text: string): string[] {
 		return chunks;
 	});
 }
+
+/** True while a piece has opened a quote (“ or ") that it has not closed yet. */
+const insideQuote = (piece: string) =>
+	(piece.match(/“/g)?.length ?? 0) > (piece.match(/”/g)?.length ?? 0) ||
+	(piece.match(/"/g)?.length ?? 0) % 2 === 1;
 
 const CJK_EDGE = /[\p{Script=Han}\u3000-\u303f\uff00-\uffef]/u;
 /** Joins two pieces of one line: no space next to Chinese text or full-width punctuation. */

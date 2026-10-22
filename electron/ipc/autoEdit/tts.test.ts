@@ -861,6 +861,29 @@ describe("speaking a narration line", () => {
 			"View.",
 		]);
 		expect(spoken("先点击设置。")).toEqual(["先点击设置。"]);
+		// A number written straight before the letters is part of the label, not cut off into
+		// the Chinese before it ("打开3" then "D,"); the end of a time is not.
+		expect(spoken("打开3D视图。")).toEqual(["打开", "3D,", "视图。"]);
+		expect(spoken("这款手机支持5G和4K录像。")).toEqual([
+			"这款手机支持",
+			"5G,",
+			"和",
+			"4K,",
+			"录像。",
+		]);
+		expect(spoken("以1.5x速度播放，连接2.4G网络。")).toEqual([
+			"以",
+			"1.5x,",
+			"速度播放，连接",
+			"2.4G,",
+			"网络。",
+		]);
+		expect(spoken("下午3:30PM开会，共10 MB。")).toEqual([
+			"下午3:30",
+			"PM,",
+			"开会，共10",
+			"MB。",
+		]);
 	});
 	it("shows a sentence the voice cannot say with its neighbour instead of failing the line", async () => {
 		const first = await speakLine(engine(["Open “GitHub”."]), "Open “GitHub”. Then save.", {

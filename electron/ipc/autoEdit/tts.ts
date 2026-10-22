@@ -547,10 +547,13 @@ export function sentencePauseS(text: string, index: number) {
 const CLAUSE_END = /[，,。.！!？?；;：:、]$/u;
 /**
  * Latin-letter text inside a Chinese line (usually an on-screen label), with the quotes or
- * brackets around it and the punctuation after it.
+ * brackets around it and the punctuation after it. A number written straight before the
+ * letters belongs to the label (3D, 5G, 4K, 1.5x): the Chinese number rules still read it as
+ * 三, 五, 四 inside the part, instead of the label being cut after its number. Not the end of
+ * a longer number or a time (10:30PM keeps 10:30 for those rules).
  */
 const LATIN_RUN =
-	/[“"‘「『（(]*\p{Script=Latin}[\p{Script=Latin}\p{N}_'’.+&/-]*(?: +[\p{Script=Latin}\p{N}_'’.+&/-]+)*[”"’」』）)]*\s*[，,。.！!？?；;：:、]*/gu;
+	/[“"‘「『（(]*(?:(?<![\p{N}.:：])\p{N}+(?:\.\p{N}+)?)?\p{Script=Latin}[\p{Script=Latin}\p{N}_'’.+&/-]*(?: +[\p{Script=Latin}\p{N}_'’.+&/-]+)*[”"’」』）)]*\s*[，,。.！!？?；;：:、]*/gu;
 
 /**
  * Splits a sentence that mixes Chinese and English into the parts Kokoro says one by one.

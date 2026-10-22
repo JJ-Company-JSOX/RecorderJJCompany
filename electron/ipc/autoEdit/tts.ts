@@ -829,7 +829,7 @@ let cachedEngine: { root: string; relative: boolean; tts: SherpaOnnx } | null = 
 /**
  * Loads a voice, from any other folder by names relative to it as the working directory.
  * espeak-ng keeps reading its data while it speaks, so the folder is entered again before
- * every use.
+ * every use (and left again by inVoiceFolder once the use is over).
  */
 async function loadEngine(root: string, bundle: Bundle) {
 	const cached = cachedEngine?.root === root ? cachedEngine : null;
@@ -847,6 +847,38 @@ async function loadEngine(root: string, bundle: Bundle) {
 	const tts = await sherpaOnnx.OfflineTts.createAsync(bundle.config(relative ? "" : root));
 	cachedEngine = { root, relative, tts };
 	return tts;
+}
+
+let voiceQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Runs one narration job or preview at a time, from any window, and puts the main process's
+ * working directory back afterwards. A job may move it into the voice folder (loadEngine),
+ * where espeak-ng must find its data until the job's last sentence is spoken; another job
+ * putting it back in the meantime would end the process, and leaving it there would move
+ * every later lookup by the working directory.
+ */
+function inVoiceFolder<T>(work: () => Promise<T>): Promise<T> {
+	const run = voiceQueue.then(async () => {
+		let previous: string | undefined;
+		try {
+			previous = process.cwd();
+		} catch {
+			// The old working directory no longer exists: nothing to go back to.
+		}
+		try {
+			return await work();
+		} finally {
+			if (previous !== undefined)
+				try {
+					process.chdir(previous);
+				} catch {
+					// Removed while the job ran; the next use enters the voice folder again anyway.
+				}
+		}
+	});
+	voiceQueue = run.catch(() => undefined);
+	return run;
 }
 
 /** The PCM WAV sherpa-onnx's writeWave makes, written by Node: it opens any path Windows can. */
@@ -901,20 +933,23 @@ async function prepareVoice(
 	return {
 		voice,
 		speakerId: speakerId as number,
-		load: async () => {
-			const root = await verifyBundledTtsAssets(
-				getBundledTtsRoot(voice.bundle, base),
-				signal,
-				voice.bundle,
-			).catch((error: unknown) => {
-				if ((error as NodeJS.ErrnoException)?.code === "ENOENT")
-					throw new Error(
-						"The offline narration voice is not installed. Reinstall the complete offline application.",
-					);
-				throw error;
-			});
-			return loadEngine(root, bundle);
-		},
+		/** Verifies and loads the voice, then speaks with it (see inVoiceFolder). */
+		use: <T>(speak: (tts: SherpaOnnx) => Promise<T>) =>
+			inVoiceFolder(async () => {
+				signal?.throwIfAborted();
+				const root = await verifyBundledTtsAssets(
+					getBundledTtsRoot(voice.bundle, base),
+					signal,
+					voice.bundle,
+				).catch((error: unknown) => {
+					if ((error as NodeJS.ErrnoException)?.code === "ENOENT")
+						throw new Error(
+							"The offline narration voice is not installed. Reinstall the complete offline application.",
+						);
+					throw error;
+				});
+				return speak(await loadEngine(root, bundle));
+			}),
 	};
 }
 
@@ -941,44 +976,50 @@ export async function synthesizeBundledNarration(options: {
 		if (typeof cue.text !== "string" || !cue.text.trim() || cue.text.length > 500)
 			throw new Error(`Invalid narration text for cue ${cue.id}`);
 	}
-	const { voice, speakerId, load } = await prepareVoice(language, options.speakerId, signal);
+	const { voice, speakerId, use } = await prepareVoice(language, options.speakerId, signal);
 	for (const cue of cues)
 		if (!voice.speaks(voice.spoken?.(cue.text) ?? cue.text))
 			throw new Error(voice.wrongLanguage);
-	const tts = await load();
-	// Earlier audio tracks keep pointing at their own files, so never reuse a name.
-	const run = `${language}-${Date.now().toString(36)}`;
-	await fs.mkdir(outputDirectory, { recursive: true });
-	const results: Array<{
-		id: string;
-		audioPath: string;
-		durationMs: number;
-		chunks: Array<{ text: string; endMs: number }>;
-	}> = [];
-	for (const cue of cues) {
-		const line = await speakLine(tts, cue.text, {
-			speakerId,
-			spoken: voice.spoken,
-			kokoro: voice.bundle === "kokoro",
-			signal,
-		});
-		// Nothing in it the voice can say: left out, and the editor reports it.
-		if (!line) continue;
-		const audioPath = path.join(outputDirectory, `narration-${run}-${cue.id}.wav`);
-		// Written by Node rather than sherpa-onnx's writeWave, which opens the path with
-		// narrow file calls (a profile folder such as C:\Users\张三\ fails there) and only
-		// returns false when the file cannot be written.
-		try {
-			await fs.writeFile(audioPath, pcm16Wav(line.samples, line.sampleRate));
-		} catch (error) {
-			await fs.rm(audioPath, { force: true }).catch(() => undefined);
-			throw new Error(
-				`The narration audio could not be saved: ${error instanceof Error ? error.message : String(error)}`,
-			);
+	return use(async (tts) => {
+		// Earlier audio tracks keep pointing at their own files, so never reuse a name.
+		const run = `${language}-${Date.now().toString(36)}`;
+		await fs.mkdir(outputDirectory, { recursive: true });
+		const results: Array<{
+			id: string;
+			audioPath: string;
+			durationMs: number;
+			chunks: Array<{ text: string; endMs: number }>;
+		}> = [];
+		for (const cue of cues) {
+			const line = await speakLine(tts, cue.text, {
+				speakerId,
+				spoken: voice.spoken,
+				kokoro: voice.bundle === "kokoro",
+				signal,
+			});
+			// Nothing in it the voice can say: left out, and the editor reports it.
+			if (!line) continue;
+			const audioPath = path.join(outputDirectory, `narration-${run}-${cue.id}.wav`);
+			// Written by Node rather than sherpa-onnx's writeWave, which opens the path with
+			// narrow file calls (a profile folder such as C:\Users\张三\ fails there) and only
+			// returns false when the file cannot be written.
+			try {
+				await fs.writeFile(audioPath, pcm16Wav(line.samples, line.sampleRate));
+			} catch (error) {
+				await fs.rm(audioPath, { force: true }).catch(() => undefined);
+				throw new Error(
+					`The narration audio could not be saved: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+			results.push({
+				id: cue.id,
+				audioPath,
+				durationMs: line.durationMs,
+				chunks: line.chunks,
+			});
 		}
-		results.push({ id: cue.id, audioPath, durationMs: line.durationMs, chunks: line.chunks });
-	}
-	return results;
+		return results;
+	});
 }
 
 /** Says one short fixed sentence with the chosen voice, for the editor to play. */
@@ -991,13 +1032,15 @@ export async function previewBundledVoice(options: {
 	signal?.throwIfAborted();
 	if (process.platform !== "win32" || process.arch !== "x64")
 		throw new Error("Bundled offline narration voice is available on Windows x64 only.");
-	const { voice, speakerId, load } = await prepareVoice(language, options.speakerId, signal);
-	const line = await speakLine(await load(), narrationPreviewText[language as SpokenLanguage], {
-		speakerId,
-		spoken: voice.spoken,
-		kokoro: voice.bundle === "kokoro",
-		signal,
-	});
+	const { voice, speakerId, use } = await prepareVoice(language, options.speakerId, signal);
+	const line = await use((tts) =>
+		speakLine(tts, narrationPreviewText[language as SpokenLanguage], {
+			speakerId,
+			spoken: voice.spoken,
+			kokoro: voice.bundle === "kokoro",
+			signal,
+		}),
+	);
 	if (!line) throw new Error("Narration preview produced no audio");
 	return { samples: line.samples, sampleRate: line.sampleRate, durationMs: line.durationMs };
 }

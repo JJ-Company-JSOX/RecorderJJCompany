@@ -61,7 +61,8 @@ describe.skipIf(!voiceReady)("the real Kokoro voice", () => {
 			outputDirectory: out,
 			language: "en",
 		});
-		expect(process.cwd()).toBe(await fs.realpath(root));
+		// The main process's working directory is back where it was once the job is over.
+		expect(process.cwd()).toBe(workingDirectory);
 		expect(short.durationMs).toBeGreaterThan(300);
 		expect(long.durationMs).toBeGreaterThan(short.durationMs + 250);
 		const wav = await fs.readFile(long.audioPath);
@@ -74,5 +75,6 @@ describe.skipIf(!voiceReady)("the real Kokoro voice", () => {
 			outputDirectory: out,
 		});
 		expect(mixed.durationMs).toBeGreaterThan(1000);
+		expect(process.cwd()).toBe(workingDirectory);
 	}, 120_000);
 });

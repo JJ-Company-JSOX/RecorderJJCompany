@@ -527,9 +527,17 @@ describe("synthesizing narration", () => {
 		const { root } = await fixture("tts-kokoro", KOKORO, path.join(temp, "张三, 测试"));
 		const canonical = await fs.realpath(root);
 		mocks.createAsync.mockResolvedValue({ generateAsync: mocks.generateAsync });
-		speaking();
+		const cwds: string[] = [];
+		mocks.generateAsync.mockImplementation(async () => {
+			cwds.push(process.cwd());
+			// Lets another job run in between, as the addon's worker thread would.
+			await new Promise((resolve) => setTimeout(resolve, 2));
+			cwds.push(process.cwd());
+			return { samples: tone(1), sampleRate: 8000 };
+		});
 		const cues = [{ id: "suggestion-1", text: "Open Settings." }];
 		const out = path.join(temp, "out");
+		process.chdir(temp);
 		await synthesizeBundledNarration({ cues, outputDirectory: out, language: "en" });
 		expect(mocks.createAsync).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -546,16 +554,44 @@ describe("synthesizing narration", () => {
 				ruleFsts: "date-zh.fst,phone-zh.fst,number-zh.fst",
 			}),
 		);
-		expect(process.cwd()).toBe(canonical);
-		// espeak-ng reads its data again while speaking: the folder is entered again each time.
-		process.chdir(temp);
-		await synthesizeBundledNarration({ cues, outputDirectory: out, language: "en" });
-		expect(process.cwd()).toBe(canonical);
+		// espeak-ng reads its data while speaking: every sentence is said inside the folder, and
+		// the main process's working directory is put back once the job is over.
+		expect(cwds).toEqual([canonical, canonical]);
+		expect(process.cwd()).toBe(temp);
+		// Two windows at once: the second job waits, so the first one putting the working
+		// directory back never pulls it from under the second one's sentences.
+		cwds.length = 0;
+		const twoSentences = [
+			{ id: "suggestion-1", text: "Open Settings. Then choose Dark mode." },
+		];
+		await Promise.all([
+			synthesizeBundledNarration({
+				cues: twoSentences,
+				outputDirectory: out,
+				language: "en",
+			}),
+			previewBundledVoice({ language: "en" }),
+			synthesizeBundledNarration({
+				cues: twoSentences,
+				outputDirectory: out,
+				language: "en",
+			}),
+		]);
+		expect(cwds.length).toBeGreaterThanOrEqual(10);
+		expect(new Set(cwds)).toEqual(new Set([canonical]));
+		expect(process.cwd()).toBe(temp);
 		expect(mocks.createAsync).toHaveBeenCalledTimes(1);
+		// A failed job puts it back as well.
+		mocks.generateAsync.mockRejectedValueOnce(new Error("model failed"));
+		await expect(
+			synthesizeBundledNarration({ cues, outputDirectory: out, language: "en" }),
+		).rejects.toThrow("model failed");
+		expect(process.cwd()).toBe(temp);
 		// A plain folder is still given by full path, and the working directory is left alone.
 		const plain = await fixture("tts-kokoro", KOKORO);
-		process.chdir(temp);
+		cwds.length = 0;
 		await synthesizeBundledNarration({ cues, outputDirectory: out, language: "en" });
+		expect(cwds).toEqual([temp, temp]);
 		expect(mocks.createAsync).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				model: expect.objectContaining({

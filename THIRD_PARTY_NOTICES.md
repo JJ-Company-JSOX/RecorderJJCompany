@@ -3,7 +3,9 @@
 ## Complete offline tools test edition
 
 The separate tools edition adds Silero VAD (MIT), RNNoise (BSD-3-Clause and its
-bundled model notice), sherpa-onnx (Apache-2.0), ONNX Runtime CPU (MIT), Whisper
+bundled model notice), sherpa-onnx (its own code Apache-2.0; its `sherpa-onnx-c-api.dll`
+also contains eSpeak NG, GPL-3.0-or-later, and piper-phonemize, MIT, as described under
+the offline AI edition below), ONNX Runtime CPU (MIT), Whisper
 base INT8 weights (MIT), PySceneDetect (BSD-3-Clause), embedded Python (PSF),
 OpenCV headless (Apache-2.0 and bundled decoder notices), NumPy (BSD-3-Clause),
 Click (BSD-3-Clause), platformdirs (MIT), tqdm (MPL-2.0/MIT) and colorama
@@ -28,9 +30,15 @@ from misaki data, Apache-2.0, and pypinyin data, MIT), icefall text-normalizatio
 (Apache-2.0) and eSpeak NG data files (`espeak-ng-data`, GPL-3.0-or-later; GPL-3.0 and this
 application's AGPL-3.0 may be combined under section 13 of each license, and the
 corresponding eSpeak NG source revision is named in the voice's MODEL-LICENSE.txt), sherpa-onnx and its prebuilt
-`sherpa-onnx-node` / `sherpa-onnx-win-x64` Node addon (Apache-2.0) and the ONNX
-Runtime library bundled with that addon (MIT), plus Silero VAD (MIT), RNNoise
-(BSD-3-Clause) and the shared sherpa-onnx C API runtime with its MSVC notices.
+`sherpa-onnx-node` / `sherpa-onnx-win-x64` Node addon (sherpa-onnx's own code
+Apache-2.0; the addon's native library `sherpa-onnx-c-api.dll` has the eSpeak NG library
+and its ucd-tools compiled in, GPL-3.0-or-later, built from the same csukuangfj/espeak-ng
+`ed530aa` source as the data, which turns every non-Chinese word the voice says into
+phonemes, and piper-phonemize, MIT, csukuangfj/piper-phonemize `f3ff95a`; both license
+texts are in the voice's MODEL-LICENSE.txt) and the ONNX Runtime library bundled with
+that addon (MIT), plus Silero VAD (MIT), RNNoise (BSD-3-Clause) and the shared sherpa-onnx
+C API runtime (the same `sherpa-onnx-c-api.dll`, so the same eSpeak NG and piper-phonemize
+code) with its MSVC notices.
 Its screen-text reader adds the PaddleOCR PP-OCRv6 small detection and
 recognition weights (Apache-2.0, Baidu / PaddleOCR rights holders) in the ONNX
 conversion distributed with RapidOCR 3.10.0 (Apache-2.0, copyright 2021 RapidOCR
@@ -42,9 +50,10 @@ WebAssembly runtime ships with ONNX Runtime's `ThirdPartyNotices.txt`). Exact re
 The Windows resource bundles contain the complete model/runtime license texts,
 embedded component notices and LLVM-MinGW toolchain notices. These component licenses
 do not change Recordly's AGPL-3.0 license or the actual shipped FFmpeg executable's GPL
-obligations; the eSpeak NG data adds the same kind of GPL-3.0 source obligation (its
-compiled dictionaries need their source published under this project's control before an
-external release); see [LICENSE_COMPLIANCE.md](LICENSE_COMPLIANCE.md).
+obligations; eSpeak NG, both its data and the library compiled into `sherpa-onnx-c-api.dll`,
+adds the same kind of GPL-3.0 source obligation (the compiled dictionaries and the DLL need
+their corresponding source published under this project's control before an external
+release); see [LICENSE_COMPLIANCE.md](LICENSE_COMPLIANCE.md).
 
 ## Voom
 

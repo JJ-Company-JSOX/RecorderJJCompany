@@ -193,15 +193,45 @@ async function writeManifest(directory, modelName, names) {
 		JSON.stringify({ version: 1, modelName, files }, null, 2),
 	);
 }
+/** sherpa-onnx's own code is Apache-2.0; its native library has these compiled in. */
+const engineLibraries = lock.engineStaticLibraries
+	.map((library) => `${library.name} (${library.license}), source ${library.source}`)
+	.join("; ");
 const notice = (voice, label, extra = "") =>
-	`Jsox offline narration speech synthesis (${label})\nModel: ${voice.modelName}\nModel license: ${voice.modelLicense}\nSource: ${voice.modelSource}\n${extra}Synthesis engine: sherpa-onnx ${lock.runtimeVersion} (Apache-2.0), https://github.com/k2-fsa/sherpa-onnx\nNode bindings: ${lock.npm.sherpaOnnxNode}, prebuilt native addon: ${lock.npm.sherpaOnnxWinX64}\nNo Python, Ollama, or network service is used by installed customers.\n`;
+	`Jsox offline narration speech synthesis (${label})\nModel: ${voice.modelName}\nModel license: ${voice.modelLicense}\nSource: ${voice.modelSource}\n${extra}Synthesis engine: sherpa-onnx ${lock.runtimeVersion} (Apache-2.0), https://github.com/k2-fsa/sherpa-onnx\nCompiled into its native library sherpa-onnx-c-api.dll: ${engineLibraries}\nNode bindings: ${lock.npm.sherpaOnnxNode}, prebuilt native addon: ${lock.npm.sherpaOnnxWinX64}\nNo Python, Ollama, or network service is used by installed customers.\n`;
+
+const archiveNotice = (voice) =>
+	notice(
+		voice,
+		voice.languages.join(", "),
+		`Archive: ${voice.archive.url}\nArchive SHA-256: ${voice.archive.sha256}\nConversion scripts: ${voice.converter}\n`,
+	);
+const licenseHeader = (license) => `===== ${license.title} =====\n${license.url}\n\n`;
+/**
+ * The generated NOTICE and MODEL-LICENSE must say what the lock says now: the manifest only
+ * proves they were not changed since an earlier run, which may have recorded less.
+ */
+async function verifyGenerated(directory, voice) {
+	const read = (name) => fs.readFile(path.join(directory, name), "utf8");
+	const licenses = await read("MODEL-LICENSE.txt");
+	let at = licenses.startsWith(`${voice.licenseSummary.join("\n")}\n\n`) ? 0 : -1;
+	for (const license of voice.licenses)
+		if (at >= 0) at = licenses.indexOf(licenseHeader(license), at);
+	if (at < 0 || (await read("NOTICE.txt")) !== archiveNotice(voice))
+		throw new Error(
+			`${voice.directory}: NOTICE.txt or MODEL-LICENSE.txt is out of date with scripts/offline-tts.lock.json. Run npm run prepare:offline-tts again.`,
+		);
+}
 
 /** One release archive, verified, unpacked, and only the files the voice needs copied out. */
 async function prepareArchiveVoice(name, voice) {
 	const directory = path.join(vendor, voice.directory);
 	const folders = voice.folders ?? [];
 	const required = [...voice.artifacts.map((a) => a.file), ...GENERATED];
-	if (verifyOnly) return verify(directory, voice.artifacts, folders);
+	if (verifyOnly) {
+		await verify(directory, voice.artifacts, folders);
+		return verifyGenerated(directory, voice);
+	}
 	const target = (artifact) => path.join(directory, ...artifact.file.split("/"));
 	const missing = [];
 	for (const artifact of voice.artifacts)
@@ -229,23 +259,15 @@ async function prepareArchiveVoice(name, voice) {
 	await refuseUnexpected(directory, new Set([...required, "manifest.json"]));
 	const licenses = [];
 	for (const license of voice.licenses)
-		licenses.push(
-			`===== ${license.title} =====\n${license.url}\n\n${await fetchText(license)}`,
-		);
+		licenses.push(`${licenseHeader(license)}${await fetchText(license)}`);
 	await fs.writeFile(
 		path.join(directory, "MODEL-LICENSE.txt"),
 		`${voice.licenseSummary.join("\n")}\n\n${licenses.join("\n\n")}`,
 	);
-	await fs.writeFile(
-		path.join(directory, "NOTICE.txt"),
-		notice(
-			voice,
-			voice.languages.join(", "),
-			`Archive: ${voice.archive.url}\nArchive SHA-256: ${voice.archive.sha256}\nConversion scripts: ${voice.converter}\n`,
-		),
-	);
+	await fs.writeFile(path.join(directory, "NOTICE.txt"), archiveNotice(voice));
 	await writeManifest(directory, voice.modelName, required);
 	await verify(directory, voice.artifacts, folders);
+	await verifyGenerated(directory, voice);
 }
 
 /** The older voices: one pinned download per file. */

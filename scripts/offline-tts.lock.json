@@ -5,6 +5,18 @@
 		"sherpaOnnxNode": "sherpa-onnx-node@1.13.8",
 		"sherpaOnnxWinX64": "sherpa-onnx-win-x64@1.13.8"
 	},
+	"engineStaticLibraries": [
+		{
+			"name": "eSpeak NG, with its ucd-tools",
+			"license": "GPL-3.0-or-later",
+			"source": "https://github.com/csukuangfj/espeak-ng/tree/ed530aa113046142eb5115cf2fc9157854d0ffe1"
+		},
+		{
+			"name": "piper-phonemize",
+			"license": "MIT",
+			"source": "https://github.com/csukuangfj/piper-phonemize/tree/f3ff95afc03640bc1399e113e83361192a2fafb4"
+		}
+	],
 	"voices": {
 		"kokoro": {
 			"directory": "tts-kokoro",
@@ -34,6 +46,13 @@
 				"application's AGPL-3.0 (section 13 of each license). Corresponding source:",
 				"https://github.com/csukuangfj/espeak-ng/tree/ed530aa113046142eb5115cf2fc9157854d0ffe1",
 				"",
+				"The engine that speaks this voice is sherpa-onnx 1.13.8 (its own code Apache-2.0). Its native",
+				"library sherpa-onnx-c-api.dll (in node_modules/sherpa-onnx-win-x64, next to sherpa-onnx.node)",
+				"has two more components compiled in: the eSpeak NG library with its ucd-tools,",
+				"GPL-3.0-or-later, from the same source revision as espeak-ng-data above (it turns the",
+				"English words into phonemes); and piper-phonemize, MIT, source",
+				"https://github.com/csukuangfj/piper-phonemize/tree/f3ff95afc03640bc1399e113e83361192a2fafb4",
+				"",
 				"Kokoro-82M training data, as its author's model card describes it: public-domain audio,",
 				"audio licensed under Apache, MIT and similar licenses, synthetic audio from closed TTS",
 				"models, and CC BY audio the author credits: Koniwa tnc (CC BY 3.0) and SIWIS (CC BY 4.0)."
@@ -50,9 +69,14 @@
 					"sha256": "1e6c90014b4912815c296ee64bb6f6280af47e6d4c5d80e86232dfc5defe764c"
 				},
 				{
-					"title": "GNU General Public License v3 (or later): espeak-ng-data, from eSpeak NG as built into sherpa-onnx 1.13.8 (source: https://github.com/csukuangfj/espeak-ng/tree/ed530aa113046142eb5115cf2fc9157854d0ffe1)",
+					"title": "GNU General Public License v3 (or later): espeak-ng-data, and the eSpeak NG library with its ucd-tools compiled into sherpa-onnx 1.13.8 (sherpa-onnx-c-api.dll) (source: https://github.com/csukuangfj/espeak-ng/tree/ed530aa113046142eb5115cf2fc9157854d0ffe1)",
 					"url": "https://raw.githubusercontent.com/csukuangfj/espeak-ng/ed530aa113046142eb5115cf2fc9157854d0ffe1/COPYING",
 					"sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+				},
+				{
+					"title": "MIT License: piper-phonemize, compiled into sherpa-onnx 1.13.8 (sherpa-onnx-c-api.dll) (source: https://github.com/csukuangfj/piper-phonemize/tree/f3ff95afc03640bc1399e113e83361192a2fafb4)",
+					"url": "https://raw.githubusercontent.com/csukuangfj/piper-phonemize/f3ff95afc03640bc1399e113e83361192a2fafb4/LICENSE.md",
+					"sha256": "13746d509d74e55ea2265fbef204bb7cdbf84a8315b0207e988326cb54387028"
 				}
 			],
 			"artifacts": [

@@ -289,6 +289,26 @@ async function prepareFileVoice(language, voice) {
 	await verify(directory, voice.artifacts);
 }
 
+/**
+ * The installed engine must be the one the lock, the eSpeak NG data and the license records
+ * describe: a newer sherpa-onnx has its own eSpeak NG compiled in, which may not read this
+ * data (sherpa-onnx then ends the process) and would make the NOTICE wrong.
+ */
+async function checkInstalledEngine() {
+	for (const pinned of Object.values(lock.npm)) {
+		const name = pinned.slice(0, pinned.lastIndexOf("@"));
+		const file = path.join(root, "node_modules", name, "package.json");
+		const installed = JSON.parse(await fs.readFile(file, "utf8").catch(() => "null"));
+		// The Windows addon is installed only on Windows x64; the packaged smoke test checks it.
+		if (!installed && name.startsWith("sherpa-onnx-win-")) continue;
+		if (`${installed?.name}@${installed?.version}` !== pinned)
+			throw new Error(
+				`${installed ? `${name}@${installed.version} is installed` : `${name} is not installed`}; scripts/offline-tts.lock.json pins ${pinned}. Run npm ci.`,
+			);
+	}
+}
+
+await checkInstalledEngine();
 for (const [name, voice] of Object.entries(lock.voices)) await prepareArchiveVoice(name, voice);
 if (withLegacy)
 	for (const [language, voice] of Object.entries(lock.legacyVoices))

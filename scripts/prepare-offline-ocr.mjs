@@ -198,6 +198,20 @@ async function verify() {
 		)
 			throw new Error(`Invalid offline OCR asset: ${entry.path}`);
 	}
+	// The package takes every model, text and runtime file in the folder, so a file the
+	// manifest does not list would ship unverified.
+	const expected = new Set([...required, "manifest.json"]);
+	for (const entry of await fs.readdir(destination, { recursive: true, withFileTypes: true })) {
+		if (entry.isDirectory()) continue;
+		const relative = path
+			.relative(destination, path.join(entry.parentPath ?? entry.path, entry.name))
+			.split(path.sep)
+			.join("/");
+		if (!expected.has(relative))
+			throw new Error(
+				`Unexpected file in ${lock.directory}: ${relative}. Remove it or run npm run prepare:offline-ocr again.`,
+			);
+	}
 }
 
 if (!verifyOnly) {

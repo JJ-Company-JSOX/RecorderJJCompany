@@ -129,16 +129,41 @@ const safePath = (file, folders) =>
 		: file.includes("/") &&
 			folders.includes(file.split("/")[0]) &&
 			file.split("/").every((part) => SAFE_NAME.test(part));
-async function verify(directory, required, folders = []) {
+/** Written by this script next to the pinned files. */
+const GENERATED = ["MODEL-LICENSE.txt", "NOTICE.txt"];
+/**
+ * Every file in the voice folder must be one the lock or this script put there: the offline
+ * package ships the whole folder, so a leftover would ship unverified.
+ */
+async function refuseUnexpected(directory, expected) {
+	for (const entry of await fs.readdir(directory, { recursive: true, withFileTypes: true })) {
+		if (entry.isDirectory()) continue;
+		const relative = path
+			.relative(directory, path.join(entry.parentPath ?? entry.path, entry.name))
+			.split(path.sep)
+			.join("/");
+		if (!expected.has(relative))
+			throw new Error(
+				`Unexpected file in ${path.basename(directory)}: ${relative}. Remove it and prepare again.`,
+			);
+	}
+}
+/** The folder holds exactly the pinned files (as pinned) plus the generated ones, nothing else. */
+async function verify(directory, artifacts, folders = []) {
 	const manifest = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8"));
+	const required = [...artifacts.map((artifact) => artifact.file), ...GENERATED];
 	if (
 		manifest.version !== 1 ||
 		!Array.isArray(manifest.files) ||
-		required.some((file) => !manifest.files.some((entry) => entry.path === file))
+		manifest.files.length !== required.length ||
+		required.some((file) => !manifest.files.some((entry) => entry?.path === file))
 	)
-		throw new Error(`Incomplete offline TTS manifest: ${directory}`);
+		throw new Error(
+			`Offline TTS manifest does not match scripts/offline-tts.lock.json: ${directory}`,
+		);
 	const seen = new Set();
 	for (const entry of manifest.files) {
+		const pinned = artifacts.find((artifact) => artifact.file === entry.path);
 		if (
 			typeof entry.path !== "string" ||
 			!safePath(entry.path, folders) ||
@@ -146,6 +171,7 @@ async function verify(directory, required, folders = []) {
 			!Number.isSafeInteger(entry.bytes) ||
 			entry.bytes < 1 ||
 			!/^[a-f0-9]{64}$/.test(entry.sha256) ||
+			(pinned && (pinned.size !== entry.bytes || pinned.sha256 !== entry.sha256)) ||
 			!(await valid(path.join(directory, ...entry.path.split("/")), {
 				size: entry.bytes,
 				sha256: entry.sha256,
@@ -154,6 +180,7 @@ async function verify(directory, required, folders = []) {
 			throw new Error(`Invalid offline TTS asset: ${entry.path}`);
 		seen.add(entry.path.toLowerCase());
 	}
+	await refuseUnexpected(directory, new Set([...required, "manifest.json"]));
 }
 async function writeManifest(directory, modelName, names) {
 	const files = [];
@@ -173,8 +200,8 @@ const notice = (voice, label, extra = "") =>
 async function prepareArchiveVoice(name, voice) {
 	const directory = path.join(vendor, voice.directory);
 	const folders = voice.folders ?? [];
-	const required = [...voice.artifacts.map((a) => a.file), "MODEL-LICENSE.txt", "NOTICE.txt"];
-	if (verifyOnly) return verify(directory, required, folders);
+	const required = [...voice.artifacts.map((a) => a.file), ...GENERATED];
+	if (verifyOnly) return verify(directory, voice.artifacts, folders);
 	const target = (artifact) => path.join(directory, ...artifact.file.split("/"));
 	const missing = [];
 	for (const artifact of voice.artifacts)
@@ -196,25 +223,10 @@ async function prepareArchiveVoice(name, voice) {
 		}
 		await fs.rm(unpacked, { recursive: true, force: true });
 	}
-	const listed = new Set(voice.artifacts.map((a) => a.file));
 	for (const artifact of voice.artifacts)
 		if (!(await valid(target(artifact), artifact)))
 			throw new Error(`Invalid offline TTS asset: ${artifact.file}`);
-	// A file left over from another version would ship unverified: refuse it.
-	for (const entry of await fs.readdir(directory, { recursive: true, withFileTypes: true })) {
-		if (!entry.isFile()) continue;
-		const relative = path
-			.relative(directory, path.join(entry.parentPath ?? entry.path, entry.name))
-			.split(path.sep)
-			.join("/");
-		if (
-			!listed.has(relative) &&
-			!["MODEL-LICENSE.txt", "NOTICE.txt", "manifest.json"].includes(relative)
-		)
-			throw new Error(
-				`Unexpected file in ${voice.directory}: ${relative}. Remove it and prepare again.`,
-			);
-	}
+	await refuseUnexpected(directory, new Set([...required, "manifest.json"]));
 	const licenses = [];
 	for (const license of voice.licenses)
 		licenses.push(
@@ -233,14 +245,14 @@ async function prepareArchiveVoice(name, voice) {
 		),
 	);
 	await writeManifest(directory, voice.modelName, required);
-	await verify(directory, required, folders);
+	await verify(directory, voice.artifacts, folders);
 }
 
 /** The older voices: one pinned download per file. */
 async function prepareFileVoice(language, voice) {
 	const directory = path.join(vendor, voice.directory);
-	const required = [...voice.artifacts.map((a) => a.file), "MODEL-LICENSE.txt", "NOTICE.txt"];
-	if (verifyOnly) return verify(directory, required);
+	const required = [...voice.artifacts.map((a) => a.file), ...GENERATED];
+	if (verifyOnly) return verify(directory, voice.artifacts);
 	await fs.mkdir(directory, { recursive: true });
 	for (const entry of voice.artifacts) await download(entry, path.join(directory, entry.file));
 	await fs.writeFile(
@@ -252,7 +264,7 @@ async function prepareFileVoice(language, voice) {
 		notice(voice, language, `Revision: ${voice.modelRevision}\n`),
 	);
 	await writeManifest(directory, voice.modelName, required);
-	await verify(directory, required);
+	await verify(directory, voice.artifacts);
 }
 
 for (const [name, voice] of Object.entries(lock.voices)) await prepareArchiveVoice(name, voice);

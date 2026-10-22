@@ -1,0 +1,84 @@
+{
+	"version": 1,
+	"directory": "ocr",
+	"modelName": "PP-OCRv6 small (RapidOCR ONNX)",
+	"modelLicense": "Apache-2.0",
+	"modelSource": "https://github.com/RapidAI/RapidOCR",
+	"upstreamModels": [
+		"https://github.com/PaddlePaddle/PaddleOCR (PP-OCRv6_small_det)",
+		"https://github.com/PaddlePaddle/PaddleOCR (PP-OCRv6_small_rec)"
+	],
+	"wheel": {
+		"package": "rapidocr",
+		"version": "3.10.0",
+		"file": "rapidocr-3.10.0-py3-none-any.whl",
+		"size": 27288134,
+		"sha256": "2fc34e26cd0f48514804a94f8832283039c7334076bff60768b1fed9ad068050",
+		"url": "https://files.pythonhosted.org/packages/59/07/203065283bba0c5e9c10af3602dc25ab3e59ee54dc2d1d22c8faeabf5ed8/rapidocr-3.10.0-py3-none-any.whl",
+		"files": [
+			{
+				"file": "PP-OCRv6_det_small.onnx",
+				"wheelPath": "rapidocr/models/PP-OCRv6_det_small.onnx",
+				"size": 9929594,
+				"sha256": "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
+			},
+			{
+				"file": "PP-OCRv6_rec_small.onnx",
+				"wheelPath": "rapidocr/models/PP-OCRv6_rec_small.onnx",
+				"size": 21234383,
+				"sha256": "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"
+			},
+			{
+				"file": "MODEL-LICENSE.txt",
+				"wheelPath": "rapidocr-3.10.0.dist-info/licenses/LICENSE",
+				"size": 11422,
+				"sha256": "3e0af25fdd06aa9586ae97adb00ea927ebe5a3805ac77d2d3a81ce5f55693333"
+			},
+			{
+				"file": "RAPIDOCR-MODEL-LICENSES.md",
+				"wheelPath": "rapidocr-3.10.0.dist-info/licenses/MODEL_LICENSES.md",
+				"size": 8398,
+				"sha256": "c5fd0e8603d3df743355b546121e6fe0f4ef8ff455c5a85c1681fd3ae520e153"
+			}
+		]
+	},
+	"dictionary": {
+		"file": "keys.txt",
+		"model": "PP-OCRv6_rec_small.onnx",
+		"metadataKey": "character",
+		"entries": 18708,
+		"size": 74946,
+		"sha256": "f7aa897ca828a4c7c9e2739c30f9161a33306d532f020bcdb91dcfb664a5507e"
+	},
+	"runtime": {
+		"package": "onnxruntime-web",
+		"version": "1.30.0",
+		"license": "MIT",
+		"files": [
+			{
+				"file": "runtime/ort-wasm-simd-threaded.mjs",
+				"packagePath": "dist/ort-wasm-simd-threaded.mjs",
+				"size": 24381,
+				"sha256": "e13f7f94fc51b4ca72b12faeb1ee95f4ace6dfbc8939bc718aabdc0a27c4299b"
+			},
+			{
+				"file": "runtime/ort-wasm-simd-threaded.wasm",
+				"packagePath": "dist/ort-wasm-simd-threaded.wasm",
+				"size": 14239897,
+				"sha256": "3398c10d07d229bd91b364548e130e0e51a8e5704b88c7c083ebbeb78842dee2"
+			},
+			{
+				"file": "runtime/ONNXRUNTIME-LICENSE.txt",
+				"url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.30.0/LICENSE",
+				"size": 1073,
+				"sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+			},
+			{
+				"file": "runtime/ONNXRUNTIME-THIRD-PARTY-NOTICES.txt",
+				"url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.30.0/ThirdPartyNotices.txt",
+				"size": 338088,
+				"sha256": "143764b952fdb1a7c69ce653bfba74a7744d6a8a573bfb73e235fba356c83de3"
+			}
+		]
+	}
+}

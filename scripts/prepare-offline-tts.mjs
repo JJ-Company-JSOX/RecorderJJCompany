@@ -1,53 +1,135 @@
 // Build-machine only. Installed applications never fetch a model or an npm package.
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const lock = JSON.parse(await fs.readFile(path.join(root, "scripts/offline-tts.lock.json"), "utf8"));
+const lock = JSON.parse(
+	await fs.readFile(path.join(root, "scripts/offline-tts.lock.json"), "utf8"),
+);
 const verifyOnly = process.argv.includes("--verify");
+// The older single-language VITS voices are only a fallback for developer folders and
+// packages built before Kokoro; new packages ship Kokoro alone.
+const withLegacy = process.argv.includes("--legacy-vits");
+const vendor = path.join(root, "vendor/offline-ai/win32-x64");
+const temporary = path.join(root, ".tmp/offline-tts");
+
 async function hash(file) {
 	const h = createHash("sha256");
 	for await (const chunk of createReadStream(file)) h.update(chunk);
 	return h.digest("hex");
 }
 async function valid(file, entry) {
-	return (
-		(await fs.stat(file).catch(() => null))?.size === entry.size &&
-		(await hash(file)) === entry.sha256
-	);
+	const stat = await fs.lstat(file).catch(() => null);
+	return !!stat?.isFile() && stat.size === entry.size && (await hash(file)) === entry.sha256;
 }
+/** Size-capped, resumable download with retries; the result must match the pinned SHA-256. */
 async function download(entry, file) {
 	if (await valid(file, entry)) return;
 	await fs.mkdir(path.dirname(file), { recursive: true });
 	const partial = `${file}.download`;
-	for (let attempt = 0; attempt < 3; attempt++) {
+	for (let attempt = 0; attempt < 4; attempt++) {
+		const controller = new AbortController();
+		let lastProgress = Date.now();
+		const watchdog = setInterval(() => {
+			if (Date.now() - lastProgress > 60000) controller.abort(Error("Download stalled"));
+		}, 5000);
 		try {
-			console.log(`Preparing pinned TTS asset: ${path.basename(file)}`);
-			const response = await fetch(entry.url, { signal: AbortSignal.timeout(600000) });
+			let offset = (await fs.stat(partial).catch(() => null))?.size ?? 0;
+			if (offset >= entry.size) {
+				if (await valid(partial, entry)) break;
+				offset = 0;
+			}
+			console.log(
+				`Preparing pinned TTS asset: ${path.basename(file)}${offset ? ` (resuming at ${offset} bytes)` : ""}`,
+			);
+			const response = await fetch(entry.url, {
+				headers: offset ? { Range: `bytes=${offset}-` } : {},
+				signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60 * 60 * 1000)]),
+			});
 			if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
-			let received = 0;
-			const limiter = async function* (source) {
-				for await (const chunk of source) {
+			if (response.status === 206) {
+				if (!response.headers.get("content-range")?.startsWith(`bytes ${offset}-`))
+					throw new Error("Invalid resumed response");
+			} else offset = 0;
+			let received = offset;
+			let announced = offset;
+			const limiter = new Transform({
+				transform(chunk, _encoding, done) {
+					lastProgress = Date.now();
 					received += chunk.length;
-					if (received > entry.size) throw new Error("Oversized asset response");
-					yield chunk;
-				}
-			};
-			await pipeline(Readable.fromWeb(response.body), limiter, createWriteStream(partial));
-			if (!(await valid(partial, entry))) throw new Error(`Checksum mismatch: ${path.basename(file)}`);
-			await fs.rename(partial, file);
-			return;
+					if (received > entry.size) return done(new Error("Oversized asset response"));
+					if (received - announced > 64 * 1024 ** 2) {
+						announced = received;
+						console.log(
+							`${path.basename(file)}: ${Math.floor((received / entry.size) * 100)}%`,
+						);
+					}
+					done(null, chunk);
+				},
+			});
+			await pipeline(
+				Readable.fromWeb(response.body),
+				limiter,
+				createWriteStream(partial, { flags: offset ? "a" : "w" }),
+			);
+			break;
 		} catch (error) {
-			if (attempt === 2) throw error;
+			// An oversized or wrong file is not resumed from.
+			if (error instanceof Error && error.message === "Oversized asset response")
+				await fs.rm(partial, { force: true });
+			if (attempt === 3) throw error;
+			console.log(`Retrying ${path.basename(file)} (${attempt + 1}/3)`);
+		} finally {
+			clearInterval(watchdog);
 		}
 	}
+	if (!(await valid(partial, entry))) {
+		await fs.rm(partial, { force: true });
+		throw new Error(`Checksum mismatch: ${path.basename(file)}`);
+	}
+	await fs.rename(partial, file);
 }
-async function verify(directory, required) {
+async function fetchText(entry) {
+	const response = await fetch(entry.url, { signal: AbortSignal.timeout(60000) });
+	if (!response.ok) throw new Error(`License download failed: ${response.status} ${entry.url}`);
+	const text = await response.text();
+	if (entry.sha256 && createHash("sha256").update(text).digest("hex") !== entry.sha256)
+		throw new Error(`License checksum mismatch: ${entry.url}`);
+	return text;
+}
+/** Windows 10/11 ship bsdtar as System32\tar.exe; it reads .tar.bz2. Git's tar may not. */
+function tar() {
+	if (process.platform !== "win32") return "tar";
+	return path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
+}
+function extract(archive, destination) {
+	try {
+		execFileSync(tar(), ["-xf", archive, "-C", destination], {
+			windowsHide: true,
+			stdio: ["ignore", "ignore", "pipe"],
+		});
+	} catch (error) {
+		throw new Error(
+			`Could not extract ${path.basename(archive)} with ${tar()}. Windows 10/11 include tar.exe in System32; on Linux or macOS install tar with bzip2 support. ${error instanceof Error ? error.message : ""}`,
+		);
+	}
+}
+
+/** Mirrors the app: plain top-level names, or safe parts inside a listed folder. */
+const SAFE_NAME = /^[A-Za-z0-9_!+-](?:[A-Za-z0-9_.!+ -]*[A-Za-z0-9_!+-])?$/;
+const safePath = (file, folders) =>
+	/^[A-Za-z0-9_.-]+$/.test(file) && !file.includes("..")
+		? true
+		: file.includes("/") &&
+			folders.includes(file.split("/")[0]) &&
+			file.split("/").every((part) => SAFE_NAME.test(part));
+async function verify(directory, required, folders = []) {
 	const manifest = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8"));
 	if (
 		manifest.version !== 1 ||
@@ -58,51 +140,125 @@ async function verify(directory, required) {
 	const seen = new Set();
 	for (const entry of manifest.files) {
 		if (
-			!/^[A-Za-z0-9_.-]+$/.test(entry.path) ||
-			entry.path.includes("..") ||
+			typeof entry.path !== "string" ||
+			!safePath(entry.path, folders) ||
 			seen.has(entry.path.toLowerCase()) ||
 			!Number.isSafeInteger(entry.bytes) ||
 			entry.bytes < 1 ||
 			!/^[a-f0-9]{64}$/.test(entry.sha256) ||
-			!(await valid(path.join(directory, entry.path), { size: entry.bytes, sha256: entry.sha256 }))
+			!(await valid(path.join(directory, ...entry.path.split("/")), {
+				size: entry.bytes,
+				sha256: entry.sha256,
+			}))
 		)
 			throw new Error(`Invalid offline TTS asset: ${entry.path}`);
 		seen.add(entry.path.toLowerCase());
 	}
 }
-for (const [language, voice] of Object.entries(lock.voices)) {
-	const directory = path.join(root, "vendor/offline-ai/win32-x64", voice.directory);
-	const required = [...voice.artifacts.map((a) => a.file), "MODEL-LICENSE.txt", "NOTICE.txt"];
-	if (verifyOnly) {
-		await verify(directory, required);
-		continue;
-	}
-	await fs.mkdir(directory, { recursive: true });
-	for (const entry of voice.artifacts) await download(entry, path.join(directory, entry.file));
-	const license = await fetch(voice.modelLicenseUrl, { signal: AbortSignal.timeout(60000) });
-	if (!license.ok) throw new Error(`Model license download failed: ${license.status}`);
-	const licenseText = await license.text();
-	if (
-		voice.modelLicenseSha256 &&
-		createHash("sha256").update(licenseText).digest("hex") !== voice.modelLicenseSha256
-	)
-		throw new Error(`Model license checksum mismatch: ${language}`);
-	await fs.writeFile(path.join(directory, "MODEL-LICENSE.txt"), licenseText);
-	await fs.writeFile(
-		path.join(directory, "NOTICE.txt"),
-		`Jsox offline narration speech synthesis (${language})\nModel: ${voice.modelName}\nModel license: ${voice.modelLicense}\nSource: ${voice.modelSource}\nRevision: ${voice.modelRevision}\nSynthesis engine: sherpa-onnx ${lock.runtimeVersion} (Apache-2.0), https://github.com/k2-fsa/sherpa-onnx\nNode bindings: ${lock.npm.sherpaOnnxNode}, prebuilt native addon: ${lock.npm.sherpaOnnxWinX64}\nNo Python, Ollama, or network service is used by installed customers.\n`,
-	);
+async function writeManifest(directory, modelName, names) {
 	const files = [];
-	for (const name of required) {
-		const file = path.join(directory, name);
+	for (const name of names) {
+		const file = path.join(directory, ...name.split("/"));
 		files.push({ path: name, bytes: (await fs.stat(file)).size, sha256: await hash(file) });
 	}
 	await fs.writeFile(
 		path.join(directory, "manifest.json"),
-		JSON.stringify({ version: 1, modelName: voice.modelName, files }, null, 2),
+		JSON.stringify({ version: 1, modelName, files }, null, 2),
 	);
+}
+const notice = (voice, label, extra = "") =>
+	`Jsox offline narration speech synthesis (${label})\nModel: ${voice.modelName}\nModel license: ${voice.modelLicense}\nSource: ${voice.modelSource}\n${extra}Synthesis engine: sherpa-onnx ${lock.runtimeVersion} (Apache-2.0), https://github.com/k2-fsa/sherpa-onnx\nNode bindings: ${lock.npm.sherpaOnnxNode}, prebuilt native addon: ${lock.npm.sherpaOnnxWinX64}\nNo Python, Ollama, or network service is used by installed customers.\n`;
+
+/** One release archive, verified, unpacked, and only the files the voice needs copied out. */
+async function prepareArchiveVoice(name, voice) {
+	const directory = path.join(vendor, voice.directory);
+	const folders = voice.folders ?? [];
+	const required = [...voice.artifacts.map((a) => a.file), "MODEL-LICENSE.txt", "NOTICE.txt"];
+	if (verifyOnly) return verify(directory, required, folders);
+	const target = (artifact) => path.join(directory, ...artifact.file.split("/"));
+	const missing = [];
+	for (const artifact of voice.artifacts)
+		if (!(await valid(target(artifact), artifact))) missing.push(artifact);
+	if (missing.length) {
+		const archive = path.join(temporary, path.basename(new URL(voice.archive.url).pathname));
+		await download(voice.archive, archive);
+		const unpacked = path.join(temporary, `${name}-unpacked`);
+		await fs.rm(unpacked, { recursive: true, force: true });
+		await fs.mkdir(unpacked, { recursive: true });
+		console.log(`Extracting ${path.basename(archive)}`);
+		extract(archive, unpacked);
+		for (const artifact of missing) {
+			const source = path.join(unpacked, voice.archive.root, ...artifact.file.split("/"));
+			if (!(await valid(source, artifact)))
+				throw new Error(`Archive file missing or not as pinned: ${artifact.file}`);
+			await fs.mkdir(path.dirname(target(artifact)), { recursive: true });
+			await fs.copyFile(source, target(artifact));
+		}
+		await fs.rm(unpacked, { recursive: true, force: true });
+	}
+	const listed = new Set(voice.artifacts.map((a) => a.file));
+	for (const artifact of voice.artifacts)
+		if (!(await valid(target(artifact), artifact)))
+			throw new Error(`Invalid offline TTS asset: ${artifact.file}`);
+	// A file left over from another version would ship unverified: refuse it.
+	for (const entry of await fs.readdir(directory, { recursive: true, withFileTypes: true })) {
+		if (!entry.isFile()) continue;
+		const relative = path
+			.relative(directory, path.join(entry.parentPath ?? entry.path, entry.name))
+			.split(path.sep)
+			.join("/");
+		if (
+			!listed.has(relative) &&
+			!["MODEL-LICENSE.txt", "NOTICE.txt", "manifest.json"].includes(relative)
+		)
+			throw new Error(
+				`Unexpected file in ${voice.directory}: ${relative}. Remove it and prepare again.`,
+			);
+	}
+	const licenses = [];
+	for (const license of voice.licenses)
+		licenses.push(
+			`===== ${license.title} =====\n${license.url}\n\n${await fetchText(license)}`,
+		);
+	await fs.writeFile(
+		path.join(directory, "MODEL-LICENSE.txt"),
+		`${voice.licenseSummary.join("\n")}\n\n${licenses.join("\n\n")}`,
+	);
+	await fs.writeFile(
+		path.join(directory, "NOTICE.txt"),
+		notice(
+			voice,
+			voice.languages.join(", "),
+			`Archive: ${voice.archive.url}\nArchive SHA-256: ${voice.archive.sha256}\nConversion scripts: ${voice.converter}\n`,
+		),
+	);
+	await writeManifest(directory, voice.modelName, required);
+	await verify(directory, required, folders);
+}
+
+/** The older voices: one pinned download per file. */
+async function prepareFileVoice(language, voice) {
+	const directory = path.join(vendor, voice.directory);
+	const required = [...voice.artifacts.map((a) => a.file), "MODEL-LICENSE.txt", "NOTICE.txt"];
+	if (verifyOnly) return verify(directory, required);
+	await fs.mkdir(directory, { recursive: true });
+	for (const entry of voice.artifacts) await download(entry, path.join(directory, entry.file));
+	await fs.writeFile(
+		path.join(directory, "MODEL-LICENSE.txt"),
+		await fetchText({ url: voice.modelLicenseUrl, sha256: voice.modelLicenseSha256 }),
+	);
+	await fs.writeFile(
+		path.join(directory, "NOTICE.txt"),
+		notice(voice, language, `Revision: ${voice.modelRevision}\n`),
+	);
+	await writeManifest(directory, voice.modelName, required);
 	await verify(directory, required);
 }
+
+for (const [name, voice] of Object.entries(lock.voices)) await prepareArchiveVoice(name, voice);
+if (withLegacy)
+	for (const [language, voice] of Object.entries(lock.legacyVoices))
+		await prepareFileVoice(language, voice);
 console.log(
 	verifyOnly
 		? "Pinned offline TTS voices verified; no network used"

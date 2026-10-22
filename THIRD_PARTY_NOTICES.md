@@ -23,16 +23,20 @@ still apply. See [tools scope and limitations](docs/offline-tools.zh-CN.md).
 
 The offline edition additionally distributes Qwen3-VL model weights (Apache-2.0),
 OpenAI Whisper small multilingual weights (MIT), llama.cpp (MIT), whisper.cpp
-(MIT), AISHELL-3 VITS voice weights (Apache-2.0), VITS LJSpeech English voice weights (MIT; LJSpeech
-public domain), sherpa-onnx and its prebuilt
+(MIT), Kokoro-82M v1.0 narration voice weights (Apache-2.0) with its lexicons (generated
+from misaki data, Apache-2.0, and pypinyin data, MIT), icefall text-normalization rule FSTs
+(Apache-2.0) and eSpeak NG data files (`espeak-ng-data`, GPL-3.0-or-later; GPL-3.0 and this
+application's AGPL-3.0 may be combined under section 13 of each license, and the
+corresponding eSpeak NG source revision is named in the voice's MODEL-LICENSE.txt), sherpa-onnx and its prebuilt
 `sherpa-onnx-node` / `sherpa-onnx-win-x64` Node addon (Apache-2.0) and the ONNX
 Runtime library bundled with that addon (MIT), plus Silero VAD (MIT), RNNoise
 (BSD-3-Clause) and the shared sherpa-onnx C API runtime with its MSVC notices. Exact revisions, asset hashes and model notices are recorded in
 [MODEL_LICENSES.md](MODEL_LICENSES.md) and the build lock files under `scripts/`.
 The Windows resource bundles contain the complete model/runtime license texts,
-embedded component notices and LLVM-MinGW toolchain notices. These permissive
-component licenses do not change Recordly's AGPL-3.0 license or the actual shipped
-FFmpeg executable's GPL obligations; see [LICENSE_COMPLIANCE.md](LICENSE_COMPLIANCE.md).
+embedded component notices and LLVM-MinGW toolchain notices. These component licenses
+do not change Recordly's AGPL-3.0 license or the actual shipped FFmpeg executable's GPL
+obligations; the eSpeak NG data adds the same kind of GPL-3.0 source obligation (its
+source is public at the revision named above); see [LICENSE_COMPLIANCE.md](LICENSE_COMPLIANCE.md).
 
 ## Voom
 

@@ -315,13 +315,13 @@ interface Window {
 			screen?: {
 				videoPath: string;
 				frames: Array<{
-				id: string;
-				timeMs: number;
-				focus?: { cx: number; cy: number };
-				action?: boolean;
-			}>;
-			style?: "concise" | "tutorial" | "detailed";
-			timelineEndMs?: number;
+					id: string;
+					timeMs: number;
+					focus?: { cx: number; cy: number };
+					action?: boolean;
+				}>;
+				style?: "concise" | "tutorial" | "detailed";
+				timelineEndMs?: number;
 			},
 		) => Promise<{
 			success: boolean;
@@ -331,11 +331,33 @@ interface Window {
 		getBundledTtsStatus: () => Promise<{
 			available: boolean;
 			voices: { zh: boolean; en: boolean; ms: boolean };
+			/** Kokoro when its files are installed, else the older single-language voices. */
+			engine?: "kokoro" | "vits";
+			/** The Chinese voice also reads English words, so English labels can stay as they are. */
+			mixedLanguage?: boolean;
+			/** Voices the customer may choose; empty when the installed voice has just one. */
+			voiceList?: Array<{
+				id: number;
+				language: "zh" | "en";
+				gender: "female" | "male";
+				labels: { zh: string; en: string; ms: string };
+				default: boolean;
+			}>;
 			reason?: string;
+		}>;
+		previewAutoEditNarrationVoice?: (
+			language: "zh" | "en" | "ms",
+			speakerId?: number,
+		) => Promise<{
+			success: boolean;
+			samples?: Float32Array;
+			sampleRate?: number;
+			error?: string;
 		}>;
 		synthesizeAutoEditNarration: (
 			cues: Array<{ id: string; text: string }>,
 			language?: "zh" | "en" | "ms",
+			speakerId?: number,
 		) => Promise<{
 			success: boolean;
 			clips?: Array<{

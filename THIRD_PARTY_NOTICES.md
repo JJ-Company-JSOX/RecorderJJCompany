@@ -43,7 +43,8 @@ The Windows resource bundles contain the complete model/runtime license texts,
 embedded component notices and LLVM-MinGW toolchain notices. These component licenses
 do not change Recordly's AGPL-3.0 license or the actual shipped FFmpeg executable's GPL
 obligations; the eSpeak NG data adds the same kind of GPL-3.0 source obligation (its
-source is public at the revision named above); see [LICENSE_COMPLIANCE.md](LICENSE_COMPLIANCE.md).
+compiled dictionaries need their source published under this project's control before an
+external release); see [LICENSE_COMPLIANCE.md](LICENSE_COMPLIANCE.md).
 
 ## Voom
 

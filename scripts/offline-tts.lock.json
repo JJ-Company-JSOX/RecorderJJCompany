@@ -32,7 +32,11 @@
 				"rules (Apache-2.0).",
 				"espeak-ng-data/: eSpeak NG data files, GPL-3.0-or-later. GPL-3.0 may be combined with this",
 				"application's AGPL-3.0 (section 13 of each license). Corresponding source:",
-				"https://github.com/csukuangfj/espeak-ng/tree/ed530aa113046142eb5115cf2fc9157854d0ffe1"
+				"https://github.com/csukuangfj/espeak-ng/tree/ed530aa113046142eb5115cf2fc9157854d0ffe1",
+				"",
+				"Kokoro-82M training data, as its author's model card describes it: public-domain audio,",
+				"audio licensed under Apache, MIT and similar licenses, synthetic audio from closed TTS",
+				"models, and CC BY audio the author credits: Koniwa tnc (CC BY 3.0) and SIWIS (CC BY 4.0)."
 			],
 			"licenses": [
 				{

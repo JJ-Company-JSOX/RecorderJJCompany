@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bundledClient } from "./bundled";
-import { fitSize, graySamples, rectAround, SAMPLE_MS } from "./frameGrab";
+import { fitSize, grabFrame, graySamples, rectAround, SAMPLE_MS } from "./frameGrab";
 import {
 	changeRect,
 	changeRegion,
@@ -242,6 +242,98 @@ describe("narration frames", () => {
 		expect(pick?.after.timeMs).toBeGreaterThanOrEqual(3100);
 		expect(pick?.after.timeMs).toBeLessThanOrEqual(3400);
 		expect(pick?.settled).toBe(true);
+	});
+	it("reads what was on screen at each time, also in variable-frame-rate recordings", async () => {
+		// A frame is written only when the screen changes: black until 2.52 s, white until
+		// 3.52 s, then gray. The second file has the same pictures at a constant frame rate,
+		// with timestamps that start at 1.5 s instead of 0.
+		for (const color of ["black", "white", "gray"])
+			execFileSync(ffmpegPath, [
+				"-v",
+				"error",
+				"-y",
+				"-f",
+				"lavfi",
+				"-i",
+				`color=c=${color}:s=320x180`,
+				"-frames:v",
+				"1",
+				path.join(dir, `${color}.png`),
+			]);
+		const list = path.join(dir, "screens.txt");
+		writeFileSync(
+			list,
+			"file 'black.png'\nduration 2.52\nfile 'white.png'\nduration 1\nfile 'gray.png'\nduration 3\nfile 'gray.png'\n",
+		);
+		const encode = (name: string, extra: string[]) => {
+			const out = path.join(dir, name);
+			execFileSync(ffmpegPath, [
+				"-v",
+				"error",
+				"-y",
+				"-f",
+				"concat",
+				"-i",
+				list,
+				...extra,
+				"-c:v",
+				"libx264",
+				"-g",
+				"600",
+				"-pix_fmt",
+				"yuv420p",
+				out,
+			]);
+			return out;
+		};
+		const vfr = encode("vfr.mp4", ["-fps_mode", "vfr"]);
+		const offset = encode("offset.mp4", [
+			"-fps_mode",
+			"cfr",
+			"-r",
+			"10",
+			"-output_ts_offset",
+			"1.5",
+		]);
+		const shade = (level: number) => (level < 40 ? "black" : level > 215 ? "white" : "gray");
+		// The constant-rate copy changes on its 10 fps frame grid (2.5 s and 3.5 s).
+		const expected = (startMs: number, count: number, white: number, gray: number) =>
+			Array.from({ length: count }, (_, i) => {
+				const t = startMs + i * SAMPLE_MS;
+				return t < white ? "black" : t < gray ? "white" : "gray";
+			});
+		for (const [file, white, gray] of [
+			[vfr, 2520, 3520],
+			[offset, 2500, 3500],
+		] as const) {
+			const samples = await graySamples(
+				ffmpegPath,
+				file,
+				{ startMs: 1000, endMs: 4000 },
+				signal(),
+			);
+			expect(samples.length).toBeGreaterThanOrEqual(12);
+			expect(samples.slice(0, 12).map((s) => shade(s.gray[10]))).toEqual(
+				expected(1000, 12, white, gray),
+			);
+			for (const [timeMs, color] of [
+				[2000, "black"],
+				[2600, "white"],
+				[3000, "white"],
+				[4000, "gray"],
+			] as const) {
+				const rgb = await grabFrame({
+					ffmpegPath,
+					videoPath: file,
+					timeMs,
+					rect: { x: 0, y: 0, w: 320, h: 180 },
+					out: { width: 32, height: 18 },
+					format: "rgb",
+					signal: signal(),
+				});
+				expect([file, timeMs, shade(rgb[30])]).toEqual([file, timeMs, color]);
+			}
+		}
 	});
 	it("sends BEFORE and AFTER as two sharp PNGs in one request and reads other moments as screens", async () => {
 		const calls: Parameters<LookFn>[] = [];

@@ -22,6 +22,23 @@ export const GRAY_W = 96;
 export const GRAY_H = 54;
 /** One low-resolution sample every 250 ms (fps=4). */
 export const SAMPLE_MS = 250;
+
+/**
+ * Seeks so that time t means what the editor shows at t, also for variable-frame-rate
+ * recordings, where a frame is only written when the screen changes. An accurate input seek
+ * drops the frame that is still on screen at the seek point, so decoding starts at the
+ * keyframe before it instead, keeps real timestamps from the start of the file, and the fps
+ * filter (start_time + round=up) then picks for each tick the latest frame at or before it.
+ */
+const seekTo = (timeMs: number) => [
+	"-noaccurate_seek",
+	"-ss",
+	(timeMs / 1000).toFixed(3),
+	"-copyts",
+	"-start_at_zero",
+];
+const ticksFrom = (timeMs: number) =>
+	`fps=${1000 / SAMPLE_MS}:start_time=${(timeMs / 1000).toFixed(3)}:round=up`;
 /** A PNG of at most 1280x960 is well under this; raw RGB of the same size is 3.7 MB. */
 const MAX_FRAME_BYTES = 16_000_000;
 
@@ -96,7 +113,9 @@ export async function grabFrame(options: {
 	signal: AbortSignal;
 }): Promise<Buffer> {
 	const { rect, out, marker } = options;
+	const timeMs = Math.max(0, options.timeMs);
 	const filters = [
+		ticksFrom(timeMs),
 		`crop=${rect.w}:${rect.h}:${rect.x}:${rect.y}`,
 		`scale=${out.width}:${out.height}:flags=area`,
 	];
@@ -108,8 +127,7 @@ export async function grabFrame(options: {
 		options.ffmpegPath,
 		[
 			...ffmpegBase,
-			"-ss",
-			(Math.max(0, options.timeMs) / 1000).toFixed(3),
+			...seekTo(timeMs),
 			"-i",
 			options.videoPath,
 			"-map",
@@ -157,18 +175,17 @@ export function graySamples(
 			ffmpegPath,
 			[
 				...ffmpegBase,
-				"-ss",
-				(startMs / 1000).toFixed(3),
-				"-t",
-				((span.endMs - startMs) / 1000).toFixed(3),
+				...seekTo(startMs),
 				"-i",
 				videoPath,
 				"-map",
 				"0:v:0",
+				// Timestamps stay absolute (see seekTo), so the span ends at an absolute time too.
+				"-to",
+				(span.endMs / 1000).toFixed(3),
 				"-vf",
-				// Timestamps restart at the seek point, and round=up keeps for each tick the latest
-				// frame at or before it, so sample i is (within one frame) what -ss start+i*250ms shows.
-				`setpts=PTS-STARTPTS,fps=${1000 / SAMPLE_MS}:round=up,scale=${GRAY_W}:${GRAY_H}:flags=area,format=gray`,
+				// Sample i is what the editor shows at start + i * SAMPLE_MS.
+				`${ticksFrom(startMs)},scale=${GRAY_W}:${GRAY_H}:flags=area,format=gray`,
 				"-threads",
 				"2",
 				"-f",

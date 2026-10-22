@@ -19,6 +19,7 @@ import {
 	getBundledOcrRoot,
 	getBundledOcrStatus,
 	getOcrWorkerPath,
+	openBundledOcr,
 } from "./bundledOcr";
 
 const FILES = {
@@ -278,5 +279,50 @@ describe("bundled OCR engine", () => {
 		await expect(missing.recognize(image(1))).rejects.toThrow();
 		await engine.dispose();
 		await missing.dispose();
+	});
+});
+
+describe("opening the bundled OCR engine for a voice-over job", () => {
+	it("opens nothing, silently, when the build has no OCR bundle", async () => {
+		const { root, workerPath, starts } = await bundle((m) => {
+			m.files = m.files.filter((f) => f.path !== "PP-OCRv6_rec_small.onnx");
+		});
+		expect(await openBundledOcr(undefined, { root, workerPath })).toBeUndefined();
+		expect(
+			await openBundledOcr(undefined, { root: path.join(root, "nope"), workerPath }),
+		).toBeUndefined();
+		expect(await starts()).toBe(0);
+	});
+
+	it("finds the bundle and worker on its own and starts the worker on the first call", async () => {
+		const { root, workerPath, starts } = await bundle();
+		// Where getOcrWorkerPath() looks in a developer checkout: next to main.cjs.
+		await fs.mkdir(path.join(mocks.appPath, "dist-electron"));
+		await fs.copyFile(workerPath, path.join(mocks.appPath, "dist-electron", "ocr-worker.cjs"));
+		expect(getBundledOcrRoot()).toBe(root);
+		const engine = await openBundledOcr(new AbortController().signal);
+		expect(engine).toBeDefined();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(await starts()).toBe(0);
+		await expect(engine?.recognize(image(1))).resolves.toHaveLength(1);
+		expect(await starts()).toBe(1);
+		await engine?.dispose();
+		await expect(engine?.recognize(image(1))).rejects.toThrow(/disposed/);
+	});
+
+	it("reports a bundle without its worker entry once, as a broken build", async () => {
+		const { root, workerPath } = await bundle();
+		await expect(
+			openBundledOcr(undefined, { root, workerPath: `${workerPath}.missing` }),
+		).rejects.toThrow(/worker is missing/);
+	});
+
+	it("stops when the job was cancelled", async () => {
+		const { root, workerPath } = await bundle();
+		const controller = new AbortController();
+		controller.abort();
+		await expect(openBundledOcr(controller.signal, { root, workerPath })).rejects.toThrow(
+			/abort/i,
+		);
 	});
 });

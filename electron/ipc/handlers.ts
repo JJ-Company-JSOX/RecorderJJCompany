@@ -3,6 +3,7 @@ import { registerAnnouncementHandlers } from "./register/announcements";
 import { registerCapturePickerHandlers } from "./register/capturePicker";
 import { registerAssetHandlers } from "./register/assets";
 import { registerCaptionHandlers } from "./register/captions";
+import { openBundledOcr } from "./autoEdit/ocr/bundledOcr";
 import { registerAutoEditHandlers } from "./register/autoEdit";
 import { registerCloudShareHandlers } from "./register/cloudShare";
 import { registerExportHandlers } from "./register/export";
@@ -73,7 +74,8 @@ export function registerIpcHandlers(
 	registerAssetHandlers();
 	registerExportHandlers();
 	registerCaptionHandlers();
-	registerAutoEditHandlers();
+	// Each voice-over job opens its own OCR engine when the build ships the OCR models.
+	registerAutoEditHandlers({ openOcr: (signal) => openBundledOcr(signal) });
 	registerCloudShareHandlers();
 	registerProjectHandlers();
 	registerSettingsHandlers();

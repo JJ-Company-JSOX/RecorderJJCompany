@@ -85,9 +85,11 @@ function asWindows() {
 }
 
 const temporary: string[] = [];
+const workingDirectory = process.cwd();
 afterEach(async () => {
 	Object.defineProperty(process, "platform", platform);
 	Object.defineProperty(process, "arch", arch);
+	process.chdir(workingDirectory);
 	for (const directory of temporary.splice(0)) {
 		if (
 			path.dirname(directory) !== os.tmpdir() ||
@@ -467,6 +469,54 @@ describe("synthesizing narration", () => {
 				speakerId: 47,
 			}),
 		).rejects.toThrow("Invalid narration speaker");
+	});
+	it("loads Kokoro by relative names from a folder espeak-ng cannot open by full path", async () => {
+		asWindows();
+		const temp = await fs.mkdtemp(path.join(os.tmpdir(), "jsox-tts-test-"));
+		temporary.push(temp);
+		// Like a per-user install under C:\Users\张三\, here with a comma as well.
+		const { root } = await fixture("tts-kokoro", KOKORO, path.join(temp, "张三, 测试"));
+		const canonical = await fs.realpath(root);
+		mocks.createAsync.mockResolvedValue({ generateAsync: mocks.generateAsync });
+		speaking();
+		const cues = [{ id: "suggestion-1", text: "Open Settings." }];
+		const out = path.join(temp, "out");
+		await synthesizeBundledNarration({ cues, outputDirectory: out, language: "en" });
+		expect(mocks.createAsync).toHaveBeenCalledWith(
+			expect.objectContaining({
+				model: expect.objectContaining({
+					kokoro: {
+						model: "model.onnx",
+						voices: "voices.bin",
+						tokens: "tokens.txt",
+						dataDir: "espeak-ng-data",
+						lexicon: "lexicon-us-en.txt,lexicon-zh.txt",
+						lengthScale: 1,
+					},
+				}),
+				ruleFsts: "date-zh.fst,phone-zh.fst,number-zh.fst",
+			}),
+		);
+		expect(process.cwd()).toBe(canonical);
+		// espeak-ng reads its data again while speaking: the folder is entered again each time.
+		process.chdir(temp);
+		await synthesizeBundledNarration({ cues, outputDirectory: out, language: "en" });
+		expect(process.cwd()).toBe(canonical);
+		expect(mocks.createAsync).toHaveBeenCalledTimes(1);
+		// A plain folder is still given by full path, and the working directory is left alone.
+		const plain = await fixture("tts-kokoro", KOKORO);
+		process.chdir(temp);
+		await synthesizeBundledNarration({ cues, outputDirectory: out, language: "en" });
+		expect(mocks.createAsync).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				model: expect.objectContaining({
+					kokoro: expect.objectContaining({
+						dataDir: path.join(await fs.realpath(plain.root), "espeak-ng-data"),
+					}),
+				}),
+			}),
+		);
+		expect(process.cwd()).toBe(temp);
 	});
 	it("previews the chosen voice with one short fixed sentence", async () => {
 		asWindows();

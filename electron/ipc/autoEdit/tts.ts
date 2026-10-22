@@ -814,18 +814,38 @@ export function sherpaExports(module: SherpaOnnx): SherpaOnnx {
 }
 const loadSherpa = async (): Promise<SherpaOnnx> => sherpaExports(await import("sherpa-onnx-node"));
 
-let cachedEngine: { root: string; tts: SherpaOnnx } | null = null;
+/**
+ * A voice folder sherpa-onnx can be given by full path: printable ASCII without a comma,
+ * and short. espeak-ng, which Kokoro uses for English words its lexicon lacks, opens its
+ * data folder with narrow file calls (read in the Windows ANSI code page) into a 230-byte
+ * buffer, and when it cannot open it sherpa-onnx ends the whole process: an install under
+ * C:\Users\张三\ would close the app on the first narration. sherpa-onnx also takes the
+ * lexicons and rule files as one comma-separated list.
+ */
+const PLAIN_ROOT = /^[\x20-\x2b\x2d-\x7e]{1,100}$/;
 
+let cachedEngine: { root: string; relative: boolean; tts: SherpaOnnx } | null = null;
+
+/**
+ * Loads a voice, from any other folder by names relative to it as the working directory.
+ * espeak-ng keeps reading its data while it speaks, so the folder is entered again before
+ * every use.
+ */
 async function loadEngine(root: string, bundle: Bundle) {
-	if (cachedEngine?.root === root) return cachedEngine.tts;
-	// sherpa-onnx takes lexicons and rule files as one comma-separated list.
-	if (root.includes(","))
-		throw new Error(
-			"The offline narration voice cannot load from a folder whose path contains a comma. Install the application in another folder.",
-		);
+	const cached = cachedEngine?.root === root ? cachedEngine : null;
+	const relative = cached ? cached.relative : !PLAIN_ROOT.test(root);
+	if (relative)
+		try {
+			process.chdir(root);
+		} catch {
+			throw new Error(
+				"The offline narration voice cannot load from this installation folder. Install the application in a folder with a shorter path.",
+			);
+		}
+	if (cached) return cached.tts;
 	const sherpaOnnx = await loadSherpa();
-	const tts = await sherpaOnnx.OfflineTts.createAsync(bundle.config(root));
-	cachedEngine = { root, tts };
+	const tts = await sherpaOnnx.OfflineTts.createAsync(bundle.config(relative ? "" : root));
+	cachedEngine = { root, relative, tts };
 	return tts;
 }
 

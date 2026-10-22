@@ -195,5 +195,9 @@
 		"expand": "Expandir línea de tiempo",
 		"collapse": "Contraer línea de tiempo"
 	},
-	"openRecordingsFolder": "Abrir carpeta de grabaciones"
+	"openRecordingsFolder": "Abrir carpeta de grabaciones",
+	"preview": {
+		"fullscreen": "Vista previa a pantalla completa",
+		"exitFullscreen": "Salir de pantalla completa (Esc)"
+	}
 }

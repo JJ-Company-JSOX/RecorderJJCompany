@@ -195,5 +195,9 @@
 		"expand": "Développer la timeline",
 		"collapse": "Réduire la timeline"
 	},
-	"openRecordingsFolder": "Ouvrir le dossier des enregistrements"
+	"openRecordingsFolder": "Ouvrir le dossier des enregistrements",
+	"preview": {
+		"fullscreen": "Aperçu plein écran",
+		"exitFullscreen": "Quitter le plein écran (Échap)"
+	}
 }

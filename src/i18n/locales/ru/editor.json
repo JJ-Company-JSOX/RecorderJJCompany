@@ -195,5 +195,9 @@
 		"expand": "Развернуть таймлайн",
 		"collapse": "Свернуть таймлайн"
 	},
-	"openRecordingsFolder": "Открыть папку с записями"
+	"openRecordingsFolder": "Открыть папку с записями",
+	"preview": {
+		"fullscreen": "Полноэкранный просмотр",
+		"exitFullscreen": "Выйти из полноэкранного режима (Esc)"
+	}
 }

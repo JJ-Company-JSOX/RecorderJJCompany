@@ -195,5 +195,9 @@
 		"expand": "Expandir linha do tempo",
 		"collapse": "Recolher linha do tempo"
 	},
-	"openRecordingsFolder": "Abrir pasta de gravações"
+	"openRecordingsFolder": "Abrir pasta de gravações",
+	"preview": {
+		"fullscreen": "Pré-visualização em tela cheia",
+		"exitFullscreen": "Sair da tela cheia (Esc)"
+	}
 }

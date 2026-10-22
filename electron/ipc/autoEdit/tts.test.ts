@@ -29,6 +29,7 @@ import {
 	getBundledTtsRoot,
 	getBundledTtsStatus,
 	mixedParts,
+	pcm16Wav,
 	previewBundledVoice,
 	sentencePauseS,
 	shapeSentence,
@@ -361,7 +362,8 @@ describe("synthesizing narration", () => {
 				{ id: "suggestion-1", text: "这里点击按钮。" },
 				{ id: "suggestion-2", text: "然后放大显示。" },
 			],
-			outputDirectory: path.join(root, "out"),
+			// Like userData under C:\Users\张三\, which sherpa-onnx's own writer cannot open.
+			outputDirectory: path.join(root, "张三", "narration-audio"),
 		});
 		expect(mocks.createAsync).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -384,7 +386,14 @@ describe("synthesizing narration", () => {
 			speed: 1,
 			enableExternalBuffer: false,
 		});
-		expect(mocks.writeWave).toHaveBeenCalledTimes(2);
+		// Written by Node, never by the addon's writer (which only returns false on failure).
+		expect(mocks.writeWave).not.toHaveBeenCalled();
+		for (const result of results) {
+			const wav = await fs.readFile(result.audioPath);
+			expect(wav.subarray(0, 4).toString()).toBe("RIFF");
+			expect(wav.readUInt32LE(24)).toBe(8000);
+			expect(((wav.length - 44) / 2 / 8000) * 1000).toBeCloseTo(result.durationMs, -1);
+		}
 		expect(results).toEqual([
 			{
 				id: "suggestion-1",
@@ -398,6 +407,46 @@ describe("synthesizing narration", () => {
 				durationMs: 1075,
 				chunks: [{ text: "然后放大显示。", endMs: 1075 }],
 			},
+		]);
+	});
+	it("fails the job when a narration WAV cannot be written, instead of returning a missing file", async () => {
+		asWindows();
+		const { root } = await fixture();
+		mocks.createAsync.mockResolvedValue({ generateAsync: mocks.generateAsync });
+		speaking();
+		const out = path.join(root, "out");
+		// Something already in the way of the second file (a full disk or a locked folder fails alike).
+		await fs.mkdir(path.join(out, "narration-zh-1000-suggestion-2.wav"), { recursive: true });
+		const now = vi.spyOn(Date, "now").mockReturnValue(36 ** 3);
+		try {
+			await expect(
+				synthesizeBundledNarration({
+					cues: [
+						{ id: "suggestion-1", text: "这里点击按钮。" },
+						{ id: "suggestion-2", text: "然后放大显示。" },
+					],
+					outputDirectory: out,
+				}),
+			).rejects.toThrow("The narration audio could not be saved");
+		} finally {
+			now.mockRestore();
+		}
+	});
+	it("writes mono 16-bit PCM WAV like sherpa-onnx's writer, clipping out-of-range samples", () => {
+		const wav = pcm16Wav(new Float32Array([0, 0.5, -0.5, 1, -1, 1.5, -2, Number.NaN]), 24000);
+		expect(wav.length).toBe(44 + 16);
+		expect(wav.subarray(0, 4).toString()).toBe("RIFF");
+		expect(wav.readUInt32LE(4)).toBe(36 + 16);
+		expect(wav.subarray(8, 16).toString()).toBe("WAVEfmt ");
+		expect([wav.readUInt32LE(16), wav.readUInt16LE(20), wav.readUInt16LE(22)]).toEqual([
+			16, 1, 1,
+		]);
+		expect([wav.readUInt32LE(24), wav.readUInt32LE(28)]).toEqual([24000, 48000]);
+		expect([wav.readUInt16LE(32), wav.readUInt16LE(34)]).toEqual([2, 16]);
+		expect(wav.subarray(36, 40).toString()).toBe("data");
+		expect(wav.readUInt32LE(40)).toBe(16);
+		expect(Array.from({ length: 8 }, (_, i) => wav.readInt16LE(44 + i * 2))).toEqual([
+			0, 16384, -16383, 32767, -32767, 32767, -32767, 0,
 		]);
 	});
 	it("prefers Kokoro: one engine for Chinese, English and mixed lines, loaded and hashed once", async () => {

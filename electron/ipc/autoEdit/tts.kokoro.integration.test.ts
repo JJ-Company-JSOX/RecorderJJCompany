@@ -50,7 +50,8 @@ describe.skipIf(!voiceReady)("the real Kokoro voice", () => {
 		await import("sherpa-onnx-node");
 		Object.defineProperty(process, "platform", { ...platform, value: "win32" });
 		Object.defineProperty(process, "arch", { ...arch, value: "x64" });
-		const out = path.join(temp, "out");
+		// Like userData under the same non-ASCII profile folder.
+		const out = path.join(temp, "张三", "narration-audio");
 		// "Zorblax" is in neither lexicon: espeak-ng spells it out while the line is spoken.
 		const [short, long] = await synthesizeBundledNarration({
 			cues: [
@@ -63,7 +64,10 @@ describe.skipIf(!voiceReady)("the real Kokoro voice", () => {
 		expect(process.cwd()).toBe(await fs.realpath(root));
 		expect(short.durationMs).toBeGreaterThan(300);
 		expect(long.durationMs).toBeGreaterThan(short.durationMs + 250);
-		expect((await fs.stat(long.audioPath)).size).toBeGreaterThan(1000);
+		const wav = await fs.readFile(long.audioPath);
+		expect(wav.subarray(0, 4).toString()).toBe("RIFF");
+		const seconds = wav.readUInt32LE(40) / wav.readUInt32LE(28);
+		expect(seconds * 1000).toBeCloseTo(long.durationMs, -1);
 		// Chinese, with the English label said on its own.
 		const [mixed] = await synthesizeBundledNarration({
 			cues: [{ id: "mixed", text: "点击“Settings”打开设置。" }],

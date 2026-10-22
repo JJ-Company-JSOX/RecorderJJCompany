@@ -1225,7 +1225,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 												: n.busy
 											: n.draft}
 									</Button>
-									{(busy === "narrate" || busy === "synthesize") && (
+									{(busy === "narrate" ||
+										busy === "synthesize" ||
+										busy === "preview") && (
 										<Button
 											variant="secondary"
 											onClick={() => {

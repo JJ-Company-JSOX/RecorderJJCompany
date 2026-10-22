@@ -454,6 +454,12 @@ const MAX_INNER_PAUSE_S = 0.26;
 const MIN_PAUSE_S = 0.08;
 /** How far a subtitle change may move to land on such a pause. */
 const SNAP_S = 0.35;
+/**
+ * The shortest time a subtitle chunk inside a sentence is shown (less only when the sentence
+ * is too short to give every chunk this much), so a short one such as "好，" or "then," never
+ * flashes by or gets no time at all and is dropped by the editor.
+ */
+const MIN_CHUNK_S = 0.25;
 
 type Range = { start: number; end: number };
 
@@ -608,33 +614,49 @@ type SpokenSentence = {
 
 /**
  * Where each subtitle chunk but the last ends inside its sentence: at its share of the
- * spoken characters, moved onto the nearest pause when one is close.
+ * spoken characters, moved onto a pause when one is close. A pause can only move the
+ * chunk end it is closest to, so the pause after a short next chunk ("then,", "好，") is
+ * not taken for this one. Every chunk keeps at least MIN_CHUNK_S: a pause is used only
+ * when it leaves that much for this chunk and each one after it, and ends are kept apart.
  */
-function chunkEnds(sentence: SpokenSentence, sampleRate: number) {
+export function chunkEnds(
+	sentence: Pick<SpokenSentence, "samples" | "pauses" | "weights">,
+	sampleRate: number,
+) {
 	const length = sentence.samples.length;
+	const count = sentence.weights.length;
 	const total = sentence.weights.reduce((sum, weight) => sum + weight, 0);
+	let said = 0;
+	const estimates = sentence.weights.slice(0, -1).map((weight, i) => {
+		said += weight;
+		return total ? (length * said) / total : (length * (i + 1)) / count;
+	});
+	const middle = (pause: Range) => (pause.start + pause.end) / 2;
+	const closest = (pause: Range) =>
+		estimates.reduce(
+			(best, estimate, i) =>
+				Math.abs(middle(pause) - estimate) < Math.abs(middle(pause) - estimates[best])
+					? i
+					: best,
+			0,
+		);
+	const least = Math.min(MIN_CHUNK_S * sampleRate, length / count);
 	const ends: number[] = [];
 	let previous = 0;
-	let said = 0;
-	for (let i = 0; i < sentence.chunks.length - 1; i++) {
-		said += sentence.weights[i];
-		const estimate = total
-			? (length * said) / total
-			: (length * (i + 1)) / sentence.chunks.length;
+	estimates.forEach((estimate, i) => {
+		const earliest = previous + least;
+		const latest = length - (count - 1 - i) * least;
 		const nearest = sentence.pauses
-			.filter((pause) => pause.end > previous)
-			.map((pause) => ({
-				pause,
-				distance: Math.abs((pause.start + pause.end) / 2 - estimate),
-			}))
+			.filter((pause) => pause.end >= earliest && pause.end <= latest && closest(pause) === i)
+			.map((pause) => ({ pause, distance: Math.abs(middle(pause) - estimate) }))
 			.filter(({ distance }) => distance <= SNAP_S * sampleRate)
 			.sort((a, b) => a.distance - b.distance)[0];
 		const end = Math.round(
-			Math.min(length, Math.max(previous, nearest?.pause.end ?? estimate)),
+			Math.min(latest, Math.max(earliest, nearest?.pause.end ?? estimate)),
 		);
 		ends.push(end);
 		previous = end;
-	}
+	});
 	return ends;
 }
 

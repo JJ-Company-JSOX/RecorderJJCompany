@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import * as fc from "fast-check";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { integratedLoudness, samplePeak, toDb } from "./loudness";
 
@@ -24,6 +25,7 @@ vi.mock("node:fs", async (importOriginal) => {
 	return { ...actual, default: actual, createReadStream: vi.fn(actual.createReadStream) };
 });
 import {
+	chunkEnds,
 	getBundledTtsRoot,
 	getBundledTtsStatus,
 	mixedParts,
@@ -559,6 +561,82 @@ describe("speaking a narration line", () => {
 		]);
 		const shaped = shapeSentence(twoParts(), 8000);
 		expect(shaped?.pauses).toEqual([{ start: 5000, end: 7080 }]);
+	});
+	it("never squeezes a short chunk after a pause to nothing", async () => {
+		// Kokoro pauses after "好，" here (2.33 to 2.59 s), not after the first chunk. Taking
+		// that pause for the first chunk used to leave "好，" no time at all, and the editor
+		// then dropped it as if it overlapped another subtitle.
+		const silence = new Float32Array(Math.round(0.26 * 8000));
+		const audio = () => concat(tone(2.33, 8000, 0, 0), silence, tone(1.41, 8000, 0, 0));
+		const line = await speakLine(engine([], audio), "首先打开设置页面，好，然后点击保存。", {
+			speakerId: 48,
+		});
+		expect(line?.chunks).toEqual([
+			{ text: "首先打开设置页面，", endMs: 2118 },
+			{ text: "好，", endMs: 2590 },
+			{ text: "然后点击保存。", endMs: 4000 },
+		]);
+	});
+	it("keeps every subtitle chunk in a sentence on screen for at least 250 ms", () => {
+		const rate = 8000;
+		const at = (seconds: number) => Math.round(seconds * rate);
+		const sentence = (seconds: number, weights: number[], pauses: Array<[number, number]>) => ({
+			samples: new Float32Array(at(seconds)),
+			pauses: pauses.map(([start, end]) => ({ start: at(start), end: at(end) })),
+			weights,
+		});
+		// "Open the menu, then, click Save.": the pause belongs to the first chunk, and "then,"
+		// would otherwise get only what is left before its own estimate (234 ms).
+		expect(chunkEnds(sentence(2, [4.85, 2.4, 3.15], [[0.9, 1.16]]), rate)).toEqual([
+			at(1.16),
+			at(1.41),
+		]);
+		// A pause too close to the end to leave the last two chunks their time is not used.
+		expect(chunkEnds(sentence(3, [6, 1, 1], [[2.3, 2.56]]), rate)).toEqual([
+			at(2.25),
+			at(2.625),
+		]);
+		// Too short to give each chunk 250 ms: each still gets an equal share.
+		expect(chunkEnds(sentence(0.6, [1, 1, 1, 1], []), rate)).toEqual([
+			at(0.15),
+			at(0.3),
+			at(0.45),
+		]);
+		fc.assert(
+			fc.property(
+				fc.double({ min: 0.3, max: 12, noNaN: true }),
+				fc.array(fc.double({ min: 0, max: 30, noNaN: true }), {
+					minLength: 1,
+					maxLength: 12,
+				}),
+				fc.array(
+					fc.tuple(
+						fc.double({ min: 0, max: 1, noNaN: true }),
+						fc.double({ min: 0.08, max: 0.26, noNaN: true }),
+					),
+					{ maxLength: 8 },
+				),
+				(seconds, weights, gaps) => {
+					const length = at(seconds);
+					const least = Math.min(0.25 * rate, length / weights.length);
+					const pauses = gaps
+						.map(([where, long]) => ({
+							start: Math.round(where * length),
+							end: Math.round(where * length + long * rate),
+						}))
+						.filter((pause) => pause.end < length);
+					const ends = chunkEnds(
+						{ samples: new Float32Array(length), pauses, weights },
+						rate,
+					);
+					expect(ends).toHaveLength(weights.length - 1);
+					[0, ...ends].forEach((start, i) => {
+						const end = ends[i] ?? length;
+						expect(end - start).toBeGreaterThanOrEqual(least - 1);
+					});
+				},
+			),
+		);
 	});
 	it("asks Kokoro to keep its own pauses, with the chosen speaker", async () => {
 		const tts = engine();

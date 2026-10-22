@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { addVisualSuggestions, parseVisualResponse, type VisualAnalysis } from "./vision";
+import {
+	addVisualSuggestions,
+	parseVisualReply,
+	parseVisualResponse,
+	type VisualAnalysis,
+} from "./vision";
 import { baselineFor, type EditPlan, type EditState } from "./plan";
 import { applyEditPlan } from "./apply";
 const source = "fixture.mp4";
@@ -31,7 +36,6 @@ const analysis: VisualAnalysis = {
 			timeMs: 4000,
 			focus: { cx: 0.7, cy: 0.3 },
 			caption: "Save 保存 Simpan",
-			rationale: "Visible settings control",
 		},
 	],
 	elapsedMs: 10,
@@ -67,11 +71,35 @@ it("does not change rule cuts, invent speed edits or accept model instructions",
 		true,
 	);
 	expect(() =>
-		parseVisualResponse({ focus: { cx: 700, cy: 300 }, caption: "x", rationale: "x" }, 4000),
+		parseVisualResponse({ focus: { cx: 700, cy: 300 }, caption: "x" }, 4000),
 	).toThrow();
-	expect(() =>
-		parseVisualResponse({ focus: null, caption: "x".repeat(241), rationale: "" }, 4000),
-	).toThrow();
+	expect(() => parseVisualResponse({ focus: null, caption: "x".repeat(241) }, 4000)).toThrow();
+});
+it("reads the model's integer 0-1000 coordinates and converts them to frame fractions", () => {
+	expect(parseVisualReply({ focus: { x: 700, y: 300 }, caption: " Save " }, 4000)).toEqual({
+		timeMs: 4000,
+		focus: { cx: 0.7, cy: 0.3 },
+		caption: "Save",
+	});
+	expect(parseVisualReply({ focus: { x: 0, y: 1000 }, caption: "" }, 0).focus).toEqual({
+		cx: 0,
+		cy: 1,
+	});
+	expect(parseVisualReply({ focus: null, caption: "" }, 0).focus).toBeNull();
+	// Fractions, out-of-range or missing values are not silently rescaled.
+	for (const focus of [
+		{ x: 0.7, y: 0.3 },
+		{ x: 1001, y: 5 },
+		{ x: -1, y: 5 },
+		{ cx: 0.5, cy: 0.5 },
+	])
+		expect(() => parseVisualReply({ focus, caption: "" }, 0)).toThrow();
+	// An older reply with a rationale field still parses; the field is ignored.
+	expect(parseVisualReply({ focus: null, caption: "x", rationale: "old" }, 0)).toEqual({
+		timeMs: 0,
+		focus: null,
+		caption: "x",
+	});
 });
 it("protects pre-existing edits, rejects changed baselines, and replacing a visual run does not duplicate suggestions", () => {
 	const s = state();

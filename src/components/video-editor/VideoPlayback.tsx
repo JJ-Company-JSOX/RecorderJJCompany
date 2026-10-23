@@ -377,6 +377,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 	) => {
 		const videoRef = useRef<HTMLVideoElement | null>(null);
 		const previewVideoSourceRef = useRef(new PreviewVideoSource());
+		// A fast or cached local source can load its metadata before React commits the element,
+		// and React drops events for an element it has not committed yet, so attaching it reads
+		// the metadata that is already there (see applyLoadedMetadata).
+		const loadedMetadataRef = useRef<(video: HTMLVideoElement) => void>(() => undefined);
 		const attachVideo = useCallback((video: HTMLVideoElement | null) => {
 			if (!video) {
 				// Ref detachment precedes passive-effect cleanup. Remove the sprite
@@ -389,6 +393,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			// React detaches the element, never during a layout effect cleanup.
 			previewVideoSourceRef.current.setVideo(video);
 			videoRef.current = video;
+			if (video && video.readyState >= HTMLMediaElement.HAVE_METADATA)
+				loadedMetadataRef.current(video);
 		}, []);
 		const previewFrameRef = useRef<HTMLDivElement | null>(null);
 		const containerRef = useRef<HTMLDivElement | null>(null);
@@ -2329,8 +2335,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			cursorSway,
 		]);
 
-		const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-			const video = e.currentTarget;
+		const applyLoadedMetadata = (video: HTMLVideoElement) => {
 			onDurationChange(video.duration);
 
 			const targetTime = clampMediaTimeToDuration(
@@ -2341,6 +2346,9 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			video.pause();
 			currentTimeRef.current = targetTime * 1000;
 		};
+		loadedMetadataRef.current = applyLoadedMetadata;
+		const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement, Event>) =>
+			applyLoadedMetadata(e.currentTarget);
 
 		const [resolvedWallpaper, setResolvedWallpaper] = useState<string | null>(null);
 		const [resolvedWallpaperKind, setResolvedWallpaperKind] = useState<

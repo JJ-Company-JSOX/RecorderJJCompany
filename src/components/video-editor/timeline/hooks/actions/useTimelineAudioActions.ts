@@ -1,7 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { resolveMediaElementSource } from "@/lib/exporter/localMediaSource";
 import type { TimelineAudioRegion } from "../../core/timelineTypes";
-import { resolveAudioPlacement } from "../utils/timelineAudioPlacement";
+import {
+	type PlacedAudioClip,
+	placeAudioClips,
+	resolveAudioPlacement,
+} from "../utils/timelineAudioPlacement";
 import { timelineNotifications } from "../utils/timelineNotifications";
 
 interface AudioFilePickerResult {
@@ -140,5 +144,27 @@ export function useTimelineAudioActions({
 		[videoDuration, totalMs, onAudioAdded, deps, currentTimeMs, audioRegions],
 	);
 
-	return { handleAddAudio };
+	/** Adds audio that already exists (text to speech), one clip after another from the playhead. */
+	const handleAddAudioClips = useCallback(
+		(clips: Array<{ audioPath: string; durationMs: number }>, gapMs = 0): PlacedAudioClip[] => {
+			if (!videoDuration || totalMs === 0 || !onAudioAdded) return [];
+			const placed = placeAudioClips({
+				audioRegions,
+				startPos: Math.max(0, Math.min(currentTimeMs, totalMs)),
+				totalMs,
+				clips,
+				gapMs,
+			});
+			for (const clip of placed)
+				onAudioAdded(
+					{ start: clip.startMs, end: clip.endMs },
+					clip.audioPath,
+					clip.trackIndex,
+				);
+			return placed;
+		},
+		[videoDuration, totalMs, onAudioAdded, currentTimeMs, audioRegions],
+	);
+
+	return { handleAddAudio, handleAddAudioClips };
 }

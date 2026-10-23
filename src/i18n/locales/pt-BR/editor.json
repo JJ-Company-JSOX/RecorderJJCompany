@@ -199,5 +199,32 @@
 	"preview": {
 		"fullscreen": "Pré-visualização em tela cheia",
 		"exitFullscreen": "Sair da tela cheia (Esc)"
+	},
+	"textToSpeech": {
+		"menu": "Texto para fala",
+		"title": "Texto para fala",
+		"description": "Digite o que a voz deve dizer. Ele é adicionado à linha do tempo no cursor de reprodução, um clipe por parágrafo.",
+		"textLabel": "Texto",
+		"placeholder": "Digite ou cole o que a voz deve dizer…",
+		"parts": "{{count}} clipes",
+		"language": "Idioma",
+		"chinese": "Chinês",
+		"english": "Inglês",
+		"voice": "Voz",
+		"preview": "Ouvir voz",
+		"previewing": "Carregando a voz…",
+		"notInstalled": "A voz offline não está instalada. Instale o pacote offline completo ou execute npm run prepare:offline-tts em um computador de desenvolvimento.",
+		"olderVoice": "Esta é a voz antiga: ela lê um idioma por linha e pula palavras em inglês no texto em chinês.",
+		"noVideo": "Abra um vídeo primeiro.",
+		"tooMany": "O texto tem parágrafos demais. Use no máximo {{max}}.",
+		"add": "Adicionar à linha do tempo",
+		"generating": "Criando a voz…",
+		"error": "Não foi possível criar a voz:",
+		"nothingSpoken": "A voz não conseguiu dizer nada deste texto.",
+		"noRoom": "Não há espaço para a voz no cursor de reprodução. Mova o cursor ou libere uma faixa de áudio.",
+		"skipped": "{{count}} parte(s) não tinham nada que a voz pudesse dizer e foram puladas.",
+		"notPlaced": "{{count}} parte(s) não couberam antes do fim do vídeo.",
+		"trimmed": "A voz foi cortada onde o vídeo termina.",
+		"added": "Voz adicionada à linha do tempo"
 	}
 }

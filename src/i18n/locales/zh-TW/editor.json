@@ -199,5 +199,32 @@
 	"preview": {
 		"fullscreen": "全螢幕預覽",
 		"exitFullscreen": "退出全螢幕 (Esc)"
+	},
+	"textToSpeech": {
+		"menu": "文字轉語音",
+		"title": "文字轉語音",
+		"description": "輸入要念的內容，會從播放頭的位置加到時間軸上，每一段產生一個音訊片段。",
+		"textLabel": "文字",
+		"placeholder": "輸入或貼上要念的內容…",
+		"parts": "共 {{count}} 段",
+		"language": "語言",
+		"chinese": "中文",
+		"english": "英文",
+		"voice": "聲音",
+		"preview": "試聽聲音",
+		"previewing": "正在載入聲音…",
+		"notInstalled": "尚未安裝離線配音。請安裝完整的離線版，或在開發電腦上執行 npm run prepare:offline-tts。",
+		"olderVoice": "這是舊版聲音：每行只能讀一種語言，中文裡的英文單字會被略過。",
+		"noVideo": "請先開啟一個影片。",
+		"tooMany": "段落太多了，請控制在 {{max}} 段以內。",
+		"add": "加到時間軸",
+		"generating": "正在產生聲音…",
+		"error": "無法產生聲音：",
+		"nothingSpoken": "這段文字裡沒有聲音能念的內容。",
+		"noRoom": "播放頭位置沒有空間放這段聲音。請移動播放頭，或空出一條音訊軌。",
+		"skipped": "有 {{count}} 段沒有能念的內容，已略過。",
+		"notPlaced": "有 {{count}} 段放不下（超過了影片結尾）。",
+		"trimmed": "聲音在影片結尾處被截斷了。",
+		"added": "聲音已加到時間軸"
 	}
 }

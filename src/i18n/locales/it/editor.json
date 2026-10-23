@@ -199,5 +199,32 @@
 	"preview": {
 		"fullscreen": "Anteprima a schermo intero",
 		"exitFullscreen": "Esci da schermo intero (Esc)"
+	},
+	"textToSpeech": {
+		"menu": "Sintesi vocale",
+		"title": "Sintesi vocale",
+		"description": "Scrivi ciò che la voce deve dire. Viene aggiunto alla timeline alla testina, una clip per paragrafo.",
+		"textLabel": "Testo",
+		"placeholder": "Scrivi o incolla ciò che la voce deve dire…",
+		"parts": "{{count}} clip",
+		"language": "Lingua",
+		"chinese": "Cinese",
+		"english": "Inglese",
+		"voice": "Voce",
+		"preview": "Ascolta la voce",
+		"previewing": "Caricamento della voce…",
+		"notInstalled": "La voce offline non è installata. Installa il pacchetto offline completo o esegui npm run prepare:offline-tts su un computer di sviluppo.",
+		"olderVoice": "Questa è la voce precedente: legge una lingua per riga e salta le parole inglesi nel testo cinese.",
+		"noVideo": "Apri prima un video.",
+		"tooMany": "Il testo ha troppi paragrafi. Massimo {{max}}.",
+		"add": "Aggiungi alla timeline",
+		"generating": "Creazione della voce…",
+		"error": "Impossibile creare la voce:",
+		"nothingSpoken": "La voce non è riuscita a dire nulla di questo testo.",
+		"noRoom": "Non c'è spazio per la voce alla testina. Sposta la testina o libera una traccia audio.",
+		"skipped": "{{count}} parte/i non contenevano nulla da pronunciare e sono state saltate.",
+		"notPlaced": "{{count}} parte/i non entravano prima della fine del video.",
+		"trimmed": "La voce è stata tagliata alla fine del video.",
+		"added": "Voce aggiunta alla timeline"
 	}
 }

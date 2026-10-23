@@ -235,7 +235,7 @@ export function useTimelineEditorRuntime({
 		onClipSplit(currentTimeMs);
 	}, [videoDuration, totalMs, currentTimeMs, onClipSplit]);
 
-	const { handleAddAudio } = useTimelineAudioActions({
+	const { handleAddAudio, handleAddAudioClips } = useTimelineAudioActions({
 		timeline: { videoDuration, totalMs, currentTimeMs },
 		regions: { audio: audioRegions },
 		onAudioAdded,
@@ -295,11 +295,13 @@ export function useTimelineEditorRuntime({
 			splitClip: handleSplitClip,
 			addAnnotation: handleAddAnnotation,
 			addAudio: handleAddAudio,
+			addAudioClips: handleAddAudioClips,
 			keyframes,
 		}),
 		[
 			handleAddAnnotation,
 			handleAddAudio,
+			handleAddAudioClips,
 			handleAddZoom,
 			handleSuggestZooms,
 			handleSplitClip,

@@ -27,6 +27,7 @@ import type { ClipSequenceSpan } from "./core/timelineTypes";
 import { useTimelineAudioPeaks } from "./hooks/useTimelineAudioPeaks";
 import { useTimelineEditorRuntime } from "./hooks/useTimelineEditorRuntime";
 import { useTimelineRange } from "./hooks/useTimelineRange";
+import type { PlacedAudioClip } from "./hooks/utils/timelineAudioPlacement";
 import {
 	buildSourceSidecarPathCandidates,
 	buildTimelineSourceAudioTracks,
@@ -110,6 +111,11 @@ export interface TimelineEditorHandle {
 	splitClip: () => void;
 	addAnnotation: (trackIndex?: number) => void;
 	addAudio: (trackIndex?: number) => Promise<void>;
+	/** Adds existing audio files one after another from the playhead; returns where they went. */
+	addAudioClips: (
+		clips: Array<{ audioPath: string; durationMs: number }>,
+		gapMs?: number,
+	) => PlacedAudioClip[];
 	keyframes: { id: string; time: number }[];
 }
 

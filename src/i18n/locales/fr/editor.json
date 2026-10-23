@@ -199,5 +199,32 @@
 	"preview": {
 		"fullscreen": "Aperçu plein écran",
 		"exitFullscreen": "Quitter le plein écran (Échap)"
+	},
+	"textToSpeech": {
+		"menu": "Synthèse vocale",
+		"title": "Synthèse vocale",
+		"description": "Saisissez ce que la voix doit dire. Le son est ajouté à la timeline à la tête de lecture, un clip par paragraphe.",
+		"textLabel": "Texte",
+		"placeholder": "Saisissez ou collez ce que la voix doit dire…",
+		"parts": "{{count}} clips",
+		"language": "Langue",
+		"chinese": "Chinois",
+		"english": "Anglais",
+		"voice": "Voix",
+		"preview": "Écouter la voix",
+		"previewing": "Chargement de la voix…",
+		"notInstalled": "La voix hors ligne n’est pas installée. Installez le paquet hors ligne complet ou lancez npm run prepare:offline-tts sur une machine de développement.",
+		"olderVoice": "Voici l’ancienne voix : elle lit une langue par ligne et ignore les mots anglais dans un texte chinois.",
+		"noVideo": "Ouvrez d’abord une vidéo.",
+		"tooMany": "Le texte a trop de paragraphes. Gardez-en {{max}} au maximum.",
+		"add": "Ajouter à la timeline",
+		"generating": "Création de la voix…",
+		"error": "Impossible de créer la voix :",
+		"nothingSpoken": "La voix n’a rien pu dire de ce texte.",
+		"noRoom": "Pas de place pour la voix à la tête de lecture. Déplacez la tête de lecture ou libérez une piste audio.",
+		"skipped": "{{count}} partie(s) ne contenaient rien de prononçable et ont été ignorées.",
+		"notPlaced": "{{count}} partie(s) ne tenaient pas avant la fin de la vidéo.",
+		"trimmed": "La voix a été coupée à la fin de la vidéo.",
+		"added": "Voix ajoutée à la timeline"
 	}
 }

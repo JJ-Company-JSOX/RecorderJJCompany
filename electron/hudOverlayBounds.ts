@@ -42,14 +42,16 @@ export function shouldExpandHudOverlayFallback({
 	fallbackExpanded,
 	recordingActive,
 	webcamPreviewVisible,
+	setupVisible = true,
 }: {
 	fallbackExpanded: boolean;
 	recordingActive: boolean;
 	webcamPreviewVisible: boolean;
+	setupVisible?: boolean;
 }): boolean {
 	// The idle setup panel needs room even when the mouse is outside its controls.
 	// During recording keep the existing compact HUD unless the camera is visible.
-	return !recordingActive || fallbackExpanded || webcamPreviewVisible;
+	return (!recordingActive && setupVisible) || fallbackExpanded || webcamPreviewVisible;
 }
 
 export function resizeHudOverlayFallbackBounds(

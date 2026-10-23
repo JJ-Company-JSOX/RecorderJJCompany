@@ -93,5 +93,16 @@
 		"updateNow": "Nu updaten",
 		"restartToUpdate": "Opnieuw starten om te updaten",
 		"tryAgain": "Opnieuw proberen"
+	},
+	"ready": {
+		"title": "Ready to record",
+		"microphone": "Microphone",
+		"camera": "Camera",
+		"systemAudio": "System audio",
+		"settings": "Recording settings",
+		"cancelCountdown": "Cancel countdown",
+		"start": "Start recording",
+		"hide": "Hide recorder",
+		"close": "Close recorder"
 	}
 }

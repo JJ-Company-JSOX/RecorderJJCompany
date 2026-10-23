@@ -110,6 +110,7 @@ export type EditorEffectSection =
 	| "ai"
 	| "scene"
 	| "cursor"
+	| "annotations"
 	| "captions"
 	| "caption"
 	| "webcam"

@@ -93,5 +93,16 @@
 		"updateNow": "Aggiorna ora",
 		"restartToUpdate": "Riavvia per aggiornare",
 		"tryAgain": "Riprova"
+	},
+	"ready": {
+		"title": "Ready to record",
+		"microphone": "Microphone",
+		"camera": "Camera",
+		"systemAudio": "System audio",
+		"settings": "Recording settings",
+		"cancelCountdown": "Cancel countdown",
+		"start": "Start recording",
+		"hide": "Hide recorder",
+		"close": "Close recorder"
 	}
 }

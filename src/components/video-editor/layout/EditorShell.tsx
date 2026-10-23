@@ -1,33 +1,35 @@
-import { createPortal } from "react-dom";
-import type { EditState } from "../auto-edit/plan";
-import { OnboardingController } from "@/components/auth/OnboardingController";
-import { AccountProfileContext } from "@/components/ui/account-avatar";
-import { DashboardSettingsContext } from "../dashboard/DashboardSettings";
-import { RecordlySignInDialog, type SignInReason } from "@/components/auth/RecordlySignInDialog";
-import { useRecordlyAuth } from "@/components/auth/useRecordlyAuth";
-import { useVideoSourceRecovery } from "../hooks/useVideoSourceRecovery";
-import { useRecordingLibrary } from "../library/useRecordingLibrary";
-import { RecordingLibraryPanel } from "../library/RecordingLibraryPanel";
-import { RECORDING_DRAG_TYPE } from "@/types/recordingLibrary";
-import { Button } from "@/components/ui/button";
 import {
+	type ComponentProps,
 	lazy,
 	Suspense,
 	useCallback,
-	useMemo,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
-	type ComponentProps,
 } from "react";
+import { createPortal } from "react-dom";
 import { EditorAnnouncementBanner } from "@/components/announcements/EditorAnnouncementBanner";
+import { OnboardingController } from "@/components/auth/OnboardingController";
+import { RecordlySignInDialog, type SignInReason } from "@/components/auth/RecordlySignInDialog";
+import { useRecordlyAuth } from "@/components/auth/useRecordlyAuth";
+import { AccountProfileContext } from "@/components/ui/account-avatar";
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toast";
 import type { useI18n } from "@/contexts/I18nContext";
+import { getStartupView } from "@/lib/startupView";
+import { RECORDING_DRAG_TYPE } from "@/types/recordingLibrary";
+import type { EditState } from "../auto-edit/plan";
+import { DashboardSettingsContext } from "../dashboard/DashboardSettings";
+import { HomeLoadingSkeleton } from "../dashboard/HomeLoadingSkeleton";
 import type { useEditorExportController } from "../export/useEditorExportController";
 import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
 import type { useExportSettings } from "../export/useExportSettings";
 import type { useTimelineEditingController } from "../hooks/useTimelineEditingController";
+import { useVideoSourceRecovery } from "../hooks/useVideoSourceRecovery";
+import { RecordingLibraryPanel } from "../library/RecordingLibraryPanel";
+import { useRecordingLibrary } from "../library/useRecordingLibrary";
 import type { useVideoEditorPresets } from "../presets/useVideoEditorPresets";
 import type { useEditorProjectController } from "../project/useEditorProjectController";
 import { SettingsPanel } from "../SettingsPanel";
@@ -35,16 +37,15 @@ import type { useAppearanceState } from "../state/useAppearanceState";
 import type { useEditorUiState } from "../state/useEditorUiState";
 import type { useProjectState } from "../state/useProjectState";
 import type { useTimelineState } from "../state/useTimelineState";
+import type { EditorEffectSection } from "../types";
 import { CropEditorDialog } from "./CropEditorDialog";
 import { EditorDialogs } from "./EditorDialogs";
-import { getStartupView } from "@/lib/startupView";
-import { HomeLoadingSkeleton } from "../dashboard/HomeLoadingSkeleton";
-import { EditorLoadingSkeleton } from "./EditorLoadingSkeleton";
 import { EditorHeader } from "./EditorHeader";
+import { EditorLoadingSkeleton } from "./EditorLoadingSkeleton";
 import { EditorPreviewPanel } from "./EditorPreviewPanel";
 import { EditorSidebar } from "./EditorSidebar";
 import { EditorTimelinePanel } from "./EditorTimelinePanel";
-import type { EditorEffectSection } from "../types";
+
 const AutoEditPanel = lazy(() =>
 	import("../auto-edit/AutoEditPanel").then((module) => ({ default: module.AutoEditPanel })),
 );
@@ -285,6 +286,29 @@ export function EditorShell(props: Props) {
 		handleSelectAnnotation,
 		handleAutoSuggestZoomsConsumed,
 	} = editing;
+	const annotationInsertRef = useRef({
+		time: projection.timelinePlayheadTime,
+		duration: projection.timelineDuration,
+	});
+	annotationInsertRef.current = {
+		time: projection.timelinePlayheadTime,
+		duration: projection.timelineDuration,
+	};
+	const addQuickAnnotation = useCallback(
+		(type: "text" | "figure" | "blur") => {
+			const { time, duration } = annotationInsertRef.current;
+			const totalMs = duration * 1000;
+			if (!Number.isFinite(totalMs) || totalMs <= 0) return;
+			const lengthMs = Math.min(3000, totalMs);
+			const startMs = Math.max(0, Math.min(time * 1000, totalMs - lengthMs));
+			annotationCommands.handleAnnotationAdded(
+				{ start: startMs, end: startMs + lengthMs },
+				0,
+				type,
+			);
+		},
+		[annotationCommands.handleAnnotationAdded],
+	);
 	const { dialogActions, status: exportStatus, exportMessage } = exportController;
 	const dashboardSettingsContent = useMemo(
 		() => (
@@ -512,6 +536,10 @@ export function EditorShell(props: Props) {
 			>
 				<div className="relative z-10 flex min-h-0 flex-1 pt-3">
 					<EditorSidebar
+						onAddAnnotation={addQuickAnnotation}
+						canAddAnnotation={
+							projection.timelineDuration > 0 && Boolean(project.videoPath)
+						}
 						accountUser={auth.user}
 						onAccountClick={openAccount}
 						panelContent={libraryPanelContent}

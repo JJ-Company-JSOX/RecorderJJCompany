@@ -23,6 +23,7 @@ import {
 	useLaunchPopoverCoordinator,
 } from "./popovers/LaunchPopoverCoordinator";
 import { RecordingControls } from "./RecordingControls";
+import { RecordingReadyBar } from "./RecordingReadyBar";
 import { RecordingSetupPanel } from "./RecordingSetupPanel";
 
 export function LaunchWindow() {
@@ -161,6 +162,10 @@ function LaunchWindowContent() {
 	const pickerPending = useRef(false);
 	const [isPickerPending, setIsPickerPending] = useState(false);
 	const [sourceReady, setSourceReady] = useState(false);
+	const [setupVisible, setSetupVisible] = useState(true);
+	useEffect(() => {
+		window.electronAPI.hudOverlaySetSetupVisible?.(setupVisible);
+	}, [setupVisible]);
 	const handlePickOnScreen = useCallback(async () => {
 		if (pickerPending.current || recording || finalizing) return;
 		pickerPending.current = true;
@@ -170,7 +175,10 @@ function LaunchWindowContent() {
 			if (!(await cancelRecordingStart())) return;
 			if (!(await preparePermissions())) return;
 			const result = await window.electronAPI.pickCaptureTarget();
-			if (result.success && result.source) syncSelectedSource(result.source);
+			if (result.success && result.source) {
+				syncSelectedSource(result.source);
+				setSetupVisible(false);
+			}
 			if (result.message && !result.canceled) {
 				if (result.success) toast.info(result.message);
 				else toast.error(result.message);
@@ -277,12 +285,34 @@ function LaunchWindowContent() {
 				beginInteractiveHudAction();
 				return (await cancelRecordingStart()) && (await preparePermissions());
 			}}
-			onSourceSelected={syncSelectedSource}
+			onSourceSelected={(source) => {
+				syncSelectedSource(source);
+				setSetupVisible(false);
+			}}
 			onPickOnScreen={() => void handlePickOnScreen()}
 			onRecord={toggleRecording}
 			onCancelCountdown={() => void cancelRecordingStart()}
 			onOpenFile={openVideoFile}
 			onHome={openHome}
+			onHide={() => void window.electronAPI.hudOverlayHide()}
+			onClose={() => void window.electronAPI.hudOverlayClose()}
+		/>
+	);
+
+	const readyControls = (
+		<RecordingReadyBar
+			source={selectedSource}
+			countdown={countdownActive}
+			disabled={isPickerPending || !sourceReady || !hasSelectedSource}
+			microphone={microphoneEnabled}
+			camera={webcamEnabled}
+			systemAudio={systemAudioEnabled}
+			onMicrophone={() => setMicrophoneEnabled(!microphoneEnabled)}
+			onCamera={() => setWebcamEnabled(!webcamEnabled)}
+			onSystemAudio={() => setSystemAudioEnabled(!systemAudioEnabled)}
+			onSettings={() => setSetupVisible(true)}
+			onStart={toggleRecording}
+			onCancelCountdown={() => void cancelRecordingStart()}
 			onHide={() => void window.electronAPI.hudOverlayHide()}
 			onClose={() => void window.electronAPI.hudOverlayClose()}
 		/>
@@ -298,7 +328,13 @@ function LaunchWindowContent() {
 		</div>
 	);
 
-	const hudMode = finalizing ? "finalizing" : recording ? "recording" : "idle";
+	const hudMode = finalizing
+		? "finalizing"
+		: recording
+			? "recording"
+			: setupVisible
+				? "idle"
+				: "ready";
 	const useNativeHudBarDrag =
 		platform === "linux" || hudOverlayMousePassthroughSupported === false;
 	const shouldAnimateHudLayout = !recording && !showRecordingWebcamPreview && !isHudDragging;
@@ -378,7 +414,9 @@ function LaunchWindowContent() {
 												? finalizingControls
 												: recording
 													? recordingControls
-													: idleControls}
+													: setupVisible
+														? idleControls
+														: readyControls}
 										</motion.div>
 									</AnimatePresence>
 								</div>

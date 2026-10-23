@@ -247,6 +247,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("auto-edit-narrate-synthesize", cues, language, speakerId),
 	previewAutoEditNarrationVoice: (language: "zh" | "en" | "ms", speakerId?: number) =>
 		ipcRenderer.invoke("auto-edit-tts-preview", language, speakerId),
+	hudOverlaySetSetupVisible: (visible: boolean) =>
+		ipcRenderer.send("hud-overlay-set-setup-visible", visible),
 	hudOverlaySetIgnoreMouse: (ignore: boolean) => {
 		ipcRenderer.send("hud-overlay-set-ignore-mouse", ignore);
 	},

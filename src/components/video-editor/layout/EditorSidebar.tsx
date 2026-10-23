@@ -1,5 +1,16 @@
-import { AccountAvatar } from "@/components/ui/account-avatar";
+import {
+	Button,
+	Card,
+	Label,
+	Switch,
+	ToggleButton,
+	ToggleButtonGroup,
+	Tooltip,
+} from "@heroui/react";
 import type { User } from "@supabase/supabase-js";
+import type { ComponentProps, ReactNode } from "react";
+import { memo, useMemo, useState } from "react";
+import { AccountAvatar } from "@/components/ui/account-avatar";
 import {
 	Camera,
 	ClosedCaptioning,
@@ -7,24 +18,17 @@ import {
 	FrameCorners,
 	Gear,
 	MagicWand,
+	TextT,
 } from "@/components/ui/icons";
-import {
-	ToggleButtonGroup,
-	ToggleButton,
-	Button,
-	Tooltip,
-	Card,
-	Switch,
-	Label,
-} from "@heroui/react";
-import type { ComponentProps, ReactNode } from "react";
-import { memo, useMemo, useState } from "react";
 import type { useI18n } from "@/contexts/I18nContext";
 import ExtensionManager from "../ExtensionManager";
 import { SettingsPanel } from "../SettingsPanel";
 import type { EditorEffectSection } from "../types";
+import { AnnotationTools, type QuickAnnotationType } from "./AnnotationTools";
 
 type Props = {
+	onAddAnnotation: (type: QuickAnnotationType) => void;
+	canAddAnnotation: boolean;
 	accountUser?: User | null;
 	panelContent?: ReactNode;
 	onAccountClick?: () => void;
@@ -51,6 +55,8 @@ function shallowEqualProperties(before: object, after: object): boolean {
 
 export const EditorSidebar = memo(
 	function EditorSidebar({
+		onAddAnnotation,
+		canAddAnnotation,
 		t,
 		accountUser,
 		activeSection,
@@ -86,6 +92,11 @@ export const EditorSidebar = memo(
 					id: "cursor" as const,
 					label: t("settings.sections.cursor", "Cursor"),
 					icon: Cursor,
+				},
+				{
+					id: "annotations" as const,
+					label: t("settings.annotationTools.title", "Annotation tools"),
+					icon: TextT,
 				},
 				{
 					id: "webcam" as const,
@@ -206,7 +217,13 @@ export const EditorSidebar = memo(
 												</Switch>
 											)}
 										</header>
-										{activeSection === "extensions" ? (
+										{activeSection === "annotations" &&
+										!settingsPanelProps.selectedAnnotationId ? (
+											<AnnotationTools
+												disabled={!canAddAnnotation}
+												onAdd={onAddAnnotation}
+											/>
+										) : activeSection === "extensions" ? (
 											<ExtensionManager />
 										) : (
 											<SettingsPanel

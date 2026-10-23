@@ -267,5 +267,12 @@
 		"title": "Mises à jour",
 		"experimental": "Mises à jour expérimentales",
 		"saveFailed": "Impossible de changer le canal de mise à jour."
+	},
+	"annotationTools": {
+		"title": "Annotation tools",
+		"text": "Text",
+		"arrow": "Arrow",
+		"blur": "Blur mask",
+		"help": "Add a layer at the playhead, then edit its appearance and duration. Changes are saved in the project and included in exports."
 	}
 }

@@ -267,5 +267,12 @@
 		"experimental": "Экспериментальные обновления",
 		"saveFailed": "Не удалось изменить канал обновлений.",
 		"experimentalDescription": "Вы включили экспериментальные обновления, поэтому можете протестировать последнее обновление Recordly до его широкого выпуска."
+	},
+	"annotationTools": {
+		"title": "Annotation tools",
+		"text": "Text",
+		"arrow": "Arrow",
+		"blur": "Blur mask",
+		"help": "Add a layer at the playhead, then edit its appearance and duration. Changes are saved in the project and included in exports."
 	}
 }

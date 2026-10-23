@@ -196,3 +196,22 @@ describe("shouldExpandHudOverlayFallback", () => {
 		).toBe(true);
 	});
 });
+
+it("collapses the confirmed ready state without shrinking an explicitly opened setup", () => {
+	expect(
+		shouldExpandHudOverlayFallback({
+			fallbackExpanded: false,
+			recordingActive: false,
+			webcamPreviewVisible: false,
+			setupVisible: false,
+		}),
+	).toBe(false);
+	expect(
+		shouldExpandHudOverlayFallback({
+			fallbackExpanded: false,
+			recordingActive: false,
+			webcamPreviewVisible: false,
+			setupVisible: true,
+		}),
+	).toBe(true);
+});

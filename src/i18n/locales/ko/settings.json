@@ -267,5 +267,12 @@
 		"title": "업데이트",
 		"experimental": "실험적 업데이트",
 		"saveFailed": "업데이트 채널을 변경하지 못했습니다."
+	},
+	"annotationTools": {
+		"title": "Annotation tools",
+		"text": "Text",
+		"arrow": "Arrow",
+		"blur": "Blur mask",
+		"help": "Add a layer at the playhead, then edit its appearance and duration. Changes are saved in the project and included in exports."
 	}
 }

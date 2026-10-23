@@ -43,6 +43,7 @@ let hudOverlayMouseReassertTimer: NodeJS.Timeout | null = null;
 let hudOverlayRecordingActive = false;
 let hudCaptureStarting = false;
 let hudOverlayWebcamPreviewVisible = false;
+let hudOverlaySetupVisible = true;
 let countdownWindow: BrowserWindow | null = null;
 let capturePickerWindows: BrowserWindow[] = [];
 let areaRecordingBorderWindow: BrowserWindow | null = null;
@@ -245,6 +246,7 @@ function getHudOverlayBounds() {
 		fallbackExpanded: hudOverlayFallbackExpanded,
 		recordingActive: hudOverlayRecordingActive,
 		webcamPreviewVisible: hudOverlayWebcamPreviewVisible,
+		setupVisible: hudOverlaySetupVisible,
 	});
 	return getHudOverlayWindowBounds(
 		workArea,
@@ -327,6 +329,7 @@ function setHudOverlayFallbackExpanded(expanded: boolean) {
 			fallbackExpanded: expanded,
 			recordingActive: hudOverlayRecordingActive,
 			webcamPreviewVisible: hudOverlayWebcamPreviewVisible,
+			setupVisible: hudOverlaySetupVisible,
 		}),
 	);
 	hudOverlayWindow.setBounds(nextBounds, false);
@@ -464,6 +467,13 @@ ipcMain.handle("get-hud-overlay-mouse-passthrough-supported", () => {
 	};
 });
 
+ipcMain.on("hud-overlay-set-setup-visible", (event, visible: boolean) => {
+	if (typeof visible !== "boolean" || event.sender !== hudOverlayWindow?.webContents) return;
+	hudOverlaySetupVisible = visible;
+	hudOverlayFallbackExpanded = false;
+	applyHudOverlayBounds();
+});
+
 ipcMain.on("hud-overlay-set-webcam-preview-visible", (_event, visible: boolean) => {
 	const nextVisible = Boolean(visible);
 	if (hudOverlayWebcamPreviewVisible === nextVisible) {
@@ -514,6 +524,7 @@ export function createHudOverlayWindow(): BrowserWindow {
 	loadHudOverlayCaptureProtectionSetting();
 	hudOverlayFallbackExpanded = false;
 	hudOverlayWebcamPreviewVisible = false;
+	hudOverlaySetupVisible = true;
 	const initialBounds = getHudOverlayBounds();
 	let hasShownHudWindow = false;
 

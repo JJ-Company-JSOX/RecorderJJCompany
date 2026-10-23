@@ -267,5 +267,12 @@
 		"title": "更新",
 		"experimental": "實驗性更新",
 		"saveFailed": "無法變更更新頻道。"
+	},
+	"annotationTools": {
+		"title": "标注工具",
+		"text": "文字",
+		"arrow": "箭头",
+		"blur": "模糊遮罩",
+		"help": "在播放头位置添加图层，然后调整外观和时长。修改会保存到工程并用于导出。"
 	}
 }

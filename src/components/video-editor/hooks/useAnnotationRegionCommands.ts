@@ -29,14 +29,15 @@ export function useAnnotationRegionCommands({
 	nextAnnotationZIndexRef,
 }: UseAnnotationRegionCommandsParams) {
 	const handleAnnotationAdded = useCallback(
-		(span: Span, trackIndex = 0) => {
+		(span: Span, trackIndex = 0, type: "text" | "figure" | "blur" = "text") => {
 			const id = `annotation-${nextAnnotationIdRef.current++}`;
 			const newRegion: AnnotationRegion = {
 				id,
 				startMs: Math.round(span.start),
 				endMs: Math.round(span.end),
-				type: "text",
-				content: "Enter text...",
+				type,
+				content: type === "text" ? "Enter text..." : "",
+				...(type === "figure" ? { figureData: { ...DEFAULT_FIGURE_DATA } } : {}),
 				position: { ...DEFAULT_ANNOTATION_POSITION },
 				size: { ...DEFAULT_ANNOTATION_SIZE },
 				style: { ...DEFAULT_ANNOTATION_STYLE },

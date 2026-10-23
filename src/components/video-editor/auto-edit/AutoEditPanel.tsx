@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
+import { loadAppSetting, saveAppSetting } from "@/lib/appSettings";
 import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
 import { projectCaptionCues } from "../captionTimeline";
 import { applyEditPlan } from "./apply";
@@ -26,6 +27,23 @@ import { buildTextCutPlan, textLines } from "./textCuts";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
 import { wizardMessages } from "./wizardMessages";
+
+/** The narration voice chosen for each language, remembered across sessions. */
+const VOICE_SETTING = "recordly.narrationVoice";
+function savedVoiceChoice(): Partial<Record<PlanLanguage, number>> {
+	const saved = loadAppSetting<unknown>(VOICE_SETTING);
+	if (!saved || typeof saved !== "object") return {};
+	return Object.fromEntries(
+		Object.entries(saved).filter(
+			([language, id]) => ["zh", "en", "ms"].includes(language) && Number.isInteger(id),
+		),
+	);
+}
+
+/** Stops a voice preview; closing an already closed player would reject. */
+function closePlayer(player: AudioContext | null) {
+	if (player && player.state !== "closed") void player.close().catch(() => undefined);
+}
 
 export const AutoEditPanel = memo(function AutoEditPanel({
 	open,
@@ -55,7 +73,15 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
 	const [busy, setBusy] = useState<
-		"analysis" | "review" | "narrate" | "synthesize" | "vision" | "tools" | "translate" | null
+		| "analysis"
+		| "review"
+		| "narrate"
+		| "synthesize"
+		| "preview"
+		| "vision"
+		| "tools"
+		| "translate"
+		| null
 	>(null);
 	const [error, setError] = useState("");
 	const [silentFallback, setSilentFallback] = useState(false);
@@ -73,10 +99,11 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		skipped: number;
 		unspoken: number;
 	} | null>(null);
-	const [ttsStatus, setTtsStatus] = useState<{
-		available: boolean;
-		voices?: Record<PlanLanguage, boolean>;
-	} | null>(null);
+	const [ttsStatus, setTtsStatus] = useState<Awaited<
+		ReturnType<Window["electronAPI"]["getBundledTtsStatus"]>
+	> | null>(null);
+	const [voiceChoice, setVoiceChoice] = useState(savedVoiceChoice);
+	const previewPlayer = useRef<AudioContext | null>(null);
 	const [narrationLanguage, setNarrationLanguage] = useState<PlanLanguage>("zh");
 	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
 	const [keepFullFrame, setKeepFullFrame] = useState(false);
@@ -170,6 +197,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		() => () => {
 			generation.current++;
 			void window.electronAPI.cancelAutoEditAnalysis?.();
+			closePlayer(previewPlayer.current);
 		},
 		[],
 	);
@@ -183,10 +211,14 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const pending = available.filter((s) => !decisions[s.id] || decisions[s.id] === "pending");
 	const accepted = available.filter((s) => decisions[s.id] === "accept");
 	const ready = bundledStatus?.available && speechReady;
+	// The Kokoro Chinese voice also says English words, so on-screen English labels can stay.
+	const mixedLanguage = !!ttsStatus?.mixedLanguage;
 	// Mirrors the main-process check: each bundled voice can only read its own script.
 	const speaks = (text: string) =>
 		narrationLanguage === "zh"
-			? /\p{Script=Han}/u.test(text)
+			? mixedLanguage
+				? /\p{Script=Han}|[A-Za-z]/u.test(text)
+				: /\p{Script=Han}/u.test(text)
 			: /[A-Za-z]/.test(text) && !/\p{Script=Han}/u.test(text);
 	// Emptied lines are skipped; every remaining line must suit the chosen voice.
 	const narrationLines = (narrationDraft?.cues ?? [])
@@ -194,8 +226,51 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		.filter(Boolean);
 	const narrationSpeakable = narrationLines.length > 0 && narrationLines.every(speaks);
 	const narrationHasLatin =
-		narrationLanguage === "zh" && narrationLines.some((line) => /[A-Za-z]/.test(line));
+		narrationLanguage === "zh" &&
+		!mixedLanguage &&
+		narrationLines.some((line) => /[A-Za-z]/.test(line));
 	const voiceInstalled = !!ttsStatus?.voices?.[narrationLanguage];
+	// Voices for the draft's language, or for the language the next draft will use.
+	const voiceLanguage = narrationDraft ? narrationLanguage : language;
+	const voiceOptions = (ttsStatus?.voiceList ?? []).filter((v) => v.language === voiceLanguage);
+	const selectedVoice =
+		voiceOptions.find((v) => v.id === voiceChoice[voiceLanguage]) ??
+		voiceOptions.find((v) => v.default) ??
+		voiceOptions[0];
+	const chooseVoice = (id: number) => {
+		const next = { ...voiceChoice, [voiceLanguage]: id };
+		setVoiceChoice(next);
+		saveAppSetting(VOICE_SETTING, next);
+	};
+	const previewVoice = async () => {
+		const run = ++generation.current;
+		setBusy("preview");
+		setError("");
+		try {
+			const result = await window.electronAPI.previewAutoEditNarrationVoice?.(
+				voiceLanguage,
+				selectedVoice?.id,
+			);
+			if (run !== generation.current) return;
+			if (!result?.success || !result.samples || !result.sampleRate)
+				throw new Error(result?.error);
+			closePlayer(previewPlayer.current);
+			const context = new AudioContext();
+			previewPlayer.current = context;
+			const buffer = context.createBuffer(1, result.samples.length, result.sampleRate);
+			buffer.copyToChannel(new Float32Array(result.samples), 0);
+			const source = context.createBufferSource();
+			source.buffer = buffer;
+			source.connect(context.destination);
+			source.onended = () => closePlayer(context);
+			source.start();
+		} catch (e) {
+			if (run === generation.current)
+				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
+		} finally {
+			if (run === generation.current) setBusy(null);
+		}
+	};
 	const stages = ["media", "transcribe", "understand", "vision"] as const;
 	const activeStage = stages.indexOf(speechStage as (typeof stages)[number]);
 	const summarize = (next: EditPlan, choices: Record<string, Decision>) => {
@@ -467,6 +542,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			const result = await window.electronAPI.synthesizeAutoEditNarration(
 				cues,
 				narrationLanguage,
+				selectedVoice?.id,
 			);
 			if (run !== generation.current) return;
 			if (!result.success || !result.clips) throw new Error(result.error);
@@ -1109,6 +1185,35 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 										)}
 									</select>
 								</label>
+								{selectedVoice && (
+									<div className="flex flex-wrap items-center gap-2 text-sm">
+										<label className="flex flex-wrap items-center gap-2">
+											{n.voice}
+											<select
+												value={selectedVoice.id}
+												disabled={!!busy}
+												onChange={(e) =>
+													chooseVoice(Number(e.target.value))
+												}
+												className="rounded-lg border border-separator bg-background px-2 py-1.5 text-sm text-foreground"
+											>
+												{voiceOptions.map((voice) => (
+													<option key={voice.id} value={voice.id}>
+														{voice.labels[language]}
+													</option>
+												))}
+											</select>
+										</label>
+										<Button
+											variant="secondary"
+											size="sm"
+											disabled={!!busy}
+											onClick={() => void previewVoice()}
+										>
+											{busy === "preview" ? n.previewing : n.preview}
+										</Button>
+									</div>
+								)}
 								<div className="flex flex-wrap gap-2">
 									<Button
 										disabled={!bundledStatus?.available || !!busy}
@@ -1120,7 +1225,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 												: n.busy
 											: n.draft}
 									</Button>
-									{(busy === "narrate" || busy === "synthesize") && (
+									{(busy === "narrate" ||
+										busy === "synthesize" ||
+										busy === "preview") && (
 										<Button
 											variant="secondary"
 											onClick={() => {
@@ -1183,7 +1290,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									</label>
 									{narrationApproved && !narrationSpeakable && (
 										<p className="text-sm">
-											{w.voiceWrongLanguage[narrationLanguage]}
+											{mixedLanguage && narrationLanguage === "zh"
+												? n.wrongLanguageMixed
+												: w.voiceWrongLanguage[narrationLanguage]}
 										</p>
 									)}
 									<Button

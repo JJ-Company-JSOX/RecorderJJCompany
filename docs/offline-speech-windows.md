@@ -27,11 +27,13 @@
 ```powershell
 npm run prepare:offline-ai
 npm run prepare:offline-speech
+npm run prepare:offline-tts
+npm run prepare:offline-ocr
 npm run build:win:speech
 node scripts/smoke-offline-speech.mjs --run
 ```
 
-前两条仅在开发机获取并校验锁定资产，不在客户启动时执行。`--verify` 或 `npm run verify:offline-speech` 只校验现有资产。`smoke-offline-speech.mjs` 没有 `--run` 或传入 `--help` 时不会启动应用、模型、录制或合成。显式运行只使用独立合成画面、SAPI 写入 WAV 文件和隔离配置，不播放声音、不录制桌面、不上传文件。
+前四条仅在开发机获取并校验锁定资产，不在客户启动时执行。语音版和语音界面版沿用完整离线 AI 版的打包配置，所以也带上 AI 解说配音（`tts-kokoro`）和屏幕文字识别（`ocr`）；打包前同样执行 `verify:offline-tts`、`verify:offline-ocr`，缺失或与锁文件不符时停止，打包后 `smoke:packaged-binaries` 检查安装包里的声音和 OCR 文件。`--verify` 或 `npm run verify:offline-speech` 只校验现有资产。`smoke-offline-speech.mjs` 没有 `--run` 或传入 `--help` 时不会启动应用、模型、录制或合成。显式运行只使用独立合成画面、SAPI 写入 WAV 文件和隔离配置，不播放声音、不录制桌面、不上传文件。
 
 自动测试必须证明实际省略了重复讲解的源片段；只加速静音、缩短输出时长不能算语义删除。检查字幕、应用、撤销、保存、重开、H.264/AAC 导出、非静音音轨和音画时长。
 

@@ -10,6 +10,7 @@ import {
 	isNarrationFrame,
 	type NarrationFrame,
 } from "../autoEdit/narrationFrames";
+import type { OcrEngine } from "../autoEdit/ocrTypes";
 import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
 import {
 	generateBundledNarration,
@@ -17,7 +18,11 @@ import {
 	LocalNarrationGenerator,
 } from "../autoEdit/narrator";
 import { isSubtitleLines, type SubtitleLine, translateSubtitles } from "../autoEdit/translate";
-import { getBundledTtsStatus, synthesizeBundledNarration } from "../autoEdit/tts";
+import {
+	getBundledTtsStatus,
+	previewBundledVoice,
+	synthesizeBundledNarration,
+} from "../autoEdit/tts";
 import { analyzeVideoFrames } from "../autoEdit/vision";
 import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
 import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
@@ -31,7 +36,15 @@ import { normalizeVideoSourcePath } from "../utils";
 import { registerOfflineTools } from "./offlineTools";
 import { protectSilenceWithVad } from "../captions/vadProtection";
 
-export function registerAutoEditHandlers() {
+export type AutoEditHandlerOptions = {
+	/**
+	 * Opens the bundled OCR engine for one voice-over job, or resolves undefined when this build
+	 * has none. With it, click labels are exact screen text; without it the vision model reads them.
+	 */
+	openOcr?: (signal: AbortSignal) => Promise<OcrEngine | undefined>;
+};
+
+export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 	const bundledRoot = () =>
 		app.isPackaged
 			? path.join(process.resourcesPath, "offline-ai")
@@ -326,6 +339,7 @@ export function registerAutoEditHandlers() {
 			const abort = () => controller.abort();
 			event.sender.once("destroyed", abort);
 			let session: Awaited<ReturnType<typeof startBundledAi>> | undefined;
+			let ocr: OcrEngine | undefined;
 			try {
 				if (
 					!plan ||
@@ -352,14 +366,27 @@ export function registerAutoEditHandlers() {
 				if (screen && !approved)
 					throw new Error("Select an approved local recording first");
 				session = await startBundledAi(bundledRoot(), controller.signal);
+				if (screen && approved && frames.length && options.openOcr)
+					try {
+						ocr = await options.openOcr(controller.signal);
+					} catch (error) {
+						// OCR only sharpens labels; the vision model still reads the screen without it.
+						controller.signal.throwIfAborted();
+						console.warn(
+							"[auto-edit-narration] OCR unavailable:",
+							error instanceof Error ? error.message : error,
+						);
+					}
 				// Look at the screen at each narrated moment first, so lines can name what is shown.
 				const screens =
 					screen && approved
 						? await describeNarrationFrames({
 								videoPath: approved,
 								ffmpegPath: getFfmpegBinaryPath(),
+								ffprobePath: getFfprobeBinaryPath(),
 								frames,
 								look: session.look,
+								ocr,
 								signal: controller.signal,
 								onProgress: (completed, total) => {
 									if (!event.sender.isDestroyed())
@@ -370,6 +397,10 @@ export function registerAutoEditHandlers() {
 								},
 							})
 						: undefined;
+				// The Kokoro voice reads English labels inside Chinese lines; the older one cannot.
+				const { mixedLanguage } = await getBundledTtsStatus().catch(() => ({
+					mixedLanguage: false,
+				}));
 				return {
 					success: true,
 					draft: await generateBundledNarration(
@@ -380,6 +411,7 @@ export function registerAutoEditHandlers() {
 						{
 							style: isNarrationStyle(screen?.style) ? screen.style : "tutorial",
 							timelineEndMs: screen?.timelineEndMs,
+							mixedLanguage,
 						},
 					),
 				};
@@ -390,6 +422,7 @@ export function registerAutoEditHandlers() {
 						error instanceof Error ? error.message : "Bundled narration draft failed",
 				};
 			} finally {
+				await ocr?.dispose().catch(() => undefined);
 				await session?.close();
 				running.delete(event.sender.id);
 				event.sender.removeListener("destroyed", abort);
@@ -441,7 +474,12 @@ export function registerAutoEditHandlers() {
 	ipcMain.handle("auto-edit-tts-status", () => getBundledTtsStatus());
 	ipcMain.handle(
 		"auto-edit-narrate-synthesize",
-		async (event, cues: Array<{ id: string; text: string }>, language?: string) => {
+		async (
+			event,
+			cues: Array<{ id: string; text: string }>,
+			language?: string,
+			speakerId?: number,
+		) => {
 			if (running.has(event.sender.id))
 				return { success: false, error: "Analysis already running" };
 			const controller = new AbortController();
@@ -451,10 +489,14 @@ export function registerAutoEditHandlers() {
 			try {
 				if (!Array.isArray(cues) || !cues.length || cues.length > 200)
 					throw new Error("Invalid narration cues");
+				// Checked again against the installed voice's curated speakers.
+				if (speakerId !== undefined && !Number.isInteger(speakerId))
+					throw new Error("Invalid narration speaker");
 				const clips = await synthesizeBundledNarration({
 					cues,
 					outputDirectory: path.join(app.getPath("userData"), "narration-audio"),
 					language: isNarrationLanguage(language) ? language : "zh",
+					speakerId,
 					signal: controller.signal,
 				});
 				return { success: true, clips };
@@ -462,6 +504,36 @@ export function registerAutoEditHandlers() {
 				return {
 					success: false,
 					error: error instanceof Error ? error.message : "Narration synthesis failed",
+				};
+			} finally {
+				running.delete(event.sender.id);
+				event.sender.removeListener("destroyed", abort);
+			}
+		},
+	);
+	ipcMain.handle(
+		"auto-edit-tts-preview",
+		async (event, language?: string, speakerId?: number) => {
+			if (running.has(event.sender.id))
+				return { success: false, error: "Analysis already running" };
+			const controller = new AbortController();
+			running.set(event.sender.id, controller);
+			const abort = () => controller.abort();
+			event.sender.once("destroyed", abort);
+			try {
+				if (!isNarrationLanguage(language)) throw new Error("Invalid narration language");
+				if (speakerId !== undefined && !Number.isInteger(speakerId))
+					throw new Error("Invalid narration speaker");
+				const { samples, sampleRate } = await previewBundledVoice({
+					language,
+					speakerId,
+					signal: controller.signal,
+				});
+				return { success: true, samples, sampleRate };
+			} catch (error) {
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : "Narration preview failed",
 				};
 			} finally {
 				running.delete(event.sender.id);

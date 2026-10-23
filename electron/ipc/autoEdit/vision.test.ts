@@ -13,13 +13,17 @@ const ffmpegPath = require("ffmpeg-static") as string,
 const dir = mkdtempSync(path.join(tmpdir(), "jsox-vision-")),
 	videoPath = path.join(dir, "fixture.mkv");
 const staticVideoPath = path.join(dir, "static.mkv");
+const largeVideoPath = path.join(dir, "large.mkv");
 const requests: {
 	route: string;
 	body: Record<string, unknown> & { messages: { images: string[] }[] };
 }[] = [];
 let remote = false,
 	vision = true,
-	malformed = false;
+	/** How many of the next chat replies are not JSON. */
+	malformed = 0,
+	/** Chat requests are dropped, as when the model process has crashed. */
+	chatDown = false;
 let onChat: (() => void) | undefined;
 const server = http.createServer((req, res) => {
 	let body = "";
@@ -52,16 +56,18 @@ const server = http.createServer((req, res) => {
 			);
 		else {
 			onChat?.();
+			if (chatDown) {
+				req.socket.destroy();
+				return;
+			}
+			const broken = malformed > 0;
+			if (broken) malformed -= 1;
 			res.end(
 				JSON.stringify({
 					message: {
-						content: malformed
+						content: broken
 							? "broken JSON"
-							: JSON.stringify({
-									focus: { cx: 0.6, cy: 0.4 },
-									caption: "Save",
-									rationale: "fixture observation",
-								}),
+							: JSON.stringify({ focus: { x: 600, y: 400 }, caption: "Save" }),
 					},
 				}),
 			);
@@ -99,6 +105,21 @@ beforeAll(async () => {
 		"ffv1",
 		staticVideoPath,
 	]);
+	execFileSync(ffmpegPath, [
+		"-y",
+		"-hide_banner",
+		"-loglevel",
+		"error",
+		"-f",
+		"lavfi",
+		"-i",
+		"testsrc2=s=1920x1080:r=5:duration=2",
+		"-threads",
+		"2",
+		"-c:v",
+		"ffv1",
+		largeVideoPath,
+	]);
 	await new Promise<void>((resolve, reject) => {
 		server.once("error", reject);
 		server.listen(11434, "127.0.0.1", resolve);
@@ -117,7 +138,7 @@ const options = () => ({
 	count: 3,
 	signal: new AbortController().signal,
 });
-it("real FFmpeg extraction sends bounded JPEG samples over loopback and returns source timestamps, NOT real AI inference", async () => {
+it("real FFmpeg extraction sends bounded lossless PNG samples over loopback and returns source timestamps, NOT real AI inference", async () => {
 	const progress: number[] = [];
 	const result = await analyzeVideoFrames({
 		...options(),
@@ -125,15 +146,36 @@ it("real FFmpeg extraction sends bounded JPEG samples over loopback and returns 
 	});
 	expect(result.sampledTimesMs).toEqual([500, 1500, 2500]);
 	expect(progress).toEqual([1, 2, 3]);
+	// The model answers on a 0-1000 grid; the app keeps 0..1 fractions of the frame.
+	expect(result.observations[0]).toEqual({
+		timeMs: 500,
+		focus: { cx: 0.6, cy: 0.4 },
+		caption: "Save",
+	});
 	expect(result.observations).toHaveLength(3);
 	const chats = requests.filter((r) => r.route === "/api/chat");
 	expect(chats).toHaveLength(3);
 	for (const chat of chats) {
-		const jpeg = Buffer.from(chat.body.messages[1].images[0], "base64");
-		expect([...jpeg.subarray(0, 2)]).toEqual([255, 216]);
-		expect(jpeg.length).toBeLessThan(256000);
+		const png = Buffer.from(chat.body.messages[1].images[0], "base64");
+		expect(png.subarray(1, 4).toString()).toBe("PNG");
+		// A small recording is never enlarged.
+		expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([320, 180]);
 		expect(JSON.stringify(chat.body)).not.toContain(videoPath);
+		expect(chat.body.messages[0]).toMatchObject({
+			content: expect.stringContaining("0 to 1000"),
+		});
 	}
+});
+it("downscales large recordings with an area filter to at most 1024x576", async () => {
+	const describe = vi.fn(async (_image: Buffer) => bundledReply);
+	await analyzeVideoFrames({
+		...options(),
+		videoPath: largeVideoPath,
+		count: 1,
+		bundled: { name: "Bundled fixture", describe },
+	});
+	const png = describe.mock.calls[0][0];
+	expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1024, 576]);
 });
 it("refuses cloud-backed or non-vision models before any image is sent", async () => {
 	const before = requests.filter((r) => r.route === "/api/chat").length;
@@ -145,10 +187,20 @@ it("refuses cloud-backed or non-vision models before any image is sent", async (
 	vision = true;
 	expect(requests.filter((r) => r.route === "/api/chat")).toHaveLength(before);
 });
-it("fails on malformed output and aborts before invoking a model when canceled", async () => {
-	malformed = true;
-	await expect(analyzeVideoFrames(options())).rejects.toThrow();
-	malformed = false;
+it("logs malformed output per sample instead of failing the pass, and aborts before invoking a model when canceled", async () => {
+	malformed = 1;
+	const log = vi.fn();
+	const result = await analyzeVideoFrames({ ...options(), log });
+	expect(result.sampledTimesMs).toEqual([500, 1500, 2500]);
+	expect(result.observations.map((observation) => observation.timeMs)).toEqual([1500, 2500]);
+	expect(log).toHaveBeenCalledTimes(1);
+	expect(log.mock.calls[0][0]).toBe("sample at 500 ms skipped: unreadable visual model reply");
+	// Nothing usable from any sample is a failure, not "nothing worth zooming into".
+	malformed = 3;
+	await expect(analyzeVideoFrames({ ...options(), log })).rejects.toThrow(
+		"No video sample could be analyzed (unreadable visual model reply)",
+	);
+	malformed = 0;
 	const controller = new AbortController();
 	controller.abort();
 	await expect(analyzeVideoFrames({ ...options(), signal: controller.signal })).rejects.toThrow();
@@ -171,10 +223,45 @@ it("cancellation interrupts an in-flight image request and discards partial resu
 	}
 });
 
-const bundledReply = JSON.stringify({
-	focus: { cx: 0.6, cy: 0.4 },
-	caption: "Save",
-	rationale: "fixture",
+const bundledReply = JSON.stringify({ focus: { x: 600, y: 400 }, caption: "Save" });
+it("keeps the other samples when one bundled reply is unusable", async () => {
+	const describe = vi
+		.fn()
+		.mockResolvedValueOnce(bundledReply)
+		.mockResolvedValueOnce(JSON.stringify({ focus: { x: 0.5, y: 0.5 }, caption: "Fractions" }))
+		.mockResolvedValueOnce(JSON.stringify({ focus: null, caption: "Done" }));
+	const log = vi.fn();
+	const result = await analyzeVideoFrames({
+		...options(),
+		bundled: { name: "Bundled fixture", describe },
+		log,
+	});
+	expect(result.observations.map((o) => [o.timeMs, o.caption])).toEqual([
+		[500, "Save"],
+		[2500, "Done"],
+	]);
+	expect(log.mock.calls[0][0]).toContain("integers from 0 to 1000");
+});
+it("fails the pass with the model's own error when the model cannot be reached, instead of skipping every sample", async () => {
+	const describe = vi.fn(async () => {
+		throw new Error("connect ECONNREFUSED 127.0.0.1:8080");
+	});
+	const log = vi.fn();
+	await expect(
+		analyzeVideoFrames({ ...options(), bundled: { name: "Bundled fixture", describe }, log }),
+	).rejects.toThrow("connect ECONNREFUSED");
+	expect(describe).toHaveBeenCalledTimes(1);
+	expect(log).not.toHaveBeenCalled();
+	// The same for Ollama when its model process drops the request.
+	const before = requests.filter((request) => request.route === "/api/chat").length;
+	chatDown = true;
+	try {
+		await expect(analyzeVideoFrames({ ...options(), log })).rejects.toThrow();
+	} finally {
+		chatDown = false;
+	}
+	expect(requests.filter((request) => request.route === "/api/chat")).toHaveLength(before + 1);
+	expect(log).not.toHaveBeenCalled();
 });
 it("reuses only byte-identical static JPEG replies within one bundled job and retains every sample time", async () => {
 	const describe = vi.fn(async () => bundledReply);

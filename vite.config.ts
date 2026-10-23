@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { build as buildElectronEntry } from "vite-plugin-electron";
 import electron from "vite-plugin-electron/simple";
 
 function electronMainCjsOutputPlugin(): Plugin {
@@ -54,6 +55,28 @@ function electronMainCjsGuardPlugin(): Plugin {
 	};
 }
 
+// The bundled OCR engine runs onnxruntime-web in a worker thread, which needs its own entry
+// file next to main.cjs (dist-electron/ocr-worker.cjs). The main bundle inlines every dynamic
+// import into one file, so the worker is built separately, with the same Node/CJS settings.
+function ocrWorkerBuildPlugin(): Plugin {
+	return {
+		name: "recordly-ocr-worker",
+		async closeBundle() {
+			await buildElectronEntry({
+				entry: {
+					"ocr-worker": path.join(__dirname, "electron/ipc/autoEdit/ocr/worker.ts"),
+				},
+				vite: {
+					root: __dirname,
+					logLevel: "warn",
+					build: { watch: null },
+					plugins: [electronMainCjsOutputPlugin()],
+				},
+			});
+		},
+	};
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
 	plugins: [
@@ -89,6 +112,7 @@ export default defineConfig(({ mode }) => ({
 								plugins: [
 									electronMainCjsOutputPlugin(),
 									electronMainCjsGuardPlugin(),
+									ocrWorkerBuildPlugin(),
 								],
 							},
 						},

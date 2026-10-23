@@ -24,7 +24,8 @@
     "node_modules/uiohook-napi/**",
     "node_modules/sherpa-onnx-node/**",
     "node_modules/sherpa-onnx-win-x64/**",
-    "electron/native/bin/**"
+    "electron/native/bin/**",
+    "dist-electron/ocr-worker.cjs"
   ],
   "win": {
     "signAndEditExecutable": false,
@@ -37,12 +38,17 @@
     {
       "from": "vendor/offline-ai/win32-x64",
       "to": "offline-ai",
-      "filter": ["manifest.json", "*.gguf", "*.txt", "runtime-static/**", "speech/**", "tts/**", "tts-en/**"]
+      "filter": ["manifest.json", "*.gguf", "*.txt", "runtime-static/**", "speech/**", "tts-kokoro/**"]
     },
     {
       "from": "vendor/offline-tools/win32-x64",
       "to": "offline-tools",
       "filter": ["silero/**", "rnnoise/**", "sherpa/manifest.json", "sherpa/runtime/**"]
+    },
+    {
+      "from": "vendor/offline-ai/win32-x64/ocr",
+      "to": "offline-ai/ocr",
+      "filter": ["manifest.json", "*.onnx", "*.txt", "*.md", "runtime/*.mjs", "runtime/*.wasm", "runtime/*.txt"]
     },
     { "from": "THIRD_PARTY_NOTICES.md", "to": "compliance/THIRD_PARTY_NOTICES.md" },
     { "from": "MODEL_LICENSES.md", "to": "compliance/MODEL_LICENSES.md" },

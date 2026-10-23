@@ -196,5 +196,9 @@
 		"expand": "Tijdlijn uitvouwen",
 		"collapse": "Tijdlijn samenvouwen"
 	},
-	"openRecordingsFolder": "Opnamemap openen"
+	"openRecordingsFolder": "Opnamemap openen",
+	"preview": {
+		"fullscreen": "Voorbeeld op volledig scherm",
+		"exitFullscreen": "Volledig scherm afsluiten (Esc)"
+	}
 }

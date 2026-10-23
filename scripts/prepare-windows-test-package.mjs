@@ -150,6 +150,8 @@ if (!helpersOnly) {
 		"dist/index.html",
 		"dist-electron/main.cjs",
 		"dist-electron/preload.mjs",
+		// Built with main.cjs since the OCR engine; a dist-electron from before it lacks it.
+		"dist-electron/ocr-worker.cjs",
 		"node_modules/electron/dist/electron.exe",
 		"node_modules/ffmpeg-static/ffmpeg.exe",
 		"node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",

@@ -194,5 +194,9 @@
 		"expand": "Zeitleiste erweitern",
 		"collapse": "Zeitleiste reduzieren"
 	},
-	"openRecordingsFolder": "Aufnahmeordner öffnen"
+	"openRecordingsFolder": "Aufnahmeordner öffnen",
+	"preview": {
+		"fullscreen": "Vollbildvorschau",
+		"exitFullscreen": "Vollbild beenden (Esc)"
+	}
 }

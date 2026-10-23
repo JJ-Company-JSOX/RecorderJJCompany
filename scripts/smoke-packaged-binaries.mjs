@@ -262,6 +262,75 @@ function verifyNativeHelpers(unpackedRoot) {
 	}
 }
 
+/**
+ * The offline AI edition ships its narration voice as resources/offline-ai/tts-kokoro: every
+ * file its manifest lists (espeak-ng-data has hundreds) must have been packaged at full size.
+ */
+function verifyOfflineNarrationVoice(unpackedRoot) {
+	// Other editions (Offline Tools) ship resources/offline-ai without a voice; which editions
+	// must ship one is enforced on the builder configs by electron/packagingGates.test.ts.
+	const voiceRoot = path.join(path.dirname(unpackedRoot), "offline-ai", "tts-kokoro");
+	if (!existsSync(voiceRoot)) {
+		return;
+	}
+
+	const manifestPath = path.join(voiceRoot, "manifest.json");
+	assertFile(manifestPath, "offline narration voice manifest");
+	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+	for (const entry of manifest.files) {
+		const filePath = path.join(voiceRoot, ...entry.path.split("/"));
+		if (!existsSync(filePath) || statSync(filePath).size !== entry.bytes) {
+			fail(`offline narration voice file is missing or truncated: ${entry.path}`);
+		}
+	}
+	console.log(`[packaged-smoke] offline narration voice: ${manifest.files.length} files`);
+	if (process.platform === "win32") {
+		assertFile(
+			path.join(unpackedRoot, "node_modules", "sherpa-onnx-win-x64", "sherpa-onnx.node"),
+			"narration voice engine addon",
+		);
+	}
+}
+
+/** What electron/ipc/autoEdit/ocr/bundledOcr.ts needs before it offers the OCR engine. */
+const OCR_REQUIRED = [
+	"PP-OCRv6_det_small.onnx",
+	"PP-OCRv6_rec_small.onnx",
+	"keys.txt",
+	"runtime/ort-wasm-simd-threaded.mjs",
+	"runtime/ort-wasm-simd-threaded.wasm",
+];
+
+/**
+ * The offline AI edition reads on-screen text with resources/offline-ai/ocr (models, character
+ * list and the ONNX Runtime WASM files its manifest lists) in a worker thread whose entry is
+ * unpacked from app.asar. Without them voice-over quietly falls back to the labels the vision
+ * model reads on its own, so a packaging mistake must fail here.
+ */
+function verifyOfflineOcr(unpackedRoot) {
+	const ocrRoot = path.join(path.dirname(unpackedRoot), "offline-ai", "ocr");
+	if (!existsSync(ocrRoot)) {
+		return;
+	}
+
+	const manifestPath = path.join(ocrRoot, "manifest.json");
+	assertFile(manifestPath, "offline OCR manifest");
+	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+	for (const name of OCR_REQUIRED) {
+		if (!manifest.files.some((entry) => entry.path === name)) {
+			fail(`offline OCR manifest does not list ${name}`);
+		}
+	}
+	for (const entry of manifest.files) {
+		const filePath = path.join(ocrRoot, ...entry.path.split("/"));
+		if (!existsSync(filePath) || statSync(filePath).size !== entry.bytes) {
+			fail(`offline OCR file is missing or truncated: ${entry.path}`);
+		}
+	}
+	console.log(`[packaged-smoke] offline OCR: ${manifest.files.length} files`);
+	assertFile(path.join(unpackedRoot, "dist-electron", "ocr-worker.cjs"), "offline OCR worker");
+}
+
 const unpackedRoots = findDirectoriesByName(releaseRoot, "app.asar.unpacked");
 
 if (unpackedRoots.length === 0) {
@@ -277,6 +346,8 @@ for (const unpackedRoot of unpackedRoots) {
 	assertPackagedAppExecutable(unpackedRoot);
 	verifyFfmpeg(unpackedRoot);
 	verifyNativeHelpers(unpackedRoot);
+	verifyOfflineNarrationVoice(unpackedRoot);
+	verifyOfflineOcr(unpackedRoot);
 }
 
 console.log("[packaged-smoke] packaged binary path smoke passed");

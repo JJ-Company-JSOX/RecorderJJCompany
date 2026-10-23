@@ -2,6 +2,20 @@ export const narrationMessages = {
 	en: {
 		style: "Narration style",
 		styles: { concise: "Concise", tutorial: "Step-by-step tutorial", detailed: "Detailed" },
+		voice: "Voice",
+		preview: "Preview voice",
+		previewing: "Preparing preview",
+		wrongLanguageMixed: "Every line needs some Chinese or English words for the voice to read.",
+		voices: {
+			zf_xiaoxiao: "Xiaoxiao (female)",
+			zf_xiaoyi: "Xiaoyi (female)",
+			zm_yunxi: "Yunxi (male)",
+			zm_yunjian: "Yunjian (male)",
+			af_heart: "Heart (US female)",
+			af_bella: "Bella (US female)",
+			am_michael: "Michael (US male)",
+			bm_george: "George (UK male)",
+		},
 		cancel: "Cancel",
 		latinHint:
 			"English words in Chinese lines appear in the subtitles but are not spoken by the Chinese voice.",
@@ -29,6 +43,20 @@ export const narrationMessages = {
 	zh: {
 		style: "解说风格",
 		styles: { concise: "简洁", tutorial: "一步一步教学", detailed: "详细" },
+		voice: "配音声音",
+		preview: "试听",
+		previewing: "正在准备试听",
+		wrongLanguageMixed: "每一句都要有中文或英文，配音才能读出来。",
+		voices: {
+			zf_xiaoxiao: "晓晓（女声）",
+			zf_xiaoyi: "晓伊（女声）",
+			zm_yunxi: "云希（男声）",
+			zm_yunjian: "云健（男声）",
+			af_heart: "Heart（美式女声）",
+			af_bella: "Bella（美式女声）",
+			am_michael: "Michael（美式男声）",
+			bm_george: "George（英式男声）",
+		},
 		cancel: "取消",
 		latinHint: "中文句子里的英文会显示在字幕上，但中文配音不会读出来。",
 		dropped: "有 {n} 句放不进视频结尾前，已经略过。可以把句子改短一点再生成。",
@@ -56,6 +84,21 @@ export const narrationMessages = {
 			tutorial: "Tutorial langkah demi langkah",
 			detailed: "Terperinci",
 		},
+		voice: "Suara",
+		preview: "Dengar contoh",
+		previewing: "Menyediakan contoh",
+		wrongLanguageMixed:
+			"Setiap baris memerlukan perkataan Cina atau Inggeris untuk dibaca oleh suara.",
+		voices: {
+			zf_xiaoxiao: "Xiaoxiao (wanita)",
+			zf_xiaoyi: "Xiaoyi (wanita)",
+			zm_yunxi: "Yunxi (lelaki)",
+			zm_yunjian: "Yunjian (lelaki)",
+			af_heart: "Heart (wanita, AS)",
+			af_bella: "Bella (wanita, AS)",
+			am_michael: "Michael (lelaki, AS)",
+			bm_george: "George (lelaki, UK)",
+		},
 		cancel: "Batal",
 		latinHint:
 			"Perkataan Inggeris dalam baris Cina dipaparkan dalam sari kata tetapi tidak disebut oleh suara Cina.",
@@ -81,4 +124,10 @@ export const narrationMessages = {
 			"Audio naratif ditambah sebagai trek audio baharu yang boleh dibuat asal, berserta sari kata yang sepadan.",
 		result: "Naratif didraf",
 	},
+};
+
+/** What the "Preview voice" button has the selected voice say, in that voice's language. */
+export const narrationPreviewText = {
+	zh: "你好，这是解说配音的试听效果。",
+	en: "Hi, this is how the narration voice sounds.",
 };

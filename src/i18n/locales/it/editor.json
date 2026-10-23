@@ -195,5 +195,9 @@
 		"expand": "Espandi timeline",
 		"collapse": "Comprimi timeline"
 	},
-	"openRecordingsFolder": "Apri cartella registrazioni"
+	"openRecordingsFolder": "Apri cartella registrazioni",
+	"preview": {
+		"fullscreen": "Anteprima a schermo intero",
+		"exitFullscreen": "Esci da schermo intero (Esc)"
+	}
 }

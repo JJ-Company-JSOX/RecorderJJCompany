@@ -212,6 +212,19 @@ describe("bundled offline narration draft (Stage B: one coherent script)", () =>
 		expect(instruction).toContain("Simplified Chinese");
 		expect(instruction).toContain("“设置（Settings）”");
 	});
+	it("keeps English labels as shown in Chinese lines when the voice can read them", async () => {
+		const complete = vi.fn(async () => JSON.stringify({}));
+		await generateBundledNarration(plan(), complete, "zh", new Map(), { mixedLanguage: true });
+		const [instruction] = complete.mock.calls[0];
+		expect(instruction).toContain("Simplified Chinese");
+		expect(instruction).toContain("点击“Settings”");
+		expect(instruction).not.toContain("（Settings）");
+		// Only Chinese lines change; English and Malay lines already keep their labels.
+		const english = vi.fn(async () => JSON.stringify({}));
+		await generateBundledNarration(plan(), english, "en", new Map(), { mixedLanguage: true });
+		expect(english.mock.calls[0][0]).toContain("plain English");
+		expect(english.mock.calls[0][0]).not.toContain("Simplified Chinese");
+	});
 	it.each([
 		["en", "plain English"],
 		["ms", "Bahasa Melayu"],

@@ -18,8 +18,24 @@
 - 官方 Qwen3-VL-2B-Instruct Q4_K_M 权重和 Q8 图像组件，共 **1,552,463,168 字节**，在构建机下载并验证固定版本的 SHA-256；权重不提交到 Git。
 - 固定版本 llama.cpp CPU 运行组件，由构建机编译。顾客机器不编译、不安装 AI 服务。软件仅以随机端口、随机访问令牌绑定 `127.0.0.1`，通过本机进程交换图像；没有远程 AI 请求。
 - 模型、运行组件、许可与清单都随安装包提供。运行时开启 offline 模式，使用明确的本地文件路径，不提供下载模型的执行路径。
-- 一次视觉分析默认读取最多四张缩小的抽样图像，提出文字标注及可选缩放；静音／静止删减仍需本地音画证据。抽样分析不等于理解全部视频，也不包含新的语音转录模型。
-- 分析前检查组件完整性及可用内存。当前 CPU 路径要求 Windows x64 / AVX2，建议 16GB RAM；至少 2.5GiB 可用内存门槛是本轮实现值，后续需要在更多机器上验证。录制／导入／编辑／保存／原画质导出不依赖 AI 是否可运行。
+- AI 自动剪辑一次读取 8 张均匀抽样的整帧画面（见下文“视频理解”），提出可选缩放；静音／静止删减仍需本地音画证据。抽样分析不等于理解全部视频，也不包含新的语音转录模型。
+- 分析前检查组件完整性及可用内存。当前 CPU 路径要求 Windows x64 / AVX2，建议 16GB RAM；至少 3GiB 可用内存门槛是本轮实现值（原为 2.5GiB，见下文），后续需要在更多机器上验证。录制／导入／编辑／保存／原画质导出不依赖 AI 是否可运行。
+
+## 视频理解（AI 解说与 AI 自动剪辑）
+
+顾客反馈离线 AI 看不懂录屏，主要原因是模型拿到的画面太小、太糊：以前点击前后被缩成一张 896×252 的 JPEG 拼图，其他时刻缩到 640×360，每张图只有约 220 个视觉 token，界面文字只剩 4–6 像素高。本轮改动如下（不更换模型、不新增模型或依赖）：
+
+1. **原始分辨率裁剪。** 点击时刻在点击处按原始像素截取约 768×432 的区域；1440p、4K 等大分辨率录屏按比例扩大截取范围（4K 为 1536×864），再用面积滤镜缩到不超过 1024×576，文字大小与 1080p 相当。画面有变化时，“点击后”截取变化区域放大 1.3 倍的范围（不小于点击区域，最宽 1280 像素、约 90 万像素以内）；没有变化时截取与点击前相同的位置。没有点击的时刻用整帧缩到 1280×720。全部用无损 PNG，不再用有损 JPEG。
+2. **点击前、点击后分成两张图，放在同一次请求里。** 消息里依次是“Image 1 (BEFORE the click)”和“Image 2 (AFTER the click)”两张图，提示词说明哪张是哪张；点击位置用 0–1000 坐标写在问题里，并在图 1 上画一个不压住文字中心的红框（录屏本身不录鼠标指针）。
+3. **时机更准。** 对每个时刻附近做一次低分辨率流式扫描（96×54 灰度，每秒 4 帧）：“点击前”取点击前 0.7–0.1 秒内最后一帧稳定的画面（能看到悬停状态）；“点击后”取点击后 0.2–3 秒内、画面开始变化之后第一帧“已经停稳”（后面连续两次采样几乎不变）的画面，点击点周围的格子不计入变化；3 秒内一直在动（例如正在播放视频）时取变化开始后约 0.8 秒的那一帧。以前固定取点击前 0.6 秒、点击后 0.8 秒，慢一点的对话框和网页经常还没出来。扫描只覆盖各时刻前后约 4.7 秒的窗口，相邻窗口合并成一次 ffmpeg 运行，时间和内存只与时刻数量（最多 16 个）有关，与视频长度无关。和上一个已分析时刻几乎相同的时刻不再重复询问模型，直接沿用结果。
+4. **llama-server 参数。** 新增 `--image-min-tokens 256 --image-max-tokens 1024`（固定的 llama.cpp b11717 / 848bbda 已支持），小裁剪会被放大而不是挤成几个 token，大图不会超过 1024 个 token；上下文从 4096 提高到 6144，放得下两张图、提示和回复。线程数不再固定为 4，而是按逻辑处理器数选择：生成用约一半（2–8），提示和图像处理用约四分之三（2–8），给编辑器留余量。6144 上下文多占约 224MiB KV 缓存，大图的视觉编码缓冲也更大，所以可用内存门槛提高到 3GiB。
+5. **输出格式。** 坐标改为模型训练时使用的 0–1000 整数，程序内部再换算回 0–1；去掉只浪费解码时间的 `rationale` 自由文本，回复长度上限从 256 token 降到 80–176 token（仍足够容纳 JSON schema 允许的最长回复）。某个时刻或某张抽样的回复无法解析时，只跳过这一项并写日志（日志不含回复内容，避免把屏幕文字写进日志），不会让整次分析失败，也不会悄悄变成一句“点击这里”。
+6. **OCR 候选文字。** 完整离线包内置屏幕文字识别（见下文“屏幕文字识别（OCR）”）。每次生成 AI 解说时打开一个 OCR 引擎（约定见 `electron/ipc/autoEdit/ocrTypes.ts`），读到第一个点击时才启动，这次解说结束、失败或取消后立即释放。有 OCR 时，点击前后的同一裁剪同时以 RGB 原始像素交给 OCR：“点击了什么”的候选是点击点所在或最近的文字行，“出现了什么”的候选是点击后新出现的文字（比较时忽略大小写、全半角、空白和标点，忽略过小和低置信度的行）。每次请求单独生成 JSON schema，这两个字段只能从 OCR 原文中选，或者回答 `none`，模型无法再编造标签；模型回复不可用时，若点击点正好落在高置信度文字上，直接采用 OCR 结果。没有 OCR 模型时（开发环境、旧的离线包）不提示，直接沿用上面的纯视觉模型路径；模型在而 worker 文件缺失时只记一次警告，同样沿用纯视觉路径；某个时刻的 OCR 出错只影响这一个时刻。
+7. **AI 自动剪辑的 8 张抽样** 同样改为无损 PNG、面积滤镜缩到最大 1024×576（约 576 个视觉 token，小录屏不放大）、0–1000 整数坐标、无 `rationale`；单张画面解码失败或回复无法解析时只跳过该样本。模型本身出错（内置模型进程崩溃或被系统结束、Ollama 没有运行、连接被拒绝、请求超时）时整次分析失败并显示原因，8 张全部被跳过时也算失败，免得“AI 出错”看起来像“没有值得放大的地方”。
+
+速度影响尚未实测：每个点击时刻的视觉 token 从约 220 个增加到约 600–1,500 个，单次推理预计明显长于上文测得的 27.227 秒，线程数自动提高可以抵消一部分。需要在测试机上用真实模型复测速度、峰值内存和识别准确率后再更新本节数字。
+
+本轮在 Linux 开发环境中验证（无法下载模型权重，因此没有真实模型推理）：用 ffmpeg 生成的合成录屏（lavfi 动画面板，以及用 Pillow 绘制工具栏、悬停、点击和滑入对话框后编码成 H.264 的 1080p 与 4K 录屏）实际运行裁剪、稳定检测和 RGB 提取；用本机假 llama-server 检查两张图同一请求的请求体、schema 和解析；用按颜色“识字”的假 OCR 检查候选文字与裁剪坐标一致，且 OCR 拿到的 RGB 与发给模型的 PNG 逐像素相同。
 
 ## 构建机流程
 
@@ -28,16 +44,36 @@ npm run prepare:offline-ai
 npm run prepare:offline-speech
 npm run prepare:offline-voice
 npm run prepare:offline-tts
+npm run prepare:offline-ocr
 npm run build:win:offline
 ```
 
-完整离线 AI 包同时内置语音识别（Whisper small，约 190 MB）和 AI 解说配音（中文 AISHELL-3 VITS，约 33 MB，Apache-2.0；英文 LJSpeech VITS，约 118 MB，MIT／公有领域数据）。`prepare:offline-voice` 准备语音边界检测（Silero VAD，按句子边界剪停顿时需要）和“让人声更清楚”（RNNoise），必须在 `prepare:offline-speech` 之后运行，因为它会用到那一步下载的编译工具。打包前依次执行 `verify:offline-ai`、`verify:offline-speech`、`verify:offline-voice`、`verify:offline-tts`，任何一项缺失或损坏都会停止打包。AI 解说稿和配音跟随界面选的语言：中文、英文都有内置配音；马来文目前只能生成解说稿，没有找到许可证清楚、可商用的离线马来文声音，所以暂不内置。开发时先完成上面三个准备命令，再用 `npm run dev` 直接测试，无需打包。
+完整离线 AI 包同时内置语音识别（Whisper small，约 190 MB）和 AI 解说配音（Kokoro-82M v1.0 多语言版，一个模型读普通话、英语和中英混读，约 363 MB，权重 Apache-2.0；详见下面“AI 解说配音”）。`prepare:offline-voice` 准备语音边界检测（Silero VAD，按句子边界剪停顿时需要）和“让人声更清楚”（RNNoise），必须在 `prepare:offline-speech` 之后运行，因为它会用到那一步下载的编译工具。打包前依次执行 `verify:offline-ai`、`verify:offline-speech`、`verify:offline-voice`、`verify:offline-tts`、`verify:offline-ocr`，任何一项缺失或损坏都会停止打包；打包后 `smoke:packaged-binaries` 再检查安装包里的声音和 OCR 文件。AI 解说稿和配音跟随界面选的语言：中文、英文都有内置配音；马来文目前只能生成解说稿，没有找到许可证清楚、可商用的离线马来文声音，所以暂不内置。开发时先完成上面三个准备命令，再用 `npm run dev` 直接测试，无需打包。
 
 准备脚本将校验后的官方模型及便携构建工具放进 Git 忽略目录，编译固定源码版本的独立 CPU 组件，检查其 Windows DLL 依赖，并生成随包清单。构建工具只在开发机 `.tmp`，模型及成品组件在 `vendor/offline-ai`；顾客包只包含运行所需文件。正式打包前执行 `verify:offline-ai`，缺失或损坏时失败，不生成“看似支持 AI、实际要求顾客另行配置”的完整版本。
 
 开发机网络中断支持断点续传，最终仍须通过完整 SHA-256 校验。顾客安装和首次 AI 分析均不执行这些开发机脚本。
 
 开发机可自动执行实际 App 录屏检查：`node scripts/smoke-app-recording.mjs --run`。它只启动自己的隔离实例，通过整个屏幕选择、录制、停止和编辑器预览，记录五秒合成动画及当前任务栏，文件留在忽略目录 `.tmp`；默认不录麦克风、系统音频或摄像头。先运行 `--help` 可查看范围而不开始录屏。此检查还记录源动画供帧、编码时间戳间隔和帧数，不能把变帧率或重复画面直接当成有效运动帧率。
+
+## AI 解说配音
+
+顾客反映 AI 配音听起来像机器人。原因有四个：中文声音是 8 kHz 的 AISHELL-3 VITS “low” 模型（电话音质）；每个字幕片段（逗号处、28 字处）单独合成，每段都有自己的句尾降调，中间固定停 0.12 秒；中文句子里的英文按钮名直接被吞掉；没有任何响度处理，每句音量都不一样。本轮改成：
+
+- **新声音**：Kokoro-82M v1.0 多语言版，sherpa-onnx 转换的 fp32 版本（int8 版在 x86 上慢约 3 倍，不用），通过已随包的 sherpa-onnx-node 1.13.8 的 kokoro 模型类型运行，24 kHz。一个模型同时负责中文和英文，中文句子里可以直接保留英文按钮名，例如 点击“Settings”。v1.1-zh 的权重许可证无法从作者处核实，所以用作者 GitHub README 明确写明 Apache 许可的 v1.0。
+- **声音选择**：解说风格旁边多了“配音声音”和“试听”。中文 2 女 2 男：晓伊（默认）、晓晓、云希、云健；英文 2 女 2 男：Heart（默认）、Bella、Michael、George。说话人编号取自模型自带的说话人表，主进程只接受这 8 个。选择按语言记在应用设置里；“试听”用所选声音读一句固定的话。默认值：中文选语音识别回听最清楚、且不需要限幅就能到 -16 LUFS 的晓伊；英文选模型作者示例里一直使用的 Heart。
+- **整句合成**：每行只在 。！？；!?; 和“. ”处分句，每句一次合成，逗号不再切开；2.0、github.com 这类不会被拆开。每句去掉首尾静音（-45 dBFS，前留 25 ms、后留 50 ms），首尾 8 ms 淡入淡出；句与句之间按标点停 0.30–0.38 秒（问号、感叹号略长，分号略短，按句子序号固定地略有变化）。sherpa-onnx 默认把句中停顿压到 20%（silenceScale 0.2），现在设为 1.0 保留自然停顿；但 Kokoro 在中英切换和长分句处会分段合成，段间留约 1.1 秒，所以句内超过 0.26 秒的停顿缩短到 0.26 秒。
+- **响度**：每一行用纯 TypeScript 的 ITU-R BS.1770-4 积分响度表测量（按模型采样率计算 K 加权滤波器，400 ms 块，-70 LUFS 绝对门限和 -10 LU 相对门限），整行统一到 -16 LUFS，采样峰值不超过 -1.5 dBFS。少数响亮音节用 5 ms 前瞻限幅器压下去，最多压 4 dB；还不够时整行降低增益，绝不硬削波。
+- **中英混读**：sherpa-onnx 1.13.8 把句子里的非中文部分一律交给 espeak-ng 转音素（模型元数据写的是 `en-us`，所以 `lexicon-us-en.txt` 实际用不上；Kokoro v1.0 训练时用的是 misaki 音素，O、A、I 这类双元音记号 espeak 给不出来）。更糟的是，一个短英文词会被直接接在前一段中文音节后面，用同一次模型调用读出，连前面的中文也一起读坏：“点击“Settings””被语音识别听成“点击赛”“点辑 SIN”。用真模型逐个试过：去掉中文引号、英文前后加空格、改大小写、调换两个词典的顺序，送进模型的音素序列逐字节相同，完全没有作用；改用英式 espeak 音素、放慢英文语速也没有改善。现在中文句子里的每段英文单独合成一次，末尾补逗号（在句末则补句号）当作一个小分句来读，与前后中文之间只留约 0.12 秒（原文在那里有标点时约 0.26 秒）。这只改变配音读的文字，字幕仍显示原文。紧挨在英文字母前面的数字算作同一个名称（3D、5G、4K、1.5x、2.4G）：以前“打开3D视图”被拆成“打开3”“D,”“视图。”，“三”和“D”中间断开，D 还按分句读；现在“3D,”整段单独合成，中文数字规则仍把数字读成“三”。时间末尾（3:30PM）和带空格的数字（10 MB）不受影响。同一流程、4 个中文声音、10 句含这类名称的解说用语音识别回听：数字和字母被连在一起听出的比例从 10/44 提高到 31/44，整句字错误率从 26.7% 降到 16.7%。
+- **字幕**：仍用原来的 28 字切分显示，`{text, endMs}` 结构不变；每段的结束时间按该句里实际读出的字数比例分配，附近有停顿时对齐到停顿。一个停顿只给离它最近的那个分段边界用，每段至少显示 0.25 秒（整句太短时平均分）：以前“好，”“then,”这类短分段前面的边界被挪到它后面的停顿上，短分段只剩 0.1 秒甚至 0 秒，0 秒的会被编辑器当成“与已有字幕重叠”丢掉。用另一个语音识别模型的逐字时间核对 30 句真实 Kokoro 合成（94 个分段边界）：平均偏差 104 ms（原来 108 ms），短于 0.2 秒的分段从 5 个变成 0 个。
+- **回退**：只装了旧 VITS 声音的开发目录（`tts`、`tts-en`）仍能用，读法同样改为整句合成和响度处理，但没有声音选择，也不能读中文句子里的英文，解说稿提示仍要求“设置（Settings）”写法。
+- **校验**：manifest 不再限制 32 个文件，espeak-ng-data（355 个文件）可以逐个校验；整包约 380 MB 的 SHA-256 每次打开 App 只算一次（按路径、大小、修改时间缓存），之后合成不再重复计算。线程数按 CPU 取 2–4。Electron 里仍关闭外部缓冲区（enableExternalBuffer: false）。
+- **安装路径**：espeak-ng（Kokoro 读词典里没有的英文词时用）用窄字符文件函数（`stat`、`fopen`）打开数据目录，Windows 按 ANSI 代码页解释路径，缓冲区只有 230 字节；打不开时 espeak-ng／sherpa-onnx 直接结束整个进程，而不是报错，App 会立刻关闭，未保存的编辑会丢失。默认的“仅为我安装”路径 `C:\Users\<用户名>\AppData\Local\Programs\...` 在中文用户名下就会出现这个问题。现在声音目录路径含非 ASCII 字符或逗号、或长于 100 个字符时，App 先把主进程的工作目录切到声音目录，再用相对路径（`espeak-ng-data`、`model.onnx` 等）加载；espeak-ng 合成时还会再读文件，所以每次合成或试听都重新切换一次，整个任务结束后（失败时也一样）再切回原来的工作目录，不让主进程之后按工作目录查找的文件（例如本地编译的 GPU 导出探测程序）找错地方。多个窗口同时合成或试听时依次执行，免得一个任务切回目录时另一个任务的 espeak-ng 正在读数据。以前“路径含逗号就不能加载”的限制也因此取消。切换不了时（例如路径超过 Windows 的 260 字符限制）给出明确错误，提示安装到路径更短的文件夹。在 Linux 上用真模型验证过：同一个 250 多字节、含中文的目录，改动前测试进程直接退出，改动后中文、英文和词典外的英文词（由 espeak-ng 读）都能正常合成（`tts.kokoro.integration.test.ts`）。Windows 上按 ANSI 代码页解释路径这一点来自源码（espeak-ng `ed530aa`、sherpa-onnx v1.13.8），没有在 Windows 机器上实测。
+- **内存**：第一次合成或试听后，声音引擎留在主进程里直到 App 关闭，约 0.45 GB（实测 RSS 从 53 MB 升到约 510 MB），之后的配音和试听不再重新加载。sherpa-onnx-node 1.13.8 没有释放引擎的接口，只能等垃圾回收清理：用真模型测试，放掉引用并强制回收后 RSS 只降约 0.1 GB，紧接着重新加载会升到约 0.9 GB，比一直保留一个引擎更高，所以不做“闲置后释放”。和视觉模型（llama-server 是独立进程，用完退出）、OCR（单独 worker，任务结束即释放）同时运行时，16 GB 的电脑仍有余量，但 8 GB 的电脑可能吃紧，需要实机确认。
+
+构建机上 `npm run prepare:offline-tts` 下载 sherpa-onnx GitHub 发布页的 `kokoro-multi-lang-v1_0.tar.bz2`（349,906,910 字节，SHA-256 `c5f7e2d2caf082bc1d20fb70334a61d99d20b484500aad32e7cf84c128ea3298`），有大小上限、重试和断点续传，压缩包留在 `.tmp/offline-tts`。Windows 10/11 用系统自带的 `System32\tar.exe` 解压（Linux/macOS 用 tar），解压失败会给出明确提示。脚本只把 `scripts/offline-tts.lock.json` 里列出的 363 个文件（model.onnx、voices.bin、tokens.txt、两个词典、三个中文规则 FST、espeak-ng-data）复制到 `vendor/offline-ai/win32-x64/tts-kokoro`，逐个核对大小和 SHA-256，再写入 MODEL-LICENSE.txt（Apache-2.0、pypinyin 的 MIT、espeak-ng-data 的 GPL-3.0 全文，以及 piper-phonemize 的 MIT 全文，均从固定提交下载并核对 SHA-256）、NOTICE.txt 和 manifest.json。sherpa-onnx 1.13.8 插件的原生库 `sherpa-onnx-c-api.dll` 里静态编进了 eSpeak NG 库（含 ucd-tools，GPL-3.0-or-later，与 espeak-ng-data 同一源码版本 `ed530aa`）和 piper-phonemize（MIT），npm 包只写了 Apache-2.0；这两项写在 MODEL-LICENSE.txt 和 NOTICE.txt 里（NOTICE 的内容来自锁文件的 `engineStaticLibraries`），对外发布前的源码义务见 `LICENSE_COMPLIANCE.md`。目录里多出未列出的文件会停止。jieba 词典目录（dict）不复制：sherpa-onnx 1.12.15 起 kokoro 不再使用它。`verify:offline-tts` 不联网，重新计算每个文件的 SHA-256，并且和准备时一样严格：manifest 必须正好是锁文件里的文件加 MODEL-LICENSE.txt、NOTICE.txt，每个文件的大小和 SHA-256 必须等于锁文件里的固定值（只改 manifest 去配合另一个 model.onnx 也会被拦下），目录里有 manifest 没列出的文件也会停止，因为打包会带上整个 `tts-kokoro` 目录；MODEL-LICENSE.txt 和 NOTICE.txt 还必须与当前锁文件里的许可说明一致，锁文件改过许可说明后，以前准备的目录要重新运行 `prepare:offline-tts`。准备和校验都会先检查已安装的 sherpa-onnx-node（以及 Windows x64 上的 sherpa-onnx-win-x64）正是锁文件固定的 1.13.8，`package.json` 里 sherpa-onnx-node 也固定为这个版本：新版 sherpa-onnx 编进去的是另一版 eSpeak NG，未必能读这里固定的 espeak-ng-data（读不了时整个进程会退出），许可记录也会对不上。打包只带 `tts-kokoro`，旧的 `tts`、`tts-en` 不再进安装包（声音部分从约 151 MB 变成约 363 MB）；`--legacy-vits` 只给需要测试回退的开发者下载旧声音。`smoke:packaged-binaries` 会检查安装包里 manifest 列出的每个声音文件都在且大小正确。
+
+实测（Linux 4 vCPU Xeon 2.1 GHz 沙盒，其他任务同时在跑；同一版本 sherpa-onnx 1.13.8 的 linux-x64 插件，另用项目自带的 Electron 43.1.0 运行时跑通同一流程）：首次合成前的完整校验约 1 秒，模型加载约 3–4 秒；3 线程实时率 0.32–0.53（合成 10 秒语音约 3–5 秒），2 线程 0.4–0.7。8 个声音读中文、英文和中英混读句子后，响度 -16.0 至 -18.4 LUFS（男声和英文声音峰值较高，限幅 4 dB 后仍略低于 -16），峰值 ≤ -1.5 dBFS，ffmpeg ebur128 复核相差不超过 0.1 LU。句间停顿约 0.38–0.42 秒（含首尾保留边距），句内逗号处约 0.2–0.26 秒（原来约 1.1 秒），中文与英文按钮名之间约 0.1 秒。用另一个离线语音识别模型回听：中文字错误率 5–9%（多为“首先”声调和同音字），英文词错误率 6–8%；中英混读：24 句带英文按钮名的中文解说（4 个中文声音，共 144 个英文词）走完整合成流程后回听，英文单独合成前后对比，英文词被听出的比例从 28% 提高到 38%，中文音节错误率（按拼音比较，不计同音字）从 13.9% 降到 10.0%，4 个声音都有改善，耗时没有明显增加；OK、Notifications、Delete 明显变好，但 Settings、Chrome、GitHub 仍然难听清（Settings 被听成“塞灵”）。中文声音读英文口音仍重：根源是 sherpa-onnx 1.13.8 只用 espeak 音素读英文，要根本解决需要插件让英文走 Kokoro 自己的 misaki 词典，或换用专门训练过中英混读的模型。原来的 8 kHz 声音同一句识别错误明显更多，响度只有 -27.7 LUFS。没有在 Windows 机器和真实客户视频上测试，也没有人耳试听；Electron 的 V8 沙盒里，开启外部缓冲区仍会报 “TTS settlement failed”，关闭后正常。
 
 ## 实测状态
 
@@ -60,11 +96,47 @@ npm run build:win:offline
 
 模型、安装包、详细日志和录屏均不提交 Git；仓库提交的是实现、构建锁定文件、测试及脱敏验证说明。
 
+## 屏幕文字识别（OCR）
+
+完整离线 AI 包内置屏幕文字识别，给 AI 解说提供画面上的原文（按钮、菜单、对话框标题、表单、状态栏，中文、英文和数字），解说稿才能说出界面上真实的名称，而不是模型猜的字。
+
+- **模型**：PaddleOCR PP-OCRv6 small 文字检测（9,929,594 字节）和识别（21,234,383 字节）模型，RapidOCR 转换的 ONNX 版本，Apache-2.0。两个文件原样取自 PyPI 上固定版本的 rapidocr 3.10.0 wheel（27,288,134 字节，SHA-256 `2fc34e26cd0f48514804a94f8832283039c7334076bff60768b1fed9ad068050`）；wheel 内的 `MODEL_LICENSES.md` 以相同的 SHA-256 列出这两个模型，说明权重版权属于百度／PaddleOCR 权利人，按 Apache-2.0 发布，没有附加限制。识别模型的字符表（18,708 个字）存在模型元数据里，准备脚本原样取出为 `keys.txt`。旋转文字的方向分类模型没有内置：界面文字都是横排。
+- **运行方式**：ONNX Runtime Web 1.30.0（MIT，WebAssembly SIMD + 多线程版本，约 14 MB）在单独的 worker 线程里运行，不用原生的 onnxruntime-node：sherpa-onnx 已经在主进程加载了它自带的 `onnxruntime.dll`，Windows 按模块名复用已加载的 DLL，再加载另一个版本会互相冲突。第一次识别时才启动 worker（`dist-electron/ocr-worker.cjs`），启动时按清单检查全部文件的大小和 SHA-256，然后加载模型；`dispose()` 结束 worker，释放内存。线程数取逻辑处理器数减 1，最多 4 个。识别请求逐个送进 worker，单张超过 120 秒视为卡住：结束 worker，下次识别重新启动。
+- **处理流程**：按 RapidOCR 3.10.0 源码逐步移植到 TypeScript（`electron/ipc/autoEdit/ocr/`，保留上游版权声明并注明改动）：检测输入短边放大到 736、宽高取 32 的倍数，按模型训练时的方式转成 BGR 并归一化到 −1～1；DB 后处理（阈值 0.3、框阈值 0.5、扩张系数 1.6、最小尺寸 3），界面文字都是横排，所以框取轴对齐矩形，不需要 OpenCV、pyclipper；从上到下、从左到右排序；识别输入高 48 像素、保持宽高比、不足 320 宽的补齐，按宽高比每 6 个一批；CTC 贪心解码，每行置信度取保留字符概率的平均值，低于 0.5 的行丢弃。图像缩放逐位复现 OpenCV `cv2.resize` 的双线性插值，模型看到的像素和 RapidOCR 相同。另外加了一步 RapidOCR 没有的处理：检测模型常把只隔着空白的菜单项、标签页（“文件　编辑　视图”）连成一行，同一行里的空白宽于文字高度时就切开，分别识别。
+- **接口**：`createBundledOcrEngine()` 实现 `electron/ipc/autoEdit/ocrTypes.ts` 的 `OcrEngine`，返回输入图像像素坐标的文字行；`getBundledOcrStatus()` 只检查清单和文件大小，不加载模型。开发时文件在 `vendor/offline-ai/win32-x64/ocr`，打包后在 `resources/offline-ai/ocr`，worker 从 app.asar 解包到 `app.asar.unpacked/dist-electron/ocr-worker.cjs`（worker 线程只能从磁盘加载入口文件）。`vite build` 和 `npm run dev` 都会生成这个 worker。AI 解说在注册处（`electron/ipc/handlers.ts`）接入：每次解说调用 `openBundledOcr()`，清单不完整时返回空、不提示，否则返回一个尚未启动的引擎，解说结束后 `dispose()`。
+
+构建机上 `npm run prepare:offline-ocr` 下载 wheel（限制大小、失败重试、校验 SHA-256，缓存在 `.tmp/ocr-downloads`），只取出两个模型和许可文件；从已安装的 onnxruntime-web 复制 WASM 运行文件（版本必须是锁定的 1.30.0，否则先 `npm ci`），再从 ONNX Runtime GitHub 固定版本下载许可和第三方声明。每个文件都按 `scripts/offline-ocr.lock.json` 校验大小和 SHA-256，最后生成 `manifest.json` 和 `NOTICE.txt`；`MODEL-LICENSE.txt` 是 wheel 里的 Apache-2.0 原文，`RAPIDOCR-MODEL-LICENSES.md` 是 RapidOCR 的模型来源和署名说明。这些都是跨平台文件，可以在任何系统上准备，整个目录约 46 MB。`npm run verify:offline-ocr` 不联网，只做校验（文件必须等于锁文件里的固定值，目录里多出 manifest 没列出的文件也会停止，因为打包会带上目录里的模型、文本和运行文件）；`package:win:offline` 在打包前会执行它，缺失或损坏时停止打包。打包后 `smoke:packaged-binaries` 检查安装包里 OCR manifest 列出的每个文件都在、大小正确，并且 `app.asar.unpacked/dist-electron/ocr-worker.cjs` 存在；`prepare:win:test` 也要求 `dist-electron/ocr-worker.cjs` 已经构建（`package:win:offline` 本身不重新构建 App，单独运行时先 `npm run build:app`）。缺了这些，App 不会报错，只会在解说时不用 OCR，所以必须在构建时拦住。
+
+实测（Linux 4 vCPU Xeon 2.1 GHz 沙盒，没有其他任务；Node 22）：用 Pillow 绘制 12 个合成软件截图（中文、英文、中英混排各 4 个，浅色、深色主题各半；Noto Sans SC、Inter、Liberation Sans、DejaVu Sans、Carlito、文泉驿正黑等字体；12–20 px 的菜单、侧栏、按钮、对话框标题、表单、提示框和状态栏），每个截图生成下面 5 种输入，共 60 张、1,726 个文字项：
+
+| 输入 | 文字项 | 完全正确（不计空格） | 字符正确率 | 每张耗时，4 线程（中位数／P90） |
+| --- | --- | --- | --- | --- |
+| 点击处裁剪 768×432 | 204 | 100% | 100% | 1.35／1.88 秒 |
+| 150% 缩放录屏的点击处裁剪 1152×648 | 199 | 100% | 100% | 1.28／2.02 秒 |
+| 整帧 1280×720 | 441 | 100% | 100% | 2.18／2.48 秒 |
+| 1080p（150% 缩放）整帧缩到 1280×720 | 441 | 100% | 100% | 2.20／2.34 秒 |
+| 压力测试：整帧缩到 853×480，文字只有 8–9 px | 441 | 99.5% | 99.94% | 2.18／2.40 秒 |
+| 合计 | 1,726 | 99.9% | 99.98% | 2.06／2.34 秒 |
+
+- 只有 2 个错误，都在 8–9 px 的压力测试里，各错一个字母（“Language”读成“Languge”，“Check for Updates”读成“Check for Updlates”）；没有漏读的文字项。裁剪边缘被切掉一半的文字也会读出（40 张裁剪里 24 行，不计入上表），另有 1 处把边框读成“_”。
+- 空格：英文单词之间的空格 99% 读出；中文和英文／数字之间的空格有 28% 读不出（如“上传 Upload”读成“上传Upload”），RapidOCR 原版同样如此。连空格一起比较时完全正确率为 92.4%，所以拿识别结果和候选文字比较时要忽略空白。
+- 线程数（20 张，同一张图依次用不同线程数运行，中位数）：768×432 裁剪 1／2／3／4 线程分别 4.0／2.1／1.5／1.3 秒；1280×720 整帧 6.7／3.7／2.5／2.4 秒。第一次识别还要启动 worker、校验约 46 MB 文件并加载模型，约多 1–2 秒。
+- 内存：运行时整个进程比空闲时多约 0.5 GB（峰值 648 MB，空闲 122 MB），主要是 WebAssembly 内存；`dispose()` 后大部分释放。
+- 和 RapidOCR 3.10.0 原版（Python、原生 onnxruntime 1.31.0 CPU、相同模型、4 线程）对比：关掉上面的切分步骤时，60 张图的 1,742 行中，每行的框相差不超过 3 像素，1,725 行文字完全相同，其余 17 行只差中英文之间的一个空格，说明移植忠实。打开切分后完全正确率 99.9%，原版 98.9%（原版把相邻菜单项连成一行，9 项因此读不出单独的结果）。原生 onnxruntime 更快：每张中位数 0.68 秒，WASM 版 2.06 秒，约慢 3 倍；4 线程下每张裁剪仍在 2.5 秒以内，所以继续使用 WASM，避免两个 `onnxruntime.dll` 冲突。
+- Electron：打包目录（`electron-builder --linux --dir`，配置同 `electron-builder.offline.json5`）里 `resources/offline-ai/ocr` 的 11 个文件和解包出来的 worker 都在；在 Electron 43.1.0 主进程里用真实的 `bundledOcr` 模块读取这个打包目录，两次运行中第一次识别 2.4–3.4 秒、之后 1.4–1.6 秒（默认 3 线程），768×432 测试图的 16 行全部正确。
+- 接入 AI 解说后的整体验证（三项改动合并后的代码，Linux 沙盒）：用 Pillow 绘制 1080p 合成录屏（悬停后点击“Export video”按钮，弹出“导出设置”对话框，H.264 编码），真实运行裁剪、OCR worker 和真实的 llama-server 请求代码，对端是记录请求的假 llama-server。同一次请求里两张 768×432 PNG；“CLICKED OPTIONS”为 Export video、Record、Import，“RESULT OPTIONS”为对话框里新出现的文字（导出设置、Choose a format and quality、格式、MP4 (H.264) 等），JSON schema 的两个字段只能取这些文字或 `none`；点击前已在屏幕上的列表文字没有被当成结果。每个点击读 3 次 OCR（点击前、点击后、点击前的同一变化区域），4 vCPU 上共约 4.3 秒（含启动 worker）。整个页面变暗的模态对话框同样得到正确的候选。`electron/ipc/autoEdit/narrationFrames.ocr.integration.test.ts` 在准备好模型并构建 worker 后自动运行同类检查。
+- 已知限制：白色对话框出现在接近白色的页面上、又没有阴影或遮罩时，低分辨率变化检测只看到文字，“点击后”裁剪只覆盖最大的一片文字（标题和表单），对话框底部的按钮可能被裁掉；标题等主要文字仍在候选里。
+
+未验证：真实录屏（视频压缩噪点、Windows ClearType 子像素字体）、Windows 真机速度、繁体中文、竖排文字（不支持）以及 12 px 以下、低对比度的文字。
+
 ## 来源
 
 - [Qwen 官方 GGUF 文件](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/tree/52d6c8ffea26cc873ac5ad116f8631268d7eb503)
 - [Qwen 项目许可](https://github.com/QwenLM/Qwen3-VL/blob/96588727e44c78b25ba03ea03b8e12f7e64fd0da/LICENSE)
 - [llama.cpp 固定源码](https://github.com/ggml-org/llama.cpp/tree/848bbda9041decd87904f7eb5a2990863ecce03b)
 - [LLVM-MinGW 官方项目](https://github.com/mstorsjo/llvm-mingw)
+- [rapidocr 3.10.0 wheel（PyPI）](https://pypi.org/project/rapidocr/3.10.0/)、[RapidOCR 项目](https://github.com/RapidAI/RapidOCR)
+- [PaddleOCR 项目及许可](https://github.com/PaddlePaddle/PaddleOCR)
+- [ONNX Runtime 1.30.0 源码及许可](https://github.com/microsoft/onnxruntime/tree/v1.30.0)
 
 运行组件源码和锁定的构建工具版本在脚本中记录。模型 Apache-2.0、llama.cpp MIT、LLVM 及工具链声明和本项目 AGPL 文本随包保留；这不是商业发行许可的法律认证。

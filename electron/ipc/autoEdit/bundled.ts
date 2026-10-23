@@ -8,7 +8,11 @@ import os from "node:os";
 import path from "node:path";
 import type { BundledAiStatus } from "../../../src/components/video-editor/auto-edit/bundledTypes";
 
-const requiredMemoryBytes = 2.5 * 1024 ** 3;
+// 2.5 GiB covered one small image at --ctx-size 4096. Two sharp images per request need a 6144
+// context (+224 MiB of KV cache) and a larger vision-encoder buffer, so the gate is 3 GiB.
+const requiredMemoryBytes = 3 * 1024 ** 3;
+/** Two images (about 300-900 tokens each, see narrationFrames.ts) plus the prompt and reply. */
+const CONTEXT_TOKENS = 6144;
 type Manifest = {
 	version: number;
 	modelName: string;
@@ -161,11 +165,185 @@ export function stopBundledAi(): void {
 	for (const child of children) child.kill();
 }
 
+/**
+ * CPU threads from the logical processor count: about one per physical core for generation and
+ * a little more for prompt and image processing, always leaving room for the editor.
+ */
+export function llamaThreads(parallelism = os.availableParallelism()) {
+	const clamp = (n: number) => Math.min(8, Math.max(2, Math.floor(n)));
+	return { threads: clamp(parallelism / 2), batch: clamp((parallelism * 3) / 4) };
+}
+
+export function llamaServerArgs(
+	root: string,
+	port: number,
+	token: string,
+	parallelism = os.availableParallelism(),
+): string[] {
+	const { threads, batch } = llamaThreads(parallelism);
+	return [
+		"--model",
+		path.join(root, "model.gguf"),
+		"--mmproj",
+		path.join(root, "vision.gguf"),
+		"--host",
+		"127.0.0.1",
+		"--port",
+		String(port),
+		"--api-key",
+		token,
+		"--ctx-size",
+		String(CONTEXT_TOKENS),
+		"--threads",
+		String(threads),
+		"--threads-batch",
+		String(batch),
+		"--parallel",
+		"1",
+		"--batch-size",
+		"128",
+		"--ubatch-size",
+		"64",
+		// Per-image vision tokens: at least 256 so a small crop is enlarged, not squeezed into a
+		// few tokens; at most 1024 so one image never costs minutes on a laptop CPU. The crops in
+		// narrationFrames.ts and vision.ts are sized to fall inside this range.
+		"--image-min-tokens",
+		"256",
+		"--image-max-tokens",
+		"1024",
+		"--n-gpu-layers",
+		"0",
+		"--no-mmproj-offload",
+		"--no-warmup",
+		"--offline",
+		"--no-webui",
+		"--log-disable",
+	];
+}
+
+const mimeOf = (image: Buffer) =>
+	image[0] === 0x89 && image[1] === 0x50 ? "image/png" : "image/jpeg";
+
+type Reply = { choices?: { message?: { content?: string } }[] };
+
+/**
+ * The requests made to a running llama-server. Every reply is constrained by a JSON schema;
+ * the caller parses it.
+ */
+export function bundledClient(port: number, token: string, signal: AbortSignal) {
+	const chat = async (body: object, timeout: number, missing: string) => {
+		const raw = (await request(
+			port,
+			token,
+			"/v1/chat/completions",
+			body,
+			signal,
+			timeout,
+		)) as Reply;
+		const content = raw.choices?.[0]?.message?.content;
+		if (typeof content !== "string") throw Error(missing);
+		return content;
+	};
+	/**
+	 * Asks the vision model about one or more PNG/JPEG images in ONE message, in order, each
+	 * after its optional label (so the model knows which image is BEFORE and which is AFTER).
+	 */
+	const look = async (
+		images: Buffer[],
+		instruction: string,
+		question: string,
+		schema: object,
+		options: { labels?: string[]; maxTokens?: number } = {},
+	): Promise<string> => {
+		if (!images.length || images.length > 4) throw Error("Send one to four images");
+		const content: object[] = [];
+		for (const [i, image] of images.entries()) {
+			const label = options.labels?.[i];
+			if (label) content.push({ type: "text", text: label });
+			content.push({
+				type: "image_url",
+				image_url: { url: `data:${mimeOf(image)};base64,${image.toString("base64")}` },
+			});
+		}
+		content.push({ type: "text", text: question });
+		return chat(
+			{
+				temperature: 0,
+				max_tokens: options.maxTokens ?? 128,
+				response_format: { type: "json_object", schema },
+				messages: [
+					{ role: "system", content: instruction },
+					{ role: "user", content },
+				],
+			},
+			// Two sharp images take longer to encode on a laptop CPU than one thumbnail did.
+			120_000 + 90_000 * images.length,
+			"Missing offline AI reply",
+		);
+	};
+	return {
+		look,
+		complete(
+			instruction: string,
+			question: string,
+			schema: object,
+			maxTokens = 768,
+		): Promise<string> {
+			if (instruction.length + question.length > 12_000)
+				throw Error("Speech analysis window is too large");
+			return chat(
+				{
+					temperature: 0,
+					max_tokens: maxTokens,
+					response_format: { type: "json_object", schema },
+					messages: [
+						{ role: "system", content: instruction },
+						{ role: "user", content: question },
+					],
+				},
+				300_000,
+				"Missing offline speech analysis reply",
+			);
+		},
+		/** Auto-edit caption and focus for one frame. Coordinates are integers on a 0-1000 scale. */
+		describe(image: Buffer, instruction: string, question: string): Promise<string> {
+			return look(
+				[image],
+				`${instruction} Caption must be ONE exact short contiguous phrase visible in the image (one to four words, at most 40 characters), or empty if uncertain. Copy a label, never describe the scene. For a button labelled Save, caption is "Save", never "a Save button".`,
+				question,
+				{
+					type: "object",
+					additionalProperties: false,
+					properties: {
+						focus: {
+							anyOf: [
+								{ type: "null" },
+								{
+									type: "object",
+									additionalProperties: false,
+									properties: {
+										x: { type: "integer", minimum: 0, maximum: 1000 },
+										y: { type: "integer", minimum: 0, maximum: 1000 },
+									},
+									required: ["x", "y"],
+								},
+							],
+						},
+						caption: { type: "string", maxLength: 40 },
+					},
+					required: ["focus", "caption"],
+				},
+				{ maxTokens: 80 },
+			);
+		},
+	};
+}
+
 async function createBundledSession(root: string, signal: AbortSignal) {
 	signal.throwIfAborted();
 	if (os.freemem() < requiredMemoryBytes)
 		throw Error(
-			"Offline AI needs at least 2.5 GiB of available memory. Close other applications and try again.",
+			"Offline AI needs at least 3 GiB of available memory. Close other applications and try again.",
 		);
 	await verifyBundledAi(root, signal);
 	const port = await freePort(),
@@ -173,37 +351,7 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 	signal.throwIfAborted();
 	const child = spawn(
 		path.join(root, "runtime-static/llama-server.exe"),
-		[
-			"--model",
-			path.join(root, "model.gguf"),
-			"--mmproj",
-			path.join(root, "vision.gguf"),
-			"--host",
-			"127.0.0.1",
-			"--port",
-			String(port),
-			"--api-key",
-			token,
-			"--ctx-size",
-			"4096",
-			"--threads",
-			"4",
-			"--threads-batch",
-			"4",
-			"--parallel",
-			"1",
-			"--batch-size",
-			"128",
-			"--ubatch-size",
-			"64",
-			"--n-gpu-layers",
-			"0",
-			"--no-mmproj-offload",
-			"--no-warmup",
-			"--offline",
-			"--no-webui",
-			"--log-disable",
-		],
+		llamaServerArgs(root, port, token),
 		{
 			windowsHide: true,
 			cwd: path.join(root, "runtime-static"),
@@ -247,107 +395,7 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 			if (Date.now() >= deadline) throw Error("Offline AI startup timed out");
 			await new Promise((resolve) => setTimeout(resolve, 200));
 		}
-		/** Asks the vision model one question about one JPEG, with a JSON-schema reply. */
-		const look = async (
-			image: Buffer,
-			instruction: string,
-			question: string,
-			schema: object,
-		): Promise<string> => {
-			const raw = (await request(
-				port,
-				token,
-				"/v1/chat/completions",
-				{
-					temperature: 0,
-					max_tokens: 256,
-					response_format: { type: "json_object", schema },
-					messages: [
-						{ role: "system", content: instruction },
-						{
-							role: "user",
-							content: [
-								{ type: "text", text: question },
-								{
-									type: "image_url",
-									image_url: {
-										url: `data:image/jpeg;base64,${image.toString("base64")}`,
-									},
-								},
-							],
-						},
-					],
-				},
-				signal,
-			)) as { choices?: { message?: { content?: string } }[] };
-			const content = raw.choices?.[0]?.message?.content;
-			if (typeof content !== "string") throw Error("Missing offline AI reply");
-			return content;
-		};
-		return {
-			pid: child.pid,
-			close,
-			async complete(
-				instruction: string,
-				question: string,
-				schema: object,
-				maxTokens = 768,
-			): Promise<string> {
-				if (instruction.length + question.length > 12_000)
-					throw Error("Speech analysis window is too large");
-				const raw = (await request(
-					port,
-					token,
-					"/v1/chat/completions",
-					{
-						temperature: 0,
-						max_tokens: maxTokens,
-						response_format: { type: "json_object", schema },
-						messages: [
-							{ role: "system", content: instruction },
-							{ role: "user", content: question },
-						],
-					},
-					signal,
-					300_000,
-				)) as { choices?: { message?: { content?: string } }[] };
-				const content = raw.choices?.[0]?.message?.content;
-				if (typeof content !== "string")
-					throw Error("Missing offline speech analysis reply");
-				return content;
-			},
-			describe(image: Buffer, instruction: string, question: string): Promise<string> {
-				return look(
-					image,
-					`${instruction} Caption must be ONE exact short contiguous phrase visible in the image (one to four words, at most 40 characters), or empty if uncertain. Copy a label, never describe the scene. For a button labelled Save, caption is "Save", never "a Save button". Keep rationale brief.`,
-					question,
-					{
-						type: "object",
-						additionalProperties: false,
-						properties: {
-							focus: {
-								anyOf: [
-									{ type: "null" },
-									{
-										type: "object",
-										additionalProperties: false,
-										properties: {
-											cx: { type: "number", minimum: 0, maximum: 1 },
-											cy: { type: "number", minimum: 0, maximum: 1 },
-										},
-										required: ["cx", "cy"],
-									},
-								],
-							},
-							caption: { type: "string", maxLength: 40 },
-							rationale: { type: "string", maxLength: 80 },
-						},
-						required: ["focus", "caption", "rationale"],
-					},
-				);
-			},
-			look,
-		};
+		return { pid: child.pid, close, ...bundledClient(port, token, signal) };
 	} catch (error) {
 		await close();
 		throw error;

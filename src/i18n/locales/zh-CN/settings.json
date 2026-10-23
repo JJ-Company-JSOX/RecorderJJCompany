@@ -151,7 +151,9 @@
 		"paddingBottom": "下",
 		"paddingLeft": "左",
 		"paddingRight": "右",
-		"removeBackground": "移除背景"
+		"removeBackground": "移除背景",
+		"clickSound": "点击音效",
+		"clickSoundVolume": "点击音效音量"
 	},
 	"sections": {
 		"scene": "场景",
@@ -198,7 +200,11 @@
 			"split": "Split",
 			"merge": "Merge",
 			"delete": "Delete"
-		}
+		},
+		"modelDisclosure": "Whisper small：下载约 500 MB。本地 CPU 识别，速度取决于电脑性能。模型及 whisper.cpp 使用 MIT 许可证。",
+		"modelLocation": "存储位置",
+		"cancelDownload": "取消下载",
+		"downloadNotRunning": "下载已结束，请刷新模型状态。"
 	},
 	"crop": {
 		"title": "裁剪视频",
@@ -251,7 +257,10 @@
 		"systemLabel": "系统声音",
 		"micLabel": "麦克风",
 		"mixedLabel": "来源",
-		"deleteRegion": "删除音频"
+		"deleteRegion": "删除音频",
+		"mute": "静音",
+		"fadeIn": "淡入",
+		"fadeOut": "淡出"
 	},
 	"updates": {
 		"experimentalDescription": "你已选择接收实验性更新，因此可以在 Recordly 最新更新广泛发布之前选择先行测试。",

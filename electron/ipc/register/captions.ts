@@ -1,8 +1,9 @@
 import path from "node:path";
 import { dialog, ipcMain } from "electron";
-import { generateAutoCaptionsFromVideo, resolveCaptionAudioCandidates } from "../captions/generate";
 import { generateBundledSpeechTranscript, getBundledSpeechStatus } from "../captions/bundledSpeech";
+import { generateAutoCaptionsFromVideo, resolveCaptionAudioCandidates } from "../captions/generate";
 import {
+	cancelWhisperModelDownload,
 	deleteWhisperSmallModel,
 	downloadWhisperSmallModel,
 	getWhisperSmallModelStatus,
@@ -174,6 +175,10 @@ export function registerCaptionHandlers() {
 		}
 	});
 
+	ipcMain.handle("cancel-whisper-model-download", (event) => ({
+		success: cancelWhisperModelDownload(event.sender.id),
+	}));
+
 	ipcMain.handle("download-whisper-small-model", async (event) => {
 		try {
 			const existing = await getWhisperSmallModelStatus();
@@ -189,6 +194,9 @@ export function registerCaptionHandlers() {
 			const modelPath = await downloadWhisperSmallModel(event.sender);
 			return { success: true, path: modelPath };
 		} catch (error) {
+			if (error instanceof Error && error.name === "AbortError") {
+				return { success: false, canceled: true };
+			}
 			console.error("Failed to download Whisper small model:", error);
 			return { success: false, error: String(error) };
 		}

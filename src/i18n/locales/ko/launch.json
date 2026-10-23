@@ -54,7 +54,8 @@
 			"upToDateTitle": "Recordly {{version}}은(는) 최신 버전입니다.",
 			"availableTitle": "Recordly {{version}}을(를) 사용할 수 있습니다.",
 			"availableGenericTitle": "업데이트를 사용할 수 있습니다."
-		}
+		},
+		"cameraUnavailable": "Camera unavailable. Screen recording will continue without a camera layer."
 	},
 	"sourceSelector": {
 		"loadingSources": "소스를 불러오는 중...",

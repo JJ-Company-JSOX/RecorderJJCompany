@@ -1,7 +1,7 @@
-import type { AudioRegion } from "@/components/video-editor/types";
-import { SOURCE_AUDIO_NORMALIZE_GAIN } from "@/components/video-editor/audio/audioTypes";
-import { resolveSourceAudioFallbackPaths } from "./sourceAudioFallback";
 import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
+import { SOURCE_AUDIO_NORMALIZE_GAIN } from "@/components/video-editor/audio/audioTypes";
+import type { AudioRegion } from "@/components/video-editor/types";
+import { resolveSourceAudioFallbackPaths } from "./sourceAudioFallback";
 
 export function resolveEnhancedAudioPath(
 	originalPath: string,
@@ -58,6 +58,8 @@ export interface ResolvedAudioTrack {
 		startDelayMs: number;
 	};
 	gain: number;
+	fadeInMs?: number;
+	fadeOutMs?: number;
 	timelineBinding: {
 		startMs: number;
 		endMs: number;
@@ -124,7 +126,11 @@ export function buildResolvedAudioPlan(input: {
 			path: region.audioPath,
 			startDelayMs: 0,
 		},
-		gain: clampGain(region.volume * (region.normalize ? SOURCE_AUDIO_NORMALIZE_GAIN : 1), 1),
+		gain: region.muted
+			? 0
+			: clampGain(region.volume * (region.normalize ? SOURCE_AUDIO_NORMALIZE_GAIN : 1), 1),
+		fadeInMs: region.fadeInMs,
+		fadeOutMs: region.fadeOutMs,
 		timelineBinding: {
 			startMs: Math.max(0, region.startMs),
 			endMs: Math.max(0, region.endMs),

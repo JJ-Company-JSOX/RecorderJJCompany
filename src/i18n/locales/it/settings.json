@@ -151,7 +151,9 @@
 		"paddingBottom": "Basso",
 		"paddingLeft": "Sinistra",
 		"paddingRight": "Destra",
-		"removeBackground": "Rimuovi sfondo"
+		"removeBackground": "Rimuovi sfondo",
+		"clickSound": "Click sound",
+		"clickSoundVolume": "Click sound volume"
 	},
 	"sections": {
 		"scene": "Scena",
@@ -198,7 +200,11 @@
 			"split": "Split",
 			"merge": "Merge",
 			"delete": "Delete"
-		}
+		},
+		"modelDisclosure": "Whisper small: approximately 500 MB download. Local CPU recognition; speed depends on your computer. Model and whisper.cpp: MIT license.",
+		"modelLocation": "Storage location",
+		"cancelDownload": "Cancel download",
+		"downloadNotRunning": "The download has already finished. Refresh the model status."
 	},
 	"crop": {
 		"title": "Ritaglia video",
@@ -251,7 +257,10 @@
 		"systemLabel": "Sorgente sistema",
 		"micLabel": "Sorgente microfono",
 		"mixedLabel": "Sorgente",
-		"deleteRegion": "Elimina audio"
+		"deleteRegion": "Elimina audio",
+		"mute": "Mute",
+		"fadeIn": "Fade in",
+		"fadeOut": "Fade out"
 	},
 	"updates": {
 		"experimentalDescription": "Hai attivato gli aggiornamenti sperimentali, quindi puoi scegliere di provare l'ultimo aggiornamento di Recordly prima che sia disponibile per tutti.",

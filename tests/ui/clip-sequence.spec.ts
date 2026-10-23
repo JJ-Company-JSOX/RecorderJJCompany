@@ -27,6 +27,7 @@ async function splitInsideClip(page: Page, clip: Locator, fraction: number) {
 async function dragLeftEdge(page: Page, clip: Locator, deltaPx: number) {
 	const box = (await clip.boundingBox())!;
 	await page.mouse.move(box.x + 2, box.y + 20);
+	await expect(clip).toHaveCSS("cursor", "col-resize");
 	await page.mouse.down();
 	await page.mouse.move(box.x + 2 + deltaPx, box.y + 20, { steps: 12 });
 	await page.mouse.up();

@@ -54,7 +54,8 @@
 			"upToDateTitle": "Recordly {{version}} está actualizado.",
 			"availableTitle": "Recordly {{version}} está disponible.",
 			"availableGenericTitle": "Hay una actualización disponible."
-		}
+		},
+		"cameraUnavailable": "Camera unavailable. Screen recording will continue without a camera layer."
 	},
 	"sourceSelector": {
 		"loadingSources": "Cargando fuentes...",

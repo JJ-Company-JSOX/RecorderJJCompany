@@ -151,7 +151,9 @@
 		"paddingBottom": "Onder",
 		"paddingLeft": "Links",
 		"paddingRight": "Rechts",
-		"removeBackground": "Achtergrond verwijderen"
+		"removeBackground": "Achtergrond verwijderen",
+		"clickSound": "Click sound",
+		"clickSoundVolume": "Click sound volume"
 	},
 	"sections": {
 		"scene": "Scène",
@@ -198,7 +200,11 @@
 			"split": "Split",
 			"merge": "Merge",
 			"delete": "Delete"
-		}
+		},
+		"modelDisclosure": "Whisper small: approximately 500 MB download. Local CPU recognition; speed depends on your computer. Model and whisper.cpp: MIT license.",
+		"modelLocation": "Storage location",
+		"cancelDownload": "Cancel download",
+		"downloadNotRunning": "The download has already finished. Refresh the model status."
 	},
 	"crop": {
 		"title": "Video bijsnijden",
@@ -251,7 +257,10 @@
 		"systemLabel": "Systeemaudio",
 		"micLabel": "Microfoon",
 		"mixedLabel": "Bron",
-		"deleteRegion": "Audio verwijderen"
+		"deleteRegion": "Audio verwijderen",
+		"mute": "Mute",
+		"fadeIn": "Fade in",
+		"fadeOut": "Fade out"
 	},
 	"updates": {
 		"experimentalDescription": "Je hebt experimentele updates ingeschakeld, dus je kunt de nieuwste update van Recordly testen voordat die breed beschikbaar is.",

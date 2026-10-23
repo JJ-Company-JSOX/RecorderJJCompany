@@ -112,6 +112,11 @@ export function useAutoCaptionController({
 		setWhisperModelDownloadStatus("downloading");
 		setWhisperModelDownloadProgress(0);
 		const result = await window.electronAPI.downloadWhisperSmallModel();
+		if (result.canceled) {
+			setWhisperModelDownloadStatus("idle");
+			setWhisperModelDownloadProgress(0);
+			return;
+		}
 		if (!result.success) {
 			setWhisperModelDownloadStatus("error");
 			toast.error(result.error || "Failed to download Whisper small model");

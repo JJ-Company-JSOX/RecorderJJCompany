@@ -1,13 +1,13 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { CURSOR_MOTION_PRESETS } from "./cursorMotionPresets";
-import { DEFAULT_CURSOR_MOTION_BLUR } from "./types";
 import {
 	fromFileUrl,
 	normalizeProjectEditor,
 	stripPersistedDevMotionBlurSettings,
 	toFileUrl,
 } from "./projectPersistence";
+import { DEFAULT_CURSOR_MOTION_BLUR } from "./types";
 
 describe("Audio path handling", () => {
 	describe("toFileUrl produces valid file:// URLs for audio paths", () => {
@@ -264,9 +264,8 @@ describe("Motion preset normalization", () => {
 		expect(result.cursorSpringDampingMultiplier).toBe(smooth.cursorSpringDampingMultiplier);
 	});
 
-	it("falls back to focused when the saved values do not match a supported preset", () => {
-		const focused = CURSOR_MOTION_PRESETS.focused;
-		const result = normalizeProjectEditor({
+	it("preserves custom motion settings rather than replacing them with a preset", () => {
+		const custom = {
 			zoomInDurationMs: 275,
 			zoomOutDurationMs: 410,
 			cursorSize: 3.25,
@@ -274,23 +273,11 @@ describe("Motion preset normalization", () => {
 			cursorSpringStiffnessMultiplier: 1.1,
 			cursorSpringDampingMultiplier: 1.05,
 			cursorSpringMassMultiplier: 1.6,
-			cursorMotionBlur: 0.9,
 			cursorClickBounce: 2.25,
 			cursorClickBounceDuration: 280,
-		} as any);
-
-		expect(result.zoomInDurationMs).toBe(focused.zoomInDurationMs);
-		expect(result.zoomOutDurationMs).toBe(focused.zoomOutDurationMs);
-		expect(result.cursorSize).toBe(focused.cursorSize);
-		expect(result.cursorSmoothing).toBe(focused.cursorSmoothing);
-		expect(result.cursorSpringStiffnessMultiplier).toBe(
-			focused.cursorSpringStiffnessMultiplier,
-		);
-		expect(result.cursorSpringDampingMultiplier).toBe(focused.cursorSpringDampingMultiplier);
-		expect(result.cursorSpringMassMultiplier).toBe(focused.cursorSpringMassMultiplier);
-		expect(result.cursorMotionBlur).toBe(DEFAULT_CURSOR_MOTION_BLUR);
-		expect(result.cursorClickBounce).toBe(focused.cursorClickBounce);
-		expect(result.cursorClickBounceDuration).toBe(focused.cursorClickBounceDuration);
+		};
+		const result = normalizeProjectEditor(custom as any);
+		expect(result).toMatchObject(custom);
 	});
 });
 

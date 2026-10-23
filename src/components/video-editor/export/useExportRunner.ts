@@ -3,6 +3,7 @@ import { toast } from "@/components/ui/toast";
 import { getMp4ExportBitrate } from "@/lib/exporter/exportBitrate";
 import { DEFAULT_MP4_CODEC } from "@/lib/exporter/mp4Support";
 import type { ExportSettings } from "@/lib/exporter/types";
+import { buildCursorClickAudioRegions } from "../audio/cursorClickSound";
 import { calculateMp4ExportDimensions, capMp4ShareDimensions } from "../exportDimensions";
 import { resolveMp4ExportRouting } from "../mp4ExportRouting";
 import { resolveMp4ExportSettings } from "../mp4ExportSettings";
@@ -317,7 +318,16 @@ export function useExportRunner(input: ExportRunnerInput) {
 								setExportProgress(progress);
 							},
 						}),
-						audioRegions,
+						audioRegions: appearance.cursorClickSound
+							? [
+									...audioRegions,
+									...buildCursorClickAudioRegions(
+										effectiveCursorTelemetry,
+										clipRegions,
+										appearance.cursorClickSoundVolume,
+									),
+								]
+							: audioRegions,
 						clipRegions,
 						sourceAudioFallbackPaths: audio.sourceAudioFallbackPaths,
 						sourceAudioFallbackStartDelayMsByPath:

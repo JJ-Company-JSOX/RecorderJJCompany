@@ -135,7 +135,28 @@ export function useAudioRegionCommands({
 		[selectedAudioId, setAudioRegions],
 	);
 
+	const handleAudioEnvelopeChange = useCallback(
+		(patch: Pick<Partial<AudioRegion>, "muted" | "fadeInMs" | "fadeOutMs">) => {
+			if (!selectedAudioId) return;
+			setAudioRegions((current) =>
+				current.map((region) => {
+					if (region.id !== selectedAudioId) return region;
+					const next = { ...region, ...patch };
+					for (const key of ["fadeInMs", "fadeOutMs"] as const) {
+						if (patch[key] !== undefined)
+							next[key] = Number.isFinite(patch[key])
+								? Math.max(0, Math.min(region.endMs - region.startMs, patch[key]!))
+								: 0;
+					}
+					return next;
+				}),
+			);
+		},
+		[selectedAudioId, setAudioRegions],
+	);
+
 	return {
+		handleAudioEnvelopeChange,
 		handleSelectAudio,
 		handleAudioAdded,
 		handleAudioSpanChange,

@@ -1,9 +1,9 @@
-import { getLocalMediaServerPath } from "@/lib/localMediaUrl";
 import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
+import { getLocalMediaServerPath } from "@/lib/localMediaUrl";
 import { DEFAULT_WALLPAPER_PATH } from "@/lib/wallpapers";
 import { ASPECT_RATIOS, type AspectRatio, isCustomAspectRatio } from "@/utils/aspectRatioUtils";
 import { closeClipGaps, rippleRegionAnchors, rippleRegions } from "./clipSequence";
-import { CURSOR_MOTION_PRESETS, resolveCursorMotionPresetId } from "./cursorMotionPresets";
+import { CURSOR_MOTION_PRESETS } from "./cursorMotionPresets";
 import {
 	ADVANCED_VERTICAL_PADDING_MAX,
 	type AnnotationRegion,
@@ -99,6 +99,8 @@ export interface ProjectEditorState {
 	showCursor: boolean;
 	loopCursor: boolean;
 	cursorStyle: CursorStyle;
+	cursorClickSound: boolean;
+	cursorClickSoundVolume: number;
 	cursorClickEffect: CursorClickEffectStyle;
 	cursorClickEffectColor: string;
 	cursorClickEffectScale: number;
@@ -628,6 +630,13 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 						audioPath: typeof region.audioPath === "string" ? region.audioPath : "",
 						volume: isFiniteNumber(region.volume) ? clamp(region.volume, 0, 1) : 1,
 						normalize: Boolean(region.normalize),
+						muted: Boolean(region.muted),
+						fadeInMs: isFiniteNumber(region.fadeInMs)
+							? clamp(region.fadeInMs, 0, endMs - startMs)
+							: 0,
+						fadeOutMs: isFiniteNumber(region.fadeOutMs)
+							? clamp(region.fadeOutMs, 0, endMs - startMs)
+							: 0,
 						trackIndex: isFiniteNumber(region.trackIndex)
 							? Math.max(0, Math.floor(region.trackIndex))
 							: 0,
@@ -709,7 +718,12 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 			rawAutoCaptionSettings.language.trim()
 				? rawAutoCaptionSettings.language.trim()
 				: DEFAULT_AUTO_CAPTION_SETTINGS.language,
-		fontFamily: getDefaultCaptionFontFamily(),
+		fontFamily:
+			typeof rawAutoCaptionSettings.fontFamily === "string" &&
+			rawAutoCaptionSettings.fontFamily.trim() &&
+			rawAutoCaptionSettings.fontFamily.length <= 256
+				? rawAutoCaptionSettings.fontFamily.trim()
+				: getDefaultCaptionFontFamily(),
 		fontSize: isFiniteNumber(rawAutoCaptionSettings.fontSize)
 			? clamp(rawAutoCaptionSettings.fontSize, 16, 72)
 			: DEFAULT_AUTO_CAPTION_SETTINGS.fontSize,
@@ -830,8 +844,8 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		(editor as Partial<ProjectEditorState>).cursorClickEffectColor,
 		DEFAULT_CURSOR_CLICK_EFFECT_COLOR,
 	);
-	const normalizedMotionPreset =
-		CURSOR_MOTION_PRESETS[resolveCursorMotionPresetId(normalizedMotionValues)];
+	// Presets supply defaults; valid manual edits must survive saving and reopening.
+	const normalizedMotionPreset = normalizedMotionValues;
 
 	return {
 		wallpaper: typeof editor.wallpaper === "string" ? editor.wallpaper : DEFAULT_WALLPAPER_PATH,
@@ -854,6 +868,10 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		showCursor: typeof editor.showCursor === "boolean" ? editor.showCursor : true,
 		loopCursor: typeof editor.loopCursor === "boolean" ? editor.loopCursor : false,
 		cursorStyle: normalizedCursorStyle,
+		cursorClickSound: editor.cursorClickSound === true,
+		cursorClickSoundVolume: isFiniteNumber(editor.cursorClickSoundVolume)
+			? clamp(editor.cursorClickSoundVolume, 0, 1)
+			: 0.35,
 		cursorClickEffect: normalizeCursorClickEffectStyle(
 			(editor as Partial<ProjectEditorState>).cursorClickEffect,
 			DEFAULT_CURSOR_CLICK_EFFECT,

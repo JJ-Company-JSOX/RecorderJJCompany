@@ -1,8 +1,9 @@
-import { acquireBrowserScreenCapture, isCapturePermissionDismissed } from "./browserScreenCapture";
 import { fixWebmDuration } from "@fix-webm-duration/fix";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
+import { useI18n } from "@/contexts/I18nContext";
 import { getEffectiveRecordingDurationMs } from "@/lib/mediaTiming";
+import { acquireBrowserScreenCapture, isCapturePermissionDismissed } from "./browserScreenCapture";
 import {
 	getVideoExtensionForMimeType,
 	isWebmMimeType,
@@ -368,6 +369,7 @@ async function createAudioInputDeviceSnapshot(): Promise<
 }
 
 export function useScreenRecorder(): UseScreenRecorderReturn {
+	const { t } = useI18n();
 	const [recording, setRecordingValue] = useState(false);
 	const recordingActive = useRef(false);
 	const setRecording = useCallback((value: boolean) => {
@@ -1079,6 +1081,13 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				"Failed to start webcam recording; continuing without webcam layer:",
 				error,
 			);
+			toast.warning(
+				t(
+					"launch.recording.cameraUnavailable",
+					"Camera unavailable. Screen recording will continue without a camera layer.",
+				),
+				{ id: "recording-camera-unavailable", duration: 8000 },
+			);
 			resolvedWebcamPath.current = null;
 			pendingWebcamPathPromise.current = Promise.resolve(null);
 			webcamStopPromise.current = Promise.resolve(null);
@@ -1090,7 +1099,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				webcamStream.current = null;
 			}
 		}
-	}, [getRecordingDurationMs, selectWebcamMimeType, webcamDeviceId, webcamEnabled]);
+	}, [getRecordingDurationMs, selectWebcamMimeType, webcamDeviceId, webcamEnabled, t]);
 
 	/** Start the prepared webcam MediaRecorder. Call after main recording begins. */
 	const beginWebcamCapture = useCallback(() => {
@@ -2162,10 +2171,16 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						videoFileName,
 					);
 					if (!videoResult.success) {
-						console.error("Failed to store video:", videoResult.message, videoResult.error);
+						console.error(
+							"Failed to store video:",
+							videoResult.message,
+							videoResult.error,
+						);
 						const baseMessage = videoResult.message || "Failed to store the recording.";
 						await notifyRecordingFinalizationFailure(
-							videoResult.error ? `${baseMessage} (${videoResult.error})` : baseMessage,
+							videoResult.error
+								? `${baseMessage} (${videoResult.error})`
+								: baseMessage,
 						);
 						return;
 					}

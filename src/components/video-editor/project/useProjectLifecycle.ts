@@ -154,6 +154,8 @@ export function useProjectLifecycle(input: Input) {
 		appearance.setCameraSpringStiffnessMultiplier(editor.cameraSpringStiffnessMultiplier);
 		appearance.setCameraSpringDampingMultiplier(editor.cameraSpringDampingMultiplier);
 		appearance.setCameraSpringMassMultiplier(editor.cameraSpringMassMultiplier);
+		appearance.setCursorClickSound(editor.cursorClickSound);
+		appearance.setCursorClickSoundVolume(editor.cursorClickSoundVolume);
 		appearance.setCursorClickEffect(editor.cursorClickEffect);
 		appearance.setCursorClickEffectColor(editor.cursorClickEffectColor);
 		appearance.setCursorClickEffectScale(editor.cursorClickEffectScale);

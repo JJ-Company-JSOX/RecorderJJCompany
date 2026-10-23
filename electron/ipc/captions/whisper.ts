@@ -1,14 +1,14 @@
-import { createWriteStream } from "node:fs";
-import { constants as fsConstants } from "node:fs";
+import { createWriteStream, constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import { get as httpsGet } from "node:https";
+import { pipeline } from "node:stream/promises";
 import type Electron from "electron";
-import { getBundledSpeechStatus } from "./bundledSpeech";
 import {
 	WHISPER_MODEL_DIR,
 	WHISPER_MODEL_DOWNLOAD_URL,
 	WHISPER_SMALL_MODEL_PATH,
 } from "../constants";
+import { getBundledSpeechStatus } from "./bundledSpeech";
 
 export function sendWhisperModelDownloadProgress(
 	webContents: Electron.WebContents,
@@ -20,6 +20,13 @@ export function sendWhisperModelDownloadProgress(
 	},
 ) {
 	webContents.send("whisper-small-model-download-progress", payload);
+}
+
+const activeDownloads = new Map<number, AbortController>();
+export function cancelWhisperModelDownload(ownerId: number): boolean {
+	const controller = activeDownloads.get(ownerId);
+	controller?.abort();
+	return Boolean(controller);
 }
 
 export async function getWhisperSmallModelStatus() {
@@ -38,6 +45,7 @@ export async function getWhisperSmallModelStatus() {
 			success: true,
 			exists: false,
 			path: null,
+			downloadPath: WHISPER_SMALL_MODEL_PATH,
 		};
 	}
 }
@@ -46,10 +54,12 @@ export function downloadFileWithProgress(
 	url: string,
 	destinationPath: string,
 	onProgress: (progress: number) => void,
+	signal?: AbortSignal,
 ): Promise<void> {
 	const request = (currentUrl: string, redirectCount = 0): Promise<void> => {
 		return new Promise((resolve, reject) => {
-			const req = httpsGet(currentUrl, { timeout: 30_000 }, (response) => {
+			let transferring = false;
+			const req = httpsGet(currentUrl, { timeout: 30_000, signal }, (response) => {
 				const statusCode = response.statusCode ?? 0;
 				const location = response.headers.location;
 
@@ -87,24 +97,16 @@ export function downloadFileWithProgress(
 					}
 				});
 
-				response.on("error", (error) => {
-					fileStream.destroy(error);
-				});
-
-				fileStream.on("error", (error) => {
-					response.destroy(error);
-					reject(error);
-				});
-
-				fileStream.on("finish", () => {
+				transferring = true;
+				void pipeline(response, fileStream, { signal }).then(() => {
 					onProgress(100);
 					resolve();
-				});
-
-				response.pipe(fileStream);
+				}, reject);
 			});
 
-			req.on("error", reject);
+			req.on("error", (error) => {
+				if (!transferring) reject(error);
+			});
 			req.on("timeout", () => {
 				req.destroy(new Error("Whisper model download timed out."));
 			});
@@ -117,44 +119,69 @@ export function downloadFileWithProgress(
 export async function downloadWhisperSmallModel(
 	webContents: Electron.WebContents,
 ): Promise<string> {
-	await fs.mkdir(WHISPER_MODEL_DIR, { recursive: true });
+	if (activeDownloads.size)
+		throw new Error("A speech model download is already running. Cancel it before retrying.");
+	const controller = new AbortController();
+	activeDownloads.set(webContents.id, controller);
+	const onDestroyed = () => controller.abort();
+	webContents.once("destroyed", onDestroyed);
+	await fs.mkdir(WHISPER_MODEL_DIR, { recursive: true }).catch((error) => {
+		activeDownloads.delete(webContents.id);
+		webContents.removeListener("destroyed", onDestroyed);
+		throw error;
+	});
 	const tempPath = `${WHISPER_SMALL_MODEL_PATH}.download`;
 
-	sendWhisperModelDownloadProgress(webContents, {
-		status: "downloading",
-		progress: 0,
-		path: null,
-	});
-
 	try {
-		await fs.rm(tempPath, { force: true });
-		await downloadFileWithProgress(WHISPER_MODEL_DOWNLOAD_URL, tempPath, (progress) => {
+		controller.signal.throwIfAborted();
+		if (!webContents.isDestroyed())
 			sendWhisperModelDownloadProgress(webContents, {
 				status: "downloading",
-				progress,
+				progress: 0,
 				path: null,
 			});
-		});
+		await fs.rm(tempPath, { force: true });
+		await downloadFileWithProgress(
+			WHISPER_MODEL_DOWNLOAD_URL,
+			tempPath,
+			(progress) => {
+				if (!webContents.isDestroyed())
+					sendWhisperModelDownloadProgress(webContents, {
+						status: "downloading",
+						progress,
+						path: null,
+					});
+			},
+			controller.signal,
+		);
+		controller.signal.throwIfAborted();
 		await fs.rename(tempPath, WHISPER_SMALL_MODEL_PATH);
-		sendWhisperModelDownloadProgress(webContents, {
-			status: "downloaded",
-			progress: 100,
-			path: WHISPER_SMALL_MODEL_PATH,
-		});
+		if (!webContents.isDestroyed())
+			sendWhisperModelDownloadProgress(webContents, {
+				status: "downloaded",
+				progress: 100,
+				path: WHISPER_SMALL_MODEL_PATH,
+			});
 		return WHISPER_SMALL_MODEL_PATH;
 	} catch (error) {
 		await fs.rm(tempPath, { force: true }).catch(() => undefined);
-		sendWhisperModelDownloadProgress(webContents, {
-			status: "error",
-			progress: 0,
-			path: null,
-			error: String(error),
-		});
+		if (!webContents.isDestroyed())
+			sendWhisperModelDownloadProgress(webContents, {
+				status: controller.signal.aborted ? "idle" : "error",
+				progress: 0,
+				path: null,
+				error: controller.signal.aborted ? undefined : String(error),
+			});
 		throw error;
+	} finally {
+		activeDownloads.delete(webContents.id);
+		webContents.removeListener("destroyed", onDestroyed);
 	}
 }
 
 export async function deleteWhisperSmallModel(): Promise<void> {
+	if (activeDownloads.size)
+		throw new Error("Cancel the active model download before deleting the model.");
 	// The packaged model belongs to application resources and is never removed.
 	await fs.rm(WHISPER_SMALL_MODEL_PATH, { force: true });
 }

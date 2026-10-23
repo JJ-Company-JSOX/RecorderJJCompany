@@ -7,11 +7,14 @@ import {
 	resetEditorHistoryStack,
 	undoEditorHistoryStack,
 } from "../editorHistory";
+import type { PresentationHistoryState } from "../presentationHistory";
 import { deriveNextId } from "../projectPersistence";
 import type { useTimelineState } from "../state/useTimelineState";
 import { cloneStructured } from "../videoEditorUtils";
 
 type Input = {
+	presentation: Partial<PresentationHistoryState>;
+	applyPresentation: (state: Partial<PresentationHistoryState>) => void;
 	timeline: ReturnType<typeof useTimelineState>;
 	nextZoomIdRef: MutableRefObject<number>;
 	nextClipIdRef: MutableRefObject<number>;
@@ -21,6 +24,8 @@ type Input = {
 };
 
 export function useEditorHistory({
+	presentation,
+	applyPresentation,
 	timeline,
 	nextZoomIdRef,
 	nextClipIdRef,
@@ -66,6 +71,7 @@ export function useEditorHistory({
 	}, []);
 	const buildSnapshot = useCallback(
 		(): EditorHistorySnapshot => ({
+			presentation,
 			sourceAudioTrackSettingsByClip,
 			zoomRegions,
 			clipRegions,
@@ -79,6 +85,7 @@ export function useEditorHistory({
 			selectedAudioId,
 		}),
 		[
+			presentation,
 			sourceAudioTrackSettingsByClip,
 			zoomRegions,
 			clipRegions,
@@ -96,7 +103,9 @@ export function useEditorHistory({
 		(snapshot: EditorHistorySnapshot) => {
 			applyingRef.current = true;
 			const cloned = cloneStructured(snapshot);
-			if (cloned.sourceAudioTrackSettingsByClip) setSourceAudioTrackSettingsByClip(cloned.sourceAudioTrackSettingsByClip);
+			if (cloned.presentation) applyPresentation(cloned.presentation);
+			if (cloned.sourceAudioTrackSettingsByClip)
+				setSourceAudioTrackSettingsByClip(cloned.sourceAudioTrackSettingsByClip);
 			setZoomRegions(cloned.zoomRegions);
 			setClipRegions(cloned.clipRegions);
 			setSpeedRegions(cloned.speedRegions);
@@ -128,6 +137,7 @@ export function useEditorHistory({
 				1;
 		},
 		[
+			applyPresentation,
 			setSourceAudioTrackSettingsByClip,
 			setZoomRegions,
 			setClipRegions,

@@ -1,3 +1,4 @@
+import type { PresentationHistoryState } from "./presentationHistory";
 import type {
 	AnnotationRegion,
 	AudioRegion,
@@ -8,7 +9,11 @@ import type {
 } from "./types";
 
 export type EditorHistorySnapshot = {
-	sourceAudioTrackSettingsByClip?: Record<string, import("./audio/audioTypes").SourceAudioTrackSettings>;
+	presentation?: Partial<PresentationHistoryState>;
+	sourceAudioTrackSettingsByClip?: Record<
+		string,
+		import("./audio/audioTypes").SourceAudioTrackSettings
+	>;
 	zoomRegions: ZoomRegion[];
 	clipRegions: ClipRegion[];
 	speedRegions: SpeedRegion[];

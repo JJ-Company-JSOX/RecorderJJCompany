@@ -1,18 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
+import {
+	createEditorHistoryStack,
+	type EditorHistorySnapshot,
+	recordEditorHistorySnapshot,
+	undoEditorHistoryStack,
+} from "./editorHistory";
 import {
 	getDefaultBorderRadiusPercent,
 	legacyBorderRadiusPixelsToPercent,
 	normalizeProjectEditor,
 	resolveVideoUrl,
 } from "./projectPersistence";
-import {
-	createEditorHistoryStack,
-	recordEditorHistorySnapshot,
-	undoEditorHistoryStack,
-	type EditorHistorySnapshot,
-} from "./editorHistory";
-import { ADVANCED_VERTICAL_PADDING_MAX } from "./types";
+import { ADVANCED_VERTICAL_PADDING_MAX, DEFAULT_AUTO_CAPTION_SETTINGS } from "./types";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -40,6 +39,25 @@ describe("resolveVideoUrl", () => {
 });
 
 describe("normalizeProjectEditor", () => {
+	it("preserves manual cursor and zoom settings when reopening a saved project", () => {
+		const custom = {
+			cursorSize: 3.7,
+			cursorSmoothing: 1.25,
+			cursorSpringStiffnessMultiplier: 1.8,
+			cursorClickBounce: 1.1,
+			zoomInDurationMs: 650,
+			zoomOutDurationMs: 850,
+		};
+		expect(normalizeProjectEditor(JSON.parse(JSON.stringify(custom)))).toMatchObject(custom);
+	});
+
+	it("preserves the selected caption font instead of replacing it with a default", () => {
+		expect(
+			normalizeProjectEditor({
+				autoCaptionSettings: { ...DEFAULT_AUTO_CAPTION_SETTINGS, fontFamily: "Arial" },
+			}).autoCaptionSettings.fontFamily,
+		).toBe("Arial");
+	});
 	it("ignores retired temporal blur fields when opening an older project", () => {
 		const savedEditor = {
 			zoomMotionBlur: 0.6,

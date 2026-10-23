@@ -814,6 +814,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	downloadWhisperSmallModel: () => {
 		return ipcRenderer.invoke("download-whisper-small-model");
 	},
+	cancelWhisperModelDownload: () => ipcRenderer.invoke("cancel-whisper-model-download"),
 	deleteWhisperSmallModel: () => {
 		return ipcRenderer.invoke("delete-whisper-small-model");
 	},

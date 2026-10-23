@@ -54,7 +54,8 @@
 			"upToDateTitle": "У вас актуальная версия Recordly {{version}}.",
 			"availableTitle": "Доступна новая версия Recordly {{version}}.",
 			"availableGenericTitle": "Доступно обновление."
-		}
+		},
+		"cameraUnavailable": "Camera unavailable. Screen recording will continue without a camera layer."
 	},
 	"sourceSelector": {
 		"loadingSources": "Загрузка источников...",

@@ -151,7 +151,9 @@
 		"paddingBottom": "아래",
 		"paddingLeft": "왼쪽",
 		"paddingRight": "오른쪽",
-		"removeBackground": "배경 제거"
+		"removeBackground": "배경 제거",
+		"clickSound": "Click sound",
+		"clickSoundVolume": "Click sound volume"
 	},
 	"sections": {
 		"scene": "장면",
@@ -198,7 +200,11 @@
 			"split": "Split",
 			"merge": "Merge",
 			"delete": "Delete"
-		}
+		},
+		"modelDisclosure": "Whisper small: approximately 500 MB download. Local CPU recognition; speed depends on your computer. Model and whisper.cpp: MIT license.",
+		"modelLocation": "Storage location",
+		"cancelDownload": "Cancel download",
+		"downloadNotRunning": "The download has already finished. Refresh the model status."
 	},
 	"crop": {
 		"title": "비디오 자르기",
@@ -251,7 +257,10 @@
 		"systemLabel": "시스템 소스",
 		"micLabel": "마이크 소스",
 		"mixedLabel": "소스",
-		"deleteRegion": "오디오 삭제"
+		"deleteRegion": "오디오 삭제",
+		"mute": "Mute",
+		"fadeIn": "Fade in",
+		"fadeOut": "Fade out"
 	},
 	"updates": {
 		"experimentalDescription": "실험적 업데이트를 선택했으므로 Recordly의 최신 업데이트가 널리 제공되기 전에 먼저 테스트해 볼 수 있습니다.",

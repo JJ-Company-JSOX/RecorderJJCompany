@@ -48,6 +48,54 @@ describe("shouldAutoApplyFreshRecordingZoomsForSource", () => {
 });
 
 describe("buildInteractionZoomSuggestions (click-cluster logic)", () => {
+	it("merges clicks close in time and position", () => {
+		const result = buildInteractionZoomSuggestions({
+			cursorTelemetry: [makeClick(1000, 0.4, 0.4), makeClick(1400, 0.45, 0.43)],
+			totalMs: TOTAL_MS,
+			defaultDurationMs: 3000,
+		});
+		expect(result.suggestions).toHaveLength(1);
+		expect(result.suggestions[0]).toMatchObject({ start: 500, end: 1900 });
+	});
+
+	it("preserves distant consecutive clicks with nonoverlapping padding", () => {
+		const result = buildInteractionZoomSuggestions({
+			cursorTelemetry: [makeClick(1000, 0.1, 0.1), makeClick(1300, 0.9, 0.9)],
+			totalMs: TOTAL_MS,
+			defaultDurationMs: 3000,
+		});
+		expect(result.suggestions).toHaveLength(2);
+		const [first, second] = result.suggestions;
+		expect(first.end).toBe(second.start);
+		expect(first.end).toBe(1150);
+		expect(first.focus).toEqual({ cx: 0.1, cy: 0.1 });
+		expect(second.focus).toEqual({ cx: 0.9, cy: 0.9 });
+	});
+
+	it("does not chain a slow drift across the screen into one focus", () => {
+		const result = buildInteractionZoomSuggestions({
+			cursorTelemetry: Array.from({ length: 7 }, (_, i) =>
+				makeClick(1000 + i * 400, 0.1 + i * 0.12, 0.5),
+			),
+			totalMs: TOTAL_MS,
+			defaultDurationMs: 3000,
+		});
+		expect(result.suggestions.length).toBeGreaterThan(1);
+		for (let i = 1; i < result.suggestions.length; i++)
+			expect(result.suggestions[i].start).toBeGreaterThanOrEqual(
+				result.suggestions[i - 1].end,
+			);
+	});
+
+	it("allows a stricter configured spatial merge radius", () => {
+		const result = buildInteractionZoomSuggestions({
+			cursorTelemetry: [makeClick(1000, 0.4, 0.4), makeClick(1400, 0.5, 0.4)],
+			totalMs: TOTAL_MS,
+			defaultDurationMs: 3000,
+			mergeDistance: 0.05,
+		});
+		expect(result.suggestions).toHaveLength(2);
+	});
 	it("creates one zoom track for a single isolated click with 500ms padding", () => {
 		const telemetry = withMoves([makeClick(5_000)], TOTAL_MS);
 

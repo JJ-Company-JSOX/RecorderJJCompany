@@ -67,10 +67,14 @@ export function shouldAutoApplyFreshRecordingZoomsForSource(
 	);
 }
 
-/** Max gap between consecutive clicks before they are split into separate zoom clusters. */
-export const CLICK_CLUSTER_MERGE_GAP_MS = 2500;
-/** Padding added before the first click and after the last click in a cluster. */
-export const CLICK_CLUSTER_PAD_MS = 500;
+/** Normalized capture coordinates are shared by telemetry, preview and export. */
+export const AUTO_ZOOM_CLICK_CONFIG = Object.freeze({
+	mergeGapMs: 2500,
+	maxDistance: 0.18,
+	padMs: 500,
+});
+export const CLICK_CLUSTER_MERGE_GAP_MS = AUTO_ZOOM_CLICK_CONFIG.mergeGapMs;
+export const CLICK_CLUSTER_PAD_MS = AUTO_ZOOM_CLICK_CONFIG.padMs;
 const EXPLICIT_CLICK_TYPES = new Set<NonNullable<CursorTelemetryPoint["interactionType"]>>([
 	"click",
 	"double-click",
@@ -307,6 +311,7 @@ export function detectInteractionCandidates(
 function buildClickClusters(
 	clicks: CursorInteractionCandidate[],
 	mergeGapMs: number,
+	maxDistance: number,
 ): Array<{ firstMs: number; lastMs: number; focus: ZoomFocus }> {
 	if (clicks.length === 0) {
 		return [];
@@ -327,7 +332,10 @@ function buildClickClusters(
 		const click = sorted[i];
 		const gap = click.centerTimeMs - clusterEnd;
 
-		if (gap <= mergeGapMs) {
+		// Compare with the cluster centroid, not just the previous click: a chain
+		// of tiny moves must not merge a journey across the entire display.
+		const distance = Math.hypot(click.focus.cx - sumCx / count, click.focus.cy - sumCy / count);
+		if (gap <= mergeGapMs && distance <= maxDistance) {
 			// Extend current cluster
 			clusterEnd = Math.max(clusterEnd, click.centerTimeMs);
 			if (click.strength > bestStrength) {
@@ -371,6 +379,7 @@ export function buildInteractionZoomSuggestions(params: {
 	reservedSpans?: Array<{ start: number; end: number }>;
 	spacingMs?: number;
 	mergeGapMs?: number;
+	mergeDistance?: number;
 	padMs?: number;
 }): InteractionZoomSuggestionResult {
 	const {
@@ -378,6 +387,7 @@ export function buildInteractionZoomSuggestions(params: {
 		totalMs,
 		reservedSpans = [],
 		mergeGapMs = CLICK_CLUSTER_MERGE_GAP_MS,
+		mergeDistance = AUTO_ZOOM_CLICK_CONFIG.maxDistance,
 		padMs = CLICK_CLUSTER_PAD_MS,
 	} = params;
 
@@ -407,14 +417,33 @@ export function buildInteractionZoomSuggestions(params: {
 	}
 
 	// Group nearby clicks into clusters, then derive zoom windows from those clusters
-	const clusters = buildClickClusters(clickCandidates, mergeGapMs);
+	const clusters = buildClickClusters(
+		clickCandidates,
+		Number.isFinite(mergeGapMs) ? Math.max(0, mergeGapMs) : CLICK_CLUSTER_MERGE_GAP_MS,
+		Number.isFinite(mergeDistance)
+			? Math.max(0, mergeDistance)
+			: AUTO_ZOOM_CLICK_CONFIG.maxDistance,
+	);
 
 	const reserved = [...reservedSpans].sort((a, b) => a.start - b.start);
 	const suggestions: SuggestedZoomRegion[] = [];
 
-	for (const cluster of clusters) {
-		const regionStart = Math.max(0, cluster.firstMs - padMs);
-		const regionEnd = Math.min(totalMs, cluster.lastMs + padMs);
+	for (const [index, cluster] of clusters.entries()) {
+		const previous = clusters[index - 1];
+		const next = clusters[index + 1];
+		// Close clicks on different parts of the screen still need separate
+		// focuses. Split their padding at the midpoint instead of dropping the
+		// later suggestion as an overlap with the first one.
+		const regionStart = Math.max(
+			0,
+			cluster.firstMs - padMs,
+			previous ? Math.floor((previous.lastMs + cluster.firstMs) / 2) : 0,
+		);
+		const regionEnd = Math.min(
+			totalMs,
+			cluster.lastMs + padMs,
+			next ? Math.floor((cluster.lastMs + next.firstMs) / 2) : totalMs,
+		);
 
 		if (regionEnd <= regionStart) {
 			continue;

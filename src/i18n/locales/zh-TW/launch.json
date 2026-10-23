@@ -54,7 +54,8 @@
 			"upToDateTitle": "Recordly {{version}} 已是最新版本。",
 			"availableTitle": "Recordly {{version}} 已推出新版本。",
 			"availableGenericTitle": "有可用更新。"
-		}
+		},
+		"cameraUnavailable": "摄像头不可用，将继续录制屏幕，不添加摄像头画面。"
 	},
 	"sourceSelector": {
 		"loadingSources": "正在載入來源...",

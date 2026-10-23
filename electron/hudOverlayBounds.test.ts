@@ -176,13 +176,23 @@ describe("shouldExpandHudOverlayFallback", () => {
 		).toBe(true);
 	});
 
-	it("does not expand for webcam visibility outside recording", () => {
+	it("keeps the idle recording setup panel expanded", () => {
 		expect(
 			shouldExpandHudOverlayFallback({
 				fallbackExpanded: false,
 				recordingActive: false,
 				webcamPreviewVisible: true,
 			}),
-		).toBe(false);
+		).toBe(true);
+	});
+
+	it("keeps idle setup expanded even without a camera or a hovered control", () => {
+		expect(
+			shouldExpandHudOverlayFallback({
+				fallbackExpanded: false,
+				recordingActive: false,
+				webcamPreviewVisible: false,
+			}),
+		).toBe(true);
 	});
 });

@@ -87,6 +87,10 @@ export function useAppearanceState(preferences: EditorPreferences) {
 	const [zoomSmoothness, setZoomSmoothness] = useState(0.5);
 	const [zoomClassicMode, setZoomClassicMode] = useState(false);
 	const [cursorMotionBlur, setCursorMotionBlur] = useState(preferences.cursorMotionBlur);
+	const [cursorClickSound, setCursorClickSound] = useState(preferences.cursorClickSound);
+	const [cursorClickSoundVolume, setCursorClickSoundVolume] = useState(
+		preferences.cursorClickSoundVolume,
+	);
 	const [cursorClickEffect, setCursorClickEffect] = useState<CursorClickEffectStyle>(
 		preferences.cursorClickEffect,
 	);
@@ -174,6 +178,10 @@ export function useAppearanceState(preferences: EditorPreferences) {
 		setZoomClassicMode,
 		cursorMotionBlur,
 		setCursorMotionBlur,
+		cursorClickSound,
+		setCursorClickSound,
+		cursorClickSoundVolume,
+		setCursorClickSoundVolume,
 		cursorClickEffect,
 		setCursorClickEffect,
 		cursorClickEffectColor,

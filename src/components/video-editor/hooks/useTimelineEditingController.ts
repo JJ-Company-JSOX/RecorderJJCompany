@@ -1,8 +1,10 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { toast } from "@/components/ui/toast";
 import type { useI18n } from "@/contexts/I18nContext";
 import type { useShortcuts } from "@/contexts/ShortcutsContext";
+import { buildCursorClickAudioRegions } from "../audio/cursorClickSound";
+import { useCursorClickAudio } from "../audio/useCursorClickAudio";
 import { useVideoEditorAudio } from "../audio/useVideoEditorAudio";
 import type { useAppearanceState } from "../state/useAppearanceState";
 import type { useTimelineState } from "../state/useTimelineState";
@@ -83,6 +85,28 @@ export function useTimelineEditingController(input: Input) {
 		autoFullTrackIdRef: input.autoFullTrackClipIdRef,
 		autoFullTrackEndRef: input.autoFullTrackClipEndMsRef,
 	});
+	const clickSounds = useMemo(
+		() =>
+			input.appearance.cursorClickSound
+				? buildCursorClickAudioRegions(
+						cursor.effectiveCursorTelemetry,
+						timeline.clipRegions,
+						input.appearance.cursorClickSoundVolume,
+					)
+				: [],
+		[
+			input.appearance.cursorClickSound,
+			input.appearance.cursorClickSoundVolume,
+			cursor.effectiveCursorTelemetry,
+			timeline.clipRegions,
+		],
+	);
+	useCursorClickAudio(
+		clickSounds,
+		projection.timelinePlayheadTime,
+		input.isPlaying,
+		input.previewVolume,
+	);
 	const audio = useVideoEditorAudio({
 		currentSourcePath: input.currentSourcePath,
 		selectedClipId: timeline.selectedClipId,

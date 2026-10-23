@@ -92,7 +92,7 @@ for (const resource of ["microphone", "cursor"] as const) {
 		await page.goto("/?windowType=hud-overlay");
 		const source = page.getByRole("button", { name: "Choose recording source" });
 		await expect(source).toBeEnabled({ timeout: 15000 });
-		await page.getByRole("button", { name: "Record", exact: true }).click();
+		await page.getByTitle("Record", { exact: true }).click();
 		await expect(page.locator("html")).toHaveAttribute("data-acquiring-capture", "true");
 		await source.click();
 		await expect(page.locator("html")).toHaveAttribute(
@@ -101,6 +101,6 @@ for (const resource of ["microphone", "cursor"] as const) {
 		);
 		await expect(page.locator("html")).toHaveAttribute("data-track-stopped", "true");
 		await expect(page.locator("html")).not.toHaveAttribute("data-recorder-started");
-		await expect(page.getByRole("button", { name: "Record", exact: true })).toBeEnabled();
+		await expect(page.getByTitle("Record", { exact: true })).toBeEnabled();
 	});
 }

@@ -1,5 +1,5 @@
-import { normalizeExportPreferences, type ExportPreferences } from "./exportPreferences";
 import { loadAppSetting, saveAppSetting } from "../../lib/appSettings";
+import { type ExportPreferences, normalizeExportPreferences } from "./exportPreferences";
 import {
 	getDefaultBorderRadiusPercent,
 	legacyBorderRadiusPixelsToPercent,
@@ -36,6 +36,8 @@ type PersistedEditorControls = Pick<
 	| "cameraSpringDampingMultiplier"
 	| "cameraSpringMassMultiplier"
 	| "cursorMotionBlur"
+	| "cursorClickSound"
+	| "cursorClickSoundVolume"
 	| "cursorClickEffect"
 	| "cursorClickEffectColor"
 	| "cursorClickEffectScale"
@@ -113,6 +115,8 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
 	cameraSpringDampingMultiplier: DEFAULT_EDITOR_CONTROLS.cameraSpringDampingMultiplier,
 	cameraSpringMassMultiplier: DEFAULT_EDITOR_CONTROLS.cameraSpringMassMultiplier,
 	cursorMotionBlur: DEFAULT_EDITOR_CONTROLS.cursorMotionBlur,
+	cursorClickSound: DEFAULT_EDITOR_CONTROLS.cursorClickSound,
+	cursorClickSoundVolume: DEFAULT_EDITOR_CONTROLS.cursorClickSoundVolume,
 	cursorClickEffect: DEFAULT_EDITOR_CONTROLS.cursorClickEffect,
 	cursorClickEffectColor: DEFAULT_EDITOR_CONTROLS.cursorClickEffectColor,
 	cursorClickEffectScale: DEFAULT_EDITOR_CONTROLS.cursorClickEffectScale,
@@ -305,6 +309,9 @@ function normalizeEditorControls(
 		cameraSpringMassMultiplier:
 			sanitizedRaw.cameraSpringMassMultiplier ?? fallback.cameraSpringMassMultiplier,
 		cursorMotionBlur: sanitizedRaw.cursorMotionBlur ?? fallback.cursorMotionBlur,
+		cursorClickSound: sanitizedRaw.cursorClickSound ?? fallback.cursorClickSound,
+		cursorClickSoundVolume:
+			sanitizedRaw.cursorClickSoundVolume ?? fallback.cursorClickSoundVolume,
 		cursorClickEffect: sanitizedRaw.cursorClickEffect ?? fallback.cursorClickEffect,
 		cursorClickEffectColor:
 			sanitizedRaw.cursorClickEffectColor ?? fallback.cursorClickEffectColor,
@@ -353,6 +360,8 @@ function normalizeEditorControls(
 		cameraSpringDampingMultiplier: normalized.cameraSpringDampingMultiplier,
 		cameraSpringMassMultiplier: normalized.cameraSpringMassMultiplier,
 		cursorMotionBlur: normalized.cursorMotionBlur,
+		cursorClickSound: normalized.cursorClickSound,
+		cursorClickSoundVolume: normalized.cursorClickSoundVolume,
 		cursorClickEffect: normalized.cursorClickEffect,
 		cursorClickEffectColor: normalized.cursorClickEffectColor,
 		cursorClickEffectScale: normalized.cursorClickEffectScale,

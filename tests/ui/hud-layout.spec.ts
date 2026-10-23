@@ -36,19 +36,12 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
 	});
 }
 
-test("HUD dividers are vertically centered", async ({ page }) => {
+test("recording setup exposes modes, devices and the project library", async ({ page }) => {
 	await installDesktopBridge(page);
 	await page.goto("/?windowType=hud-overlay");
-	const dividers = page.locator(".separator--vertical");
-	await expect(dividers.first()).toBeVisible();
-	const offsets = await dividers.evaluateAll((elements) =>
-		elements.map((element) => {
-			const bounds = element.getBoundingClientRect();
-			const parent = element.parentElement!.getBoundingClientRect();
-			return Math.abs(bounds.y + bounds.height / 2 - parent.y - parent.height / 2);
-		}),
-	);
-	for (const offset of offsets) expect(offset).toBeLessThanOrEqual(1);
+	await expect(page.getByRole("region", { name: "Choose what to record" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Full screen Choose a display" })).toBeVisible();
+	await expect(page.getByRole("combobox", { name: "Microphone", exact: true })).toBeVisible();
 	const home = page.getByRole("button", { name: "Home", exact: true });
 	await expect(home.locator("svg")).toHaveAttribute("data-icon-style", "bold");
 	await expect(page.getByRole("button", { name: "More", exact: true })).toHaveCount(0);
@@ -77,7 +70,7 @@ test("recording HUD uses uniform controls and a readable timer", async ({ page }
 		};
 	});
 	await page.goto("/?windowType=hud-overlay");
-	await expect(page.locator(".separator--vertical").first()).toBeVisible();
+	await expect(page.getByRole("region", { name: "Choose what to record" })).toBeVisible();
 	await page.evaluate(() => window.dispatchEvent(new Event("test-recording-started")));
 	const controls = page.getByRole("group", { name: "Recording controls" });
 	await expect(controls).toBeVisible();

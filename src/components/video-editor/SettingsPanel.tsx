@@ -1,17 +1,14 @@
-import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
+import { Card, Description, Label, ProgressBar, Radio, RadioGroup } from "@heroui/react";
 import type { User } from "@supabase/supabase-js";
-import { AccountSettings } from "@/components/auth/AccountSettings";
-import { RecordingPermissionsSettings } from "@/components/auth/RecordingPermissionsSettings";
-import { SettingsSections, SettingsCategory } from "./SettingsSections";
-import { Card, RadioGroup, Radio, Label, Description } from "@heroui/react";
-import { ProgressBar } from "@heroui/react";
-import { ColorControl, ColorPalette } from "@/components/ui/color-picker";
-import { Palette, Trash as Trash2, UploadSimple as Upload } from "@/components/ui/icons";
 import { AnimatePresence, motion } from "motion/react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "@/components/ui/toast";
 import minimalCursorUrl from "@/assets/cursors/custom/minimal-cursor.svg";
+import { AccountSettings } from "@/components/auth/AccountSettings";
+import { RecordingPermissionsSettings } from "@/components/auth/RecordingPermissionsSettings";
 import { Button } from "@/components/ui/button";
+import { ChoiceGroup, ChoiceItem } from "@/components/ui/choice-group";
+import { ColorControl, ColorPalette } from "@/components/ui/color-picker";
+import { Palette, Trash as Trash2, UploadSimple as Upload } from "@/components/ui/icons";
 import {
 	Select,
 	SelectContent,
@@ -20,9 +17,11 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ChoiceGroup, ChoiceItem } from "@/components/ui/choice-group";
+import { toast } from "@/components/ui/toast";
+import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getAssetPath, getRenderableVideoUrl, getWallpaperThumbnailUrl } from "@/lib/assetPath";
+import { ACCOUNTS_ENABLED } from "@/lib/productFeatures";
 import { cn } from "@/lib/utils";
 import type { BuiltInWallpaper } from "@/lib/wallpapers";
 import {
@@ -37,6 +36,7 @@ import { SUPPORTED_LOCALES } from "../../i18n/config";
 import { AnnotationSettingsPanel } from "./AnnotationSettingsPanel";
 import CaptionListPanel from "./CaptionListPanel";
 import type { CaptionRetimeSpan } from "./captionOps";
+import { SpeechModelDownloadInfo } from "./captions/SpeechModelDownloadInfo";
 import {
 	CURSOR_MOTION_PRESETS,
 	type CursorMotionPresetId,
@@ -44,10 +44,9 @@ import {
 } from "./cursorMotionPresets";
 import { loadEditorPreferences, saveEditorPreferences } from "./editorPreferences";
 import { getDefaultBorderRadiusPercent } from "./projectPersistence";
-import { SliderControl } from "./SliderControl";
-import { WallpaperGrid } from "./WallpaperGrid";
-import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { SettingsRow } from "./SettingsRow";
+import { SettingsCategory, SettingsSections } from "./SettingsSections";
+import { SliderControl } from "./SliderControl";
 import type {
 	AnnotationRegion,
 	AnnotationType,
@@ -97,6 +96,7 @@ import {
 	cursorSetAssets,
 	getCursorStyleSizeMultiplier,
 } from "./videoPlayback/uploadedCursorAssets";
+import { WallpaperGrid } from "./WallpaperGrid";
 import { WebcamCropControl } from "./WebcamCropControl";
 import {
 	getCropMatchedWebcamHeightPercent,
@@ -445,6 +445,15 @@ interface SettingsPanelProps {
 	onClipMutedChange?: (muted: boolean) => void;
 	onClipDelete?: (id: string) => void;
 	selectedAudioId?: string | null;
+	selectedAudioMuted?: boolean;
+	selectedAudioFadeInMs?: number;
+	selectedAudioFadeOutMs?: number;
+	selectedAudioDurationMs?: number;
+	onAudioEnvelopeChange?: (patch: {
+		muted?: boolean;
+		fadeInMs?: number;
+		fadeOutMs?: number;
+	}) => void;
 	selectedAudioVolume?: number | null;
 	selectedAudioNormalize?: boolean | null;
 	onAudioVolumeChange?: (volume: number) => void;
@@ -499,6 +508,10 @@ interface SettingsPanelProps {
 	zoomClassicMode?: boolean;
 	onZoomClassicModeChange?: (enabled: boolean) => void;
 	cursorClickEffect?: CursorClickEffectStyle;
+	cursorClickSound?: boolean;
+	cursorClickSoundVolume?: number;
+	onCursorClickSoundChange?: (enabled: boolean) => void;
+	onCursorClickSoundVolumeChange?: (volume: number) => void;
 	onCursorClickEffectChange?: (effect: CursorClickEffectStyle) => void;
 	cursorClickEffectColor?: string;
 	onCursorClickEffectColorChange?: (color: string) => void;
@@ -904,6 +917,11 @@ export const SettingsPanel = memo(function SettingsPanel({
 	onClipDelete,
 	selectedAudioId,
 	selectedAudioVolume,
+	selectedAudioMuted = false,
+	selectedAudioFadeInMs = 0,
+	selectedAudioFadeOutMs = 0,
+	selectedAudioDurationMs = 0,
+	onAudioEnvelopeChange,
 	selectedAudioNormalize,
 	onAudioVolumeChange,
 	onAudioNormalizeChange,
@@ -944,6 +962,10 @@ export const SettingsPanel = memo(function SettingsPanel({
 	onCameraSpringMassMultiplierChange,
 	zoomClassicMode = false,
 	onZoomClassicModeChange,
+	cursorClickSound = false,
+	cursorClickSoundVolume = 0.35,
+	onCursorClickSoundChange,
+	onCursorClickSoundVolumeChange,
 	cursorClickEffect = DEFAULT_CURSOR_CLICK_EFFECT,
 	onCursorClickEffectChange,
 	cursorClickEffectColor = DEFAULT_CURSOR_CLICK_EFFECT_COLOR,
@@ -1446,6 +1468,8 @@ export const SettingsPanel = memo(function SettingsPanel({
 			initialEditorPreferences.cursorSpringDampingMultiplier,
 		);
 		onCursorSpringMassMultiplierChange?.(initialEditorPreferences.cursorSpringMassMultiplier);
+		onCursorClickSoundChange?.(initialEditorPreferences.cursorClickSound);
+		onCursorClickSoundVolumeChange?.(initialEditorPreferences.cursorClickSoundVolume);
 		onCursorClickEffectChange?.(initialEditorPreferences.cursorClickEffect);
 		onCursorClickEffectColorChange?.(initialEditorPreferences.cursorClickEffectColor);
 		onCursorClickEffectScaleChange?.(initialEditorPreferences.cursorClickEffectScale);
@@ -2071,6 +2095,9 @@ export const SettingsPanel = memo(function SettingsPanel({
 						</SelectContent>
 					</Select>
 				</div>
+				<SpeechModelDownloadInfo
+					downloading={whisperModelDownloadStatus === "downloading"}
+				/>
 				<div className="flex flex-wrap items-center gap-2">
 					<div className="grid w-full grid-cols-1 gap-2">
 						{whisperModelDownloadStatus === "downloading" ? (
@@ -2697,6 +2724,7 @@ export const SettingsPanel = memo(function SettingsPanel({
 						variant="ghost"
 						type="button"
 						onClick={() => {
+							onAudioEnvelopeChange?.({ muted: false, fadeInMs: 0, fadeOutMs: 0 });
 							onAudioVolumeChange?.(1);
 							onAudioNormalizeChange?.(false);
 						}}
@@ -2704,6 +2732,34 @@ export const SettingsPanel = memo(function SettingsPanel({
 						{t("common.actions.reset", "Reset")}
 					</Button>
 				</div>
+				<div className="flex items-center justify-between py-2">
+					<span className="text-xs text-muted-foreground">
+						{tSettings("audio.mute", "Mute")}
+					</span>
+					<Switch
+						aria-label={tSettings("audio.mute", "Mute")}
+						checked={selectedAudioMuted}
+						onCheckedChange={(muted) => onAudioEnvelopeChange?.({ muted })}
+					/>
+				</div>
+				<SliderControl
+					label={tSettings("audio.fadeIn", "Fade in")}
+					value={selectedAudioFadeInMs}
+					min={0}
+					max={Math.max(1, selectedAudioDurationMs)}
+					step={10}
+					onChange={(fadeInMs) => onAudioEnvelopeChange?.({ fadeInMs })}
+					formatValue={(v) => `${(v / 1000).toFixed(2)}s`}
+				/>
+				<SliderControl
+					label={tSettings("audio.fadeOut", "Fade out")}
+					value={selectedAudioFadeOutMs}
+					min={0}
+					max={Math.max(1, selectedAudioDurationMs)}
+					step={10}
+					onChange={(fadeOutMs) => onAudioEnvelopeChange?.({ fadeOutMs })}
+					formatValue={(v) => `${(v / 1000).toFixed(2)}s`}
+				/>
 				<SliderControl
 					label={tSettings("audio.volume", "Volume")}
 					value={selectedAudioVolume ?? 1}
@@ -2898,6 +2954,32 @@ export const SettingsPanel = memo(function SettingsPanel({
 								onChange={(v) => onCursorSizeChange?.(v)}
 								formatValue={(v) => `${v.toFixed(2)}×`}
 							/>
+							<div className="flex items-center justify-between py-2">
+								<span className="text-xs text-muted-foreground">
+									{tSettings("effects.clickSound", "Click sound")}
+								</span>
+								<Switch
+									aria-label={tSettings("effects.clickSound", "Click sound")}
+									checked={cursorClickSound}
+									onCheckedChange={(enabled) =>
+										onCursorClickSoundChange?.(enabled)
+									}
+								/>
+							</div>
+							{cursorClickSound && (
+								<SliderControl
+									label={tSettings(
+										"effects.clickSoundVolume",
+										"Click sound volume",
+									)}
+									value={cursorClickSoundVolume}
+									min={0}
+									max={1}
+									step={0.01}
+									onChange={(value) => onCursorClickSoundVolumeChange?.(value)}
+									formatValue={(value) => `${Math.round(value * 100)}%`}
+								/>
+							)}
 							<CursorClickEffectCards
 								title={tSettings(
 									"effects.cursorClickEffects.title",

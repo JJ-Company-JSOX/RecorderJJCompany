@@ -564,6 +564,9 @@ export interface AudioRegion {
 	audioPath: string;
 	volume: number;
 	normalize?: boolean;
+	muted?: boolean;
+	fadeInMs?: number;
+	fadeOutMs?: number;
 	trackIndex?: number;
 }
 

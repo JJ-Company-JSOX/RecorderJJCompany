@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { audioEnvelopeAt } from "@/lib/exporter/audioEnvelope";
 import {
 	buildResolvedAudioPlan,
 	resolveEnhancedAudioPath,
 } from "@/lib/exporter/audioRoutingEngine";
-import type { SourceAudioTrackSettings } from "./audioTypes";
 import { resolveMediaElementSource } from "@/lib/exporter/localMediaSource";
 import {
 	clampMediaTimeToDuration,
@@ -19,6 +19,7 @@ import {
 	getVersionedAudioResourceUrl,
 	isAudioResourceLoadCurrent,
 } from "./audioResourceVersion";
+import type { SourceAudioTrackSettings } from "./audioTypes";
 
 const SOURCE_AUDIO_PREVIEW_PLAYING_SEEK_DRIFT_SECONDS = 0.18;
 const SOURCE_AUDIO_PREVIEW_PAUSED_SEEK_DRIFT_SECONDS = 0.01;
@@ -355,6 +356,20 @@ export function useAudioPreviewSync({
 			const startMs = track.timelineBinding.startMs;
 			const endMs = track.timelineBinding.endMs;
 			const isInRegion = currentTimeMs >= startMs && currentTimeMs < endMs;
+			audio.volume = Math.max(
+				0,
+				Math.min(
+					1,
+					track.gain *
+						previewVolume *
+						audioEnvelopeAt(
+							currentTimeMs - startMs,
+							endMs - startMs,
+							track.fadeInMs,
+							track.fadeOutMs,
+						),
+				),
+			);
 
 			if (isPlaying && isInRegion) {
 				enablePitchPreservingPlayback(audio);
@@ -377,7 +392,7 @@ export function useAudioPreviewSync({
 				audio.pause();
 			}
 		}
-	}, [isPlaying, resolvedUserTracks, timelineTime]);
+	}, [isPlaying, resolvedUserTracks, timelineTime, previewVolume]);
 
 	useEffect(() => {
 		if (resolvedSourceTracks.length === 0) {

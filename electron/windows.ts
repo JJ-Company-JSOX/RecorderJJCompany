@@ -1,22 +1,22 @@
-import { resolveEditorStartupView, resolveInitialDemoInput } from "./editorStartupView";
-import { currentProjectPath, currentVideoPath, currentRecordingSession } from "./ipc/state";
-import { isHudInEditorMode } from "./hudEditorMode";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain, type WebContents } from "electron";
 import {
-	supportsHudCaptureProtection,
 	shouldProtectHudCapture,
+	supportsHudCaptureProtection,
 } from "../src/lib/hudCaptureProtection";
 import { USER_DATA_PATH } from "./appPaths";
+import { resolveEditorStartupView, resolveInitialDemoInput } from "./editorStartupView";
+import { isHudInEditorMode } from "./hudEditorMode";
 import {
 	getHudOverlayWindowBounds,
 	resizeHudOverlayFallbackBounds,
 	shouldExpandHudOverlayFallback,
 } from "./hudOverlayBounds";
 import { getHudOverlayTaskbarOptions } from "./hudOverlayWindowOptions";
+import { currentProjectPath, currentRecordingSession, currentVideoPath } from "./ipc/state";
 import { getPackagedRendererBaseUrl } from "./rendererServer";
 
 const electronWindowsDir = path.dirname(fileURLToPath(import.meta.url));
@@ -323,7 +323,11 @@ function setHudOverlayFallbackExpanded(expanded: boolean) {
 	const nextBounds = resizeHudOverlayFallbackBounds(
 		workArea,
 		hudOverlayWindow.getBounds(),
-		expanded,
+		shouldExpandHudOverlayFallback({
+			fallbackExpanded: expanded,
+			recordingActive: hudOverlayRecordingActive,
+			webcamPreviewVisible: hudOverlayWebcamPreviewVisible,
+		}),
 	);
 	hudOverlayWindow.setBounds(nextBounds, false);
 	positionUpdateToastWindow();

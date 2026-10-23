@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Readable, Writable } from "node:stream";
 import type { SaveDialogOptions } from "electron";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { ensureExportDestinationSpace } from "../export/destinationSpace";
 import {
 	closeExportStream,
 	isOwnedExportPath,
@@ -85,6 +86,7 @@ export async function moveExportedTempFile(tempPath: string, destinationPath: st
 
 	const partialDestinationPath = getPartialExportDestinationPath(destinationPath);
 	try {
+		await ensureExportDestinationSpace(destinationPath, (await fs.stat(tempPath)).size);
 		await fs.copyFile(tempPath, partialDestinationPath);
 		try {
 			await fs.rename(partialDestinationPath, destinationPath);
@@ -886,6 +888,7 @@ export function registerExportHandlers() {
 					};
 				}
 
+				await ensureExportDestinationSpace(result.filePath, videoData.byteLength);
 				await fs.writeFile(result.filePath, Buffer.from(videoData));
 				const captionSidecarResult = await writeCaptionSidecarsBestEffort(
 					result.filePath,
@@ -933,6 +936,7 @@ export function registerExportHandlers() {
 				}
 
 				const resolvedPath = path.resolve(outputPath);
+				await ensureExportDestinationSpace(resolvedPath, videoData.byteLength);
 				await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
 				await fs.writeFile(resolvedPath, Buffer.from(videoData));
 				const captionSidecarResult = await writeCaptionSidecarsBestEffort(

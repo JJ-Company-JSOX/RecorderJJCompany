@@ -15,6 +15,7 @@ import {
 	resolveEnhancedAudioPath,
 } from "@/lib/exporter/audioRoutingEngine";
 import { estimateCompanionAudioStartDelaySeconds } from "@/lib/mediaTiming";
+import { audioEnvelopeAt, audioEnvelopeBreakpoints } from "./audioEnvelope";
 import { AudioMediaProcessor } from "./audioMediaProcessor";
 import {
 	AUDIO_BITRATE,
@@ -136,9 +137,15 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 
 		// Decode audio region overlay files
 		const regionEntries: Array<{ buffer: AudioBuffer; region: AudioRegion }> = [];
+		const decodedRegions = new Map<string, AudioBuffer | null>();
 		for (const region of audioRegions) {
 			if (this.cancelled) throw new Error("Export cancelled");
-			const buffer = await this.decodeAudioFromUrl(region.audioPath);
+			if (!decodedRegions.has(region.audioPath))
+				decodedRegions.set(
+					region.audioPath,
+					await this.decodeAudioFromUrl(region.audioPath),
+				);
+			const buffer = decodedRegions.get(region.audioPath);
 			if (buffer) regionEntries.push({ buffer, region });
 		}
 
@@ -418,7 +425,26 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 
 		const gainNode = ctx.createGain();
 		const normalizeGain = region.normalize ? SOURCE_AUDIO_NORMALIZE_GAIN : 1;
-		gainNode.gain.value = Math.max(0, Math.min(1, region.volume * normalizeGain));
+		const baseGain = region.muted ? 0 : Math.max(0, Math.min(1, region.volume * normalizeGain));
+		const regionDurationMs = outputEndMs - outputStartMs;
+		const offsetMs = (chunkOutputStartSec + localStartSec) * 1000 - outputStartMs;
+		const endOffsetMs = offsetMs + duration * 1000;
+		const gainAt = (timeMs: number) =>
+			baseGain * audioEnvelopeAt(timeMs, regionDurationMs, region.fadeInMs, region.fadeOutMs);
+		gainNode.gain.setValueAtTime(gainAt(offsetMs), localStartSec);
+		for (const pointMs of audioEnvelopeBreakpoints(
+			regionDurationMs,
+			region.fadeInMs,
+			region.fadeOutMs,
+		)) {
+			if (pointMs > offsetMs && pointMs < endOffsetMs) {
+				gainNode.gain.linearRampToValueAtTime(
+					gainAt(pointMs),
+					localStartSec + (pointMs - offsetMs) / 1000,
+				);
+			}
+		}
+		gainNode.gain.linearRampToValueAtTime(gainAt(endOffsetMs), localStartSec + duration);
 		gainNode.connect(ctx.destination);
 
 		const source = ctx.createBufferSource();

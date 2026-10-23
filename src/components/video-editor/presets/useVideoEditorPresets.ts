@@ -53,6 +53,8 @@ export function useVideoEditorPresets({
 			cameraSpringDampingMultiplier: appearance.cameraSpringDampingMultiplier,
 			cameraSpringMassMultiplier: appearance.cameraSpringMassMultiplier,
 			cursorMotionBlur: appearance.cursorMotionBlur,
+			cursorClickSound: appearance.cursorClickSound,
+			cursorClickSoundVolume: appearance.cursorClickSoundVolume,
 			cursorClickEffect: appearance.cursorClickEffect,
 			cursorClickEffectColor: appearance.cursorClickEffectColor,
 			cursorClickEffectScale: appearance.cursorClickEffectScale,
@@ -101,6 +103,8 @@ export function useVideoEditorPresets({
 			appearance.setCameraSpringDampingMultiplier(snapshot.cameraSpringDampingMultiplier);
 			appearance.setCameraSpringMassMultiplier(snapshot.cameraSpringMassMultiplier);
 			appearance.setCursorMotionBlur(snapshot.cursorMotionBlur);
+			appearance.setCursorClickSound(snapshot.cursorClickSound);
+			appearance.setCursorClickSoundVolume(snapshot.cursorClickSoundVolume);
 			appearance.setCursorClickEffect(snapshot.cursorClickEffect);
 			appearance.setCursorClickEffectColor(snapshot.cursorClickEffectColor);
 			appearance.setCursorClickEffectScale(snapshot.cursorClickEffectScale);

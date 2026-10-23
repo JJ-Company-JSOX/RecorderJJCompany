@@ -866,13 +866,16 @@ interface Window {
 			canceled?: boolean;
 			error?: string;
 		}>;
+		cancelWhisperModelDownload: () => Promise<{ success: boolean }>;
 		getWhisperSmallModelStatus: () => Promise<{
+			downloadPath?: string;
 			success: boolean;
 			exists: boolean;
 			path?: string | null;
 			error?: string;
 		}>;
 		downloadWhisperSmallModel: () => Promise<{
+			canceled?: boolean;
 			success: boolean;
 			path?: string;
 			alreadyDownloaded?: boolean;

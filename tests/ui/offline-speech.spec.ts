@@ -40,7 +40,8 @@ async function setup(
 			window.electronAPI.analyzeAutoEditFrames = async () => {
 				throw Error("Complete mode already includes vision");
 			};
-			window.electronAPI.analyzeCompleteAutoEdit = async () => {
+			window.electronAPI.analyzeCompleteAutoEdit = async (input) => {
+				document.documentElement.dataset.recognitionLanguage = input.language ?? "auto";
 				document.documentElement.dataset.speechCalls = String(
 					Number(document.documentElement.dataset.speechCalls || 0) + 1,
 				);
@@ -485,4 +486,19 @@ test("the result screen summarizes changes and undoes the whole run in one click
 	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
 	await page.screenshot({ path: "test-results/wizard-undone-zh.png" });
 	await panel.getByLabel("Plan language").selectOption("en");
+});
+
+test("recognition language is independent from interface language and reaches local ASR", async ({
+	page,
+}) => {
+	const panel = await setup(page);
+	const recognition = panel.getByLabel("Recognition language", { exact: true });
+	await expect(recognition).toHaveValue("auto");
+	await recognition.selectOption("zh");
+	await panel.getByLabel("Plan language").selectOption("ms");
+	await expect(panel.getByLabel("Bahasa pengecaman suara", { exact: true })).toHaveValue("zh");
+	await panel
+		.getByRole("button", { name: "Sunting pertuturan dan video secara automatik", exact: true })
+		.click();
+	await expect(page.locator("html")).toHaveAttribute("data-recognition-language", "zh");
 });

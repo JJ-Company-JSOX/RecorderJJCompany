@@ -2,8 +2,8 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import { loadAppSetting, saveAppSetting } from "@/lib/appSettings";
-import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
 import { projectCaptionCues } from "../captionTimeline";
+import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
 import { applyEditPlan } from "./apply";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { guideMessages } from "./guideMessages";
@@ -27,6 +27,14 @@ import { buildTextCutPlan, textLines } from "./textCuts";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
 import { wizardMessages } from "./wizardMessages";
+
+/** Spoken language is independent from the editing interface language. */
+type RecognitionLanguage = "auto" | "zh" | "en" | "ms";
+const RECOGNITION_LANGUAGE_SETTING = "recordly.autoEdit.recognitionLanguage";
+function savedRecognitionLanguage(): RecognitionLanguage {
+	const saved = loadAppSetting<unknown>(RECOGNITION_LANGUAGE_SETTING);
+	return saved === "zh" || saved === "en" || saved === "ms" ? saved : "auto";
+}
 
 /** The narration voice chosen for each language, remembered across sessions. */
 const VOICE_SETTING = "recordly.narrationVoice";
@@ -63,6 +71,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 }) {
 	const { locale } = useI18n();
 	const [language, setLanguage] = useState<PlanLanguage>(locale.startsWith("zh") ? "zh" : "en");
+	const [recognitionLanguage, setRecognitionLanguage] =
+		useState<RecognitionLanguage>(savedRecognitionLanguage);
 	const m = messages[language];
 	const ui = interfaceMessages[language];
 	const v = visionMessages[language];
@@ -402,7 +412,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			const complete = withSpeech
 				? await window.electronAPI.analyzeCompleteAutoEdit({
 						videoPath: source,
-						language: "auto",
+						language: recognitionLanguage,
 					})
 				: undefined;
 			if (complete?.errorCode === "NO_AUDIO") {
@@ -750,6 +760,35 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							<h3 className="text-base font-semibold">{w.chooseTitle}</h3>
 							<p className="text-xs text-muted-foreground">{w.chooseHelp}</p>
 						</div>
+						<label className="flex flex-col gap-2 text-sm">
+							<span>{ui.recognitionLanguage}</span>
+							<select
+								value={recognitionLanguage}
+								aria-label={ui.recognitionLanguage}
+								disabled={!!busy}
+								onChange={(event) => {
+									const value = event.target.value;
+									if (
+										value !== "auto" &&
+										value !== "zh" &&
+										value !== "en" &&
+										value !== "ms"
+									)
+										return;
+									setRecognitionLanguage(value);
+									saveAppSetting(RECOGNITION_LANGUAGE_SETTING, value);
+								}}
+								className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-foreground"
+							>
+								<option value="auto">{ui.detectLanguage}</option>
+								<option value="zh">中文</option>
+								<option value="en">English</option>
+								<option value="ms">Bahasa Melayu</option>
+							</select>
+							<span className="text-xs text-muted-foreground">
+								{ui.recognitionLanguageHelp}
+							</span>
+						</label>
 						<Button
 							className="min-h-12 w-full text-base font-semibold"
 							aria-label={m.completeEdit}

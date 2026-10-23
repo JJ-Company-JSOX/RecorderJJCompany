@@ -1,5 +1,9 @@
 export const interfaceMessages = {
 	en: {
+		recognitionLanguage: "Recognition language",
+		detectLanguage: "Detect automatically",
+		recognitionLanguageHelp:
+			"Select the language spoken in the recording. This is separate from the interface language; the choice is remembered on this computer.",
 		title: "AI auto edit",
 		silentFallback:
 			"No sound was found, so this edit was built from the picture only: frozen parts are cut, idle parts are sped up and clicks are zoomed. Nothing was invented for the missing sound. Next, AI voice-over can add a voice and subtitles.",
@@ -42,6 +46,10 @@ export const interfaceMessages = {
 		technical: "Analysis details",
 	},
 	zh: {
+		recognitionLanguage: "语音识别语言",
+		detectLanguage: "自动检测",
+		recognitionLanguageHelp:
+			"选择录音中实际使用的语言，与界面语言分开设置；此电脑会记住你的选择。",
 		title: "AI 自动剪辑",
 		silentFallback:
 			"没有检测到声音，所以这次只根据画面剪辑：画面不动的地方剪掉，没有操作的地方加速，点击的地方放大，不会编造原本的声音。下一步可以用 AI 配音，同时自动加上字幕。",
@@ -81,6 +89,10 @@ export const interfaceMessages = {
 		technical: "分析详情",
 	},
 	ms: {
+		recognitionLanguage: "Bahasa pengecaman suara",
+		detectLanguage: "Kesan secara automatik",
+		recognitionLanguageHelp:
+			"Pilih bahasa pertuturan dalam rakaman, berasingan daripada bahasa antara muka. Pilihan diingati pada komputer ini.",
 		title: "Suntingan automatik AI",
 		silentFallback:
 			"Tiada bunyi ditemui, jadi suntingan ini dibina daripada gambar sahaja: bahagian beku dipotong, bahagian tanpa aktiviti dipercepat dan klik dizum. Tiada bunyi direka. Seterusnya, suara AI boleh menambah suara dan sari kata.",

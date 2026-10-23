@@ -207,5 +207,32 @@
 	"preview": {
 		"fullscreen": "全屏预览",
 		"exitFullscreen": "退出全屏 (Esc)"
+	},
+	"textToSpeech": {
+		"menu": "文字转语音",
+		"title": "文字转语音",
+		"description": "输入要念的内容，会从播放头的位置加到时间轴上，每一段生成一个音频片段。",
+		"textLabel": "文字",
+		"placeholder": "输入或粘贴要念的内容…",
+		"parts": "共 {{count}} 段",
+		"language": "语言",
+		"chinese": "中文",
+		"english": "英文",
+		"voice": "声音",
+		"preview": "试听声音",
+		"previewing": "正在加载声音…",
+		"notInstalled": "还没有安装离线配音。请安装完整的离线版，或在开发电脑上运行 npm run prepare:offline-tts。",
+		"olderVoice": "这是旧版声音：每行只能读一种语言，中文里的英文单词会被跳过。",
+		"noVideo": "请先打开一个视频。",
+		"tooMany": "段落太多了，请控制在 {{max}} 段以内。",
+		"add": "加到时间轴",
+		"generating": "正在生成声音…",
+		"error": "无法生成声音：",
+		"nothingSpoken": "这段文字里没有声音能念的内容。",
+		"noRoom": "播放头位置没有空间放这段声音。请移动播放头，或空出一条音频轨。",
+		"skipped": "有 {{count}} 段没有能念的内容，已跳过。",
+		"notPlaced": "有 {{count}} 段放不下（超过了视频结尾）。",
+		"trimmed": "声音在视频结尾处被截断了。",
+		"added": "声音已加到时间轴"
 	}
 }

@@ -1,7 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
-import { loadAppSetting, saveAppSetting } from "@/lib/appSettings";
 import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
 import { projectCaptionCues } from "../captionTimeline";
 import { applyEditPlan } from "./apply";
@@ -9,6 +8,7 @@ import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { guideMessages } from "./guideMessages";
 import { interfaceMessages } from "./interfaceMessages";
 import { messages, type PlanLanguage } from "./messages";
+import { closePlayer, playVoiceSamples, savedVoiceChoice, saveVoiceChoice } from "./narrationVoice";
 import type { NarrationDraft } from "./narration";
 import { narrationCaptions } from "./narrationCaptions";
 import { narrationMessages } from "./narrationMessages";
@@ -27,23 +27,6 @@ import { buildTextCutPlan, textLines } from "./textCuts";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
 import { wizardMessages } from "./wizardMessages";
-
-/** The narration voice chosen for each language, remembered across sessions. */
-const VOICE_SETTING = "recordly.narrationVoice";
-function savedVoiceChoice(): Partial<Record<PlanLanguage, number>> {
-	const saved = loadAppSetting<unknown>(VOICE_SETTING);
-	if (!saved || typeof saved !== "object") return {};
-	return Object.fromEntries(
-		Object.entries(saved).filter(
-			([language, id]) => ["zh", "en", "ms"].includes(language) && Number.isInteger(id),
-		),
-	);
-}
-
-/** Stops a voice preview; closing an already closed player would reject. */
-function closePlayer(player: AudioContext | null) {
-	if (player && player.state !== "closed") void player.close().catch(() => undefined);
-}
 
 export const AutoEditPanel = memo(function AutoEditPanel({
 	open,
@@ -240,7 +223,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const chooseVoice = (id: number) => {
 		const next = { ...voiceChoice, [voiceLanguage]: id };
 		setVoiceChoice(next);
-		saveAppSetting(VOICE_SETTING, next);
+		saveVoiceChoice(next);
 	};
 	const previewVoice = async () => {
 		const run = ++generation.current;
@@ -255,15 +238,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			if (!result?.success || !result.samples || !result.sampleRate)
 				throw new Error(result?.error);
 			closePlayer(previewPlayer.current);
-			const context = new AudioContext();
-			previewPlayer.current = context;
-			const buffer = context.createBuffer(1, result.samples.length, result.sampleRate);
-			buffer.copyToChannel(new Float32Array(result.samples), 0);
-			const source = context.createBufferSource();
-			source.buffer = buffer;
-			source.connect(context.destination);
-			source.onended = () => closePlayer(context);
-			source.start();
+			previewPlayer.current = playVoiceSamples(result.samples, result.sampleRate);
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);

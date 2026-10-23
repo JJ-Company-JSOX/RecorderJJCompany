@@ -200,5 +200,32 @@
 	"preview": {
 		"fullscreen": "Voorbeeld op volledig scherm",
 		"exitFullscreen": "Volledig scherm afsluiten (Esc)"
+	},
+	"textToSpeech": {
+		"menu": "Tekst naar spraak",
+		"title": "Tekst naar spraak",
+		"description": "Typ wat de stem moet zeggen. Het wordt bij de afspeelkop aan de tijdlijn toegevoegd, één clip per alinea.",
+		"textLabel": "Tekst",
+		"placeholder": "Typ of plak wat de stem moet zeggen…",
+		"parts": "{{count}} clips",
+		"language": "Taal",
+		"chinese": "Chinees",
+		"english": "Engels",
+		"voice": "Stem",
+		"preview": "Stem beluisteren",
+		"previewing": "Stem laden…",
+		"notInstalled": "De offline stem is niet geïnstalleerd. Installeer het volledige offline pakket of voer npm run prepare:offline-tts uit op een ontwikkelcomputer.",
+		"olderVoice": "Dit is de oudere stem: die leest één taal per regel en slaat Engelse woorden in Chinese tekst over.",
+		"noVideo": "Open eerst een video.",
+		"tooMany": "De tekst heeft te veel alinea's. Houd het bij maximaal {{max}}.",
+		"add": "Aan tijdlijn toevoegen",
+		"generating": "Stem maken…",
+		"error": "Kon de stem niet maken:",
+		"nothingSpoken": "De stem kon niets van deze tekst uitspreken.",
+		"noRoom": "Er is geen ruimte voor de stem bij de afspeelkop. Verplaats de afspeelkop of maak een audiospoor vrij.",
+		"skipped": "{{count}} deel/delen bevatten niets uitspreekbaars en zijn overgeslagen.",
+		"notPlaced": "{{count}} deel/delen pasten niet meer voor het einde van de video.",
+		"trimmed": "De stem is afgekapt waar de video eindigt.",
+		"added": "Stem aan de tijdlijn toegevoegd"
 	}
 }

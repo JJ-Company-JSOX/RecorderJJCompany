@@ -91,3 +91,63 @@ export function resolveAudioPlacement({
 		durationMs: Math.min(audioDurationMs, availableGap, totalMs - startPos),
 	};
 }
+
+export interface PlacedAudioClip {
+	audioPath: string;
+	startMs: number;
+	endMs: number;
+	trackIndex: number;
+	/** The clip was shortened to the room it had (usually the end of the video). */
+	trimmed: boolean;
+}
+
+/**
+ * Places clips one after another from startPos, the first wherever it fits and the rest on
+ * the same track, so a longer text reads as one voice track. Stops at the first clip that has
+ * no room left.
+ */
+export function placeAudioClips({
+	audioRegions,
+	startPos,
+	totalMs,
+	clips,
+	gapMs,
+}: {
+	audioRegions: TimelineAudioRegion[];
+	startPos: number;
+	totalMs: number;
+	clips: Array<{ audioPath: string; durationMs: number }>;
+	gapMs: number;
+}): PlacedAudioClip[] {
+	const regions = [...audioRegions];
+	const placed: PlacedAudioClip[] = [];
+	let start = startPos;
+	let trackIndex: number | undefined;
+	for (const clip of clips) {
+		const placement = resolveAudioPlacement({
+			audioRegions: regions,
+			startPos: start,
+			totalMs,
+			audioDurationMs: clip.durationMs,
+			preferredTrackIndex: trackIndex,
+		});
+		if (!placement) break;
+		const endMs = start + placement.durationMs;
+		placed.push({
+			audioPath: clip.audioPath,
+			startMs: start,
+			endMs,
+			trackIndex: placement.trackIndex,
+			trimmed: placement.durationMs < clip.durationMs,
+		});
+		regions.push({
+			id: `placed-${placed.length}`,
+			startMs: start,
+			endMs,
+			trackIndex: placement.trackIndex,
+		});
+		trackIndex = placement.trackIndex;
+		start = endMs + gapMs;
+	}
+	return placed;
+}

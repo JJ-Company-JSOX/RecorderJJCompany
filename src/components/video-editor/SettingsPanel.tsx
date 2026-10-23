@@ -2889,16 +2889,16 @@ export const SettingsPanel = memo(function SettingsPanel({
 									{t("common.actions.reset", "Reset")}
 								</Button>
 							</div>
+							<label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+								<span>{tSettings("effects.showCursor")}</span>
+								<Switch
+									aria-label={tSettings("effects.showCursor")}
+									checked={showCursor}
+									onCheckedChange={onShowCursorChange}
+								/>
+							</label>
 							{advanced && (
 								<div className="flex flex-col gap-3">
-									<label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-										<span>{tSettings("effects.showCursor")}</span>
-										<Switch
-											aria-label={tSettings("effects.showCursor")}
-											checked={showCursor}
-											onCheckedChange={onShowCursorChange}
-										/>
-									</label>
 									<label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
 										<span>{tSettings("effects.loopCursor")}</span>
 										<Switch

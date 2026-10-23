@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { installDesktopBridge } from "./bridge";
 
 async function expectButtonsFit(container: Locator) {
@@ -54,7 +54,7 @@ test("advanced controls, webcam defaults and captions have consistent layouts", 
 
 	await page.goto("/?windowType=editor");
 	await page.getByRole("radio", { name: "Cursor", exact: true }).click();
-	await expect(page.getByRole("switch", { name: "Show Cursor", exact: true })).toHaveCount(0);
+	await expect(page.getByRole("switch", { name: "Show Cursor", exact: true })).toBeVisible();
 	await page.locator("aside").getByText("Advanced", { exact: true }).click();
 	await expect(page.getByRole("switch", { name: "Show Cursor", exact: true })).toBeVisible();
 	await expect(page.getByRole("switch", { name: "Loop cursor", exact: true })).toBeVisible();

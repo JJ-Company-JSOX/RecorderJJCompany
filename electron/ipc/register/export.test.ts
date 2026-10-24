@@ -14,7 +14,7 @@ vi.mock("electron", () => ({
 		isPackaged: false,
 	},
 	BrowserWindow: {
-		fromWebContents: () => null,
+		fromWebContents: () => ({ isDestroyed: () => false }),
 	},
 	dialog: {
 		showSaveDialog: vi.fn(),

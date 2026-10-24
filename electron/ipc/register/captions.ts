@@ -1,5 +1,5 @@
 import path from "node:path";
-import { dialog, ipcMain } from "electron";
+import { ipcMain } from "electron";
 import { generateBundledSpeechTranscript, getBundledSpeechStatus } from "../captions/bundledSpeech";
 import { generateAutoCaptionsFromVideo, resolveCaptionAudioCandidates } from "../captions/generate";
 import {
@@ -10,6 +10,7 @@ import {
 	sendWhisperModelDownloadProgress,
 } from "../captions/whisper";
 import { LEGACY_PROJECT_FILE_EXTENSIONS, PROJECT_FILE_EXTENSION } from "../constants";
+import { showOpenDialogForSender } from "../fileDialogs";
 import {
 	hasProjectFileExtension,
 	loadProjectFromPath,
@@ -26,68 +27,73 @@ type OpenVideoFilePickerOptions = {
 };
 
 export function registerCaptionHandlers() {
-	ipcMain.handle("open-video-file-picker", async (_, options?: OpenVideoFilePickerOptions) => {
-		try {
-			const includeProjects = Boolean(options?.includeProjects);
-			const recordingsDir = await getRecordingsDir();
-			const result = await dialog.showOpenDialog({
-				title: includeProjects ? "Import Media or Recordly Project" : "Select Video File",
-				defaultPath: recordingsDir,
-				filters: [
-					...(includeProjects
-						? [
-								{
-									name: "Media or Recordly Projects",
-									extensions: [
-										...VIDEO_FILE_EXTENSIONS,
-										...PROJECT_FILE_EXTENSIONS,
-									],
-								},
-							]
-						: []),
-					{ name: "Video Files", extensions: VIDEO_FILE_EXTENSIONS },
-					...(includeProjects
-						? [{ name: "Recordly Projects", extensions: PROJECT_FILE_EXTENSIONS }]
-						: []),
-					{ name: "All Files", extensions: ["*"] },
-				],
-				properties: ["openFile"],
-			});
+	ipcMain.handle(
+		"open-video-file-picker",
+		async (event, options?: OpenVideoFilePickerOptions) => {
+			try {
+				const includeProjects = Boolean(options?.includeProjects);
+				const recordingsDir = await getRecordingsDir();
+				const result = await showOpenDialogForSender(event, {
+					title: includeProjects
+						? "Import Media or Recordly Project"
+						: "Select Video File",
+					defaultPath: recordingsDir,
+					filters: [
+						...(includeProjects
+							? [
+									{
+										name: "Media or Recordly Projects",
+										extensions: [
+											...VIDEO_FILE_EXTENSIONS,
+											...PROJECT_FILE_EXTENSIONS,
+										],
+									},
+								]
+							: []),
+						{ name: "Video Files", extensions: VIDEO_FILE_EXTENSIONS },
+						...(includeProjects
+							? [{ name: "Recordly Projects", extensions: PROJECT_FILE_EXTENSIONS }]
+							: []),
+						{ name: "All Files", extensions: ["*"] },
+					],
+					properties: ["openFile"],
+				});
 
-			if (result.canceled || result.filePaths.length === 0) {
-				return { success: false, canceled: true };
+				if (result.canceled || result.filePaths.length === 0) {
+					return { success: false, canceled: true };
+				}
+
+				const selectedPath = result.filePaths[0];
+
+				if (includeProjects && hasProjectFileExtension(selectedPath)) {
+					const projectResult = await loadProjectFromPath(selectedPath);
+					return projectResult.success
+						? { ...projectResult, kind: "project" }
+						: projectResult;
+				}
+
+				approveUserPath(selectedPath);
+				setCurrentProjectPath(null);
+				return {
+					success: true,
+					kind: "media",
+					path: selectedPath,
+					extension: path.extname(selectedPath).replace(/^\./, "").toLowerCase(),
+				};
+			} catch (error) {
+				console.error("Failed to open file picker:", error);
+				return {
+					success: false,
+					message: "Failed to open file picker",
+					error: String(error),
+				};
 			}
+		},
+	);
 
-			const selectedPath = result.filePaths[0];
-
-			if (includeProjects && hasProjectFileExtension(selectedPath)) {
-				const projectResult = await loadProjectFromPath(selectedPath);
-				return projectResult.success
-					? { ...projectResult, kind: "project" }
-					: projectResult;
-			}
-
-			approveUserPath(selectedPath);
-			setCurrentProjectPath(null);
-			return {
-				success: true,
-				kind: "media",
-				path: selectedPath,
-				extension: path.extname(selectedPath).replace(/^\./, "").toLowerCase(),
-			};
-		} catch (error) {
-			console.error("Failed to open file picker:", error);
-			return {
-				success: false,
-				message: "Failed to open file picker",
-				error: String(error),
-			};
-		}
-	});
-
-	ipcMain.handle("open-audio-file-picker", async () => {
+	ipcMain.handle("open-audio-file-picker", async (event) => {
 		try {
-			const result = await dialog.showOpenDialog({
+			const result = await showOpenDialogForSender(event, {
 				title: "Select Audio File",
 				filters: [
 					{
@@ -118,9 +124,9 @@ export function registerCaptionHandlers() {
 		}
 	});
 
-	ipcMain.handle("open-whisper-executable-picker", async () => {
+	ipcMain.handle("open-whisper-executable-picker", async (event) => {
 		try {
-			const result = await dialog.showOpenDialog({
+			const result = await showOpenDialogForSender(event, {
 				title: "Select Whisper Executable",
 				filters: [
 					{
@@ -144,9 +150,9 @@ export function registerCaptionHandlers() {
 		}
 	});
 
-	ipcMain.handle("open-whisper-model-picker", async () => {
+	ipcMain.handle("open-whisper-model-picker", async (event) => {
 		try {
-			const result = await dialog.showOpenDialog({
+			const result = await showOpenDialogForSender(event, {
 				title: "Select Whisper Model",
 				filters: [
 					{ name: "Whisper Models", extensions: ["bin"] },

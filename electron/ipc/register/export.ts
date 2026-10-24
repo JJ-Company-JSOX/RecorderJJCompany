@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Readable, Writable } from "node:stream";
 import type { SaveDialogOptions } from "electron";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import { ensureExportDestinationSpace } from "../export/destinationSpace";
 import {
 	closeExportStream,
@@ -38,6 +38,7 @@ import {
 	settleNativeVideoExportWriteFrameRequest,
 } from "../export/native-video";
 import { getFfmpegBinaryPath } from "../ffmpeg/binary";
+import { showSaveDialogForSender } from "../fileDialogs";
 import {
 	buildNativeH264StreamExportArgs,
 	buildNativeVideoExportArgs,
@@ -885,7 +886,6 @@ export function registerExportHandlers() {
 				const filters = isGif
 					? [{ name: "GIF Image", extensions: ["gif"] }]
 					: [{ name: "MP4 Video", extensions: ["mp4"] }];
-				const parentWindow = BrowserWindow.fromWebContents(event.sender);
 				const saveDialogOptions: SaveDialogOptions = {
 					title: isGif ? "Save Exported GIF" : "Save Exported Video",
 					defaultPath: path.join(app.getPath("downloads"), fileName),
@@ -893,9 +893,7 @@ export function registerExportHandlers() {
 					properties: ["createDirectory", "showOverwriteConfirmation"],
 				};
 
-				const result = parentWindow
-					? await dialog.showSaveDialog(parentWindow, saveDialogOptions)
-					: await dialog.showSaveDialog(saveDialogOptions);
+				const result = await showSaveDialogForSender(event, saveDialogOptions);
 
 				if (result.canceled || !result.filePath) {
 					return {
@@ -1039,7 +1037,6 @@ export function registerExportHandlers() {
 				const filters = isGif
 					? [{ name: "GIF Image", extensions: ["gif"] }]
 					: [{ name: "MP4 Video", extensions: ["mp4"] }];
-				const parentWindow = BrowserWindow.fromWebContents(event.sender);
 				const saveDialogOptions: SaveDialogOptions = {
 					title: isGif ? "Save Exported GIF" : "Save Exported Video",
 					defaultPath: path.join(app.getPath("downloads"), fileName),
@@ -1047,9 +1044,7 @@ export function registerExportHandlers() {
 					properties: ["createDirectory", "showOverwriteConfirmation"],
 				};
 
-				const result = parentWindow
-					? await dialog.showSaveDialog(parentWindow, saveDialogOptions)
-					: await dialog.showSaveDialog(saveDialogOptions);
+				const result = await showSaveDialogForSender(event, saveDialogOptions);
 
 				if (result.canceled || !result.filePath) {
 					// Leave the temp file in place so the renderer can offer "Save Again"

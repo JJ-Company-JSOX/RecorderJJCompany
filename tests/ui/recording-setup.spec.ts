@@ -198,6 +198,38 @@ test("opening a local video reuses the file picker and editor navigation", async
 	await expect(page.locator("html")).toHaveAttribute("data-editor-opened", "true");
 });
 
+test("canceling an import releases setup controls and allows screen selection again", async ({
+	page,
+}) => {
+	await setup(page);
+	await page.evaluate(() => {
+		window.electronAPI.openVideoFilePicker = () => {
+			document.documentElement.dataset.importDialogOpened = "true";
+			return new Promise((resolve) => {
+				window.addEventListener(
+					"test-file-dialog-canceled",
+					() => resolve({ success: false, canceled: true }),
+					{ once: true },
+				);
+			});
+		};
+	});
+	const importVideo = page.getByRole("button", {
+		name: "Import video Edit an existing recording",
+	});
+	const fullScreen = page.getByRole("button", { name: "Full screen Choose a display" });
+	await importVideo.click();
+	await expect(importVideo).toBeDisabled();
+	await expect(fullScreen).toBeDisabled();
+	await expect(page.locator("html")).toHaveAttribute("data-import-dialog-opened", "true");
+	await page.evaluate(() => window.dispatchEvent(new Event("test-file-dialog-canceled")));
+	await expect(importVideo).toBeEnabled();
+	await expect(fullScreen).toBeEnabled();
+	await fullScreen.click();
+	await page.getByRole("button", { name: "Display 1", exact: true }).click();
+	await expect(page.getByRole("group", { name: "Ready to record", exact: true })).toBeVisible();
+});
+
 test("confirming a source opens the compact ready bar until settings are explicitly reopened", async ({
 	page,
 }) => {

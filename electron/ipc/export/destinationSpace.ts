@@ -23,7 +23,18 @@ export async function ensureExportDestinationSpace(
 			directory = parent;
 		}
 	}
-	const stats = await fs.statfs(directory, { bigint: true });
+	const stats = await fs.statfs(directory, { bigint: true }).catch((error: unknown) => {
+		const code = (error as NodeJS.ErrnoException).code;
+		if (code && ["ENOSYS", "ENOTSUP", "EOPNOTSUPP"].includes(code)) {
+			// Some mounted/network filesystems allow writes but cannot report free space.
+			// Preserve actual write/permission failures; lack of this optional check
+			// must not make every export to such a filesystem fail.
+			console.warn(`[export] Free space is unavailable for ${directory} (${code})`);
+			return null;
+		}
+		throw error;
+	});
+	if (!stats) return;
 	const available = stats.bavail * stats.bsize;
 	const needed = BigInt(requiredBytes) + EXPORT_DISK_RESERVE_BYTES;
 	if (available < needed) {

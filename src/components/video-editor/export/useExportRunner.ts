@@ -12,6 +12,7 @@ import { buildExportRenderOptions } from "./buildExportRenderOptions";
 import {
 	type PendingExportSave,
 	saveExportBlob,
+	savePendingExport,
 	streamExportBlobToTempFile,
 	writeSmokeExportReport,
 } from "./exportPersistence";
@@ -209,6 +210,9 @@ export function useExportRunner(input: ExportRunnerInput) {
 						} else {
 							setExportError(saveResult.message || "Failed to save GIF");
 							toast.error(saveResult.message || "Failed to save GIF");
+							pendingExportSaveRef.current = pendingSave;
+							setHasPendingExportSave(true);
+							keepExportDialogOpen = true;
 							if (smokeExportConfig.enabled) {
 								window.close();
 								return;
@@ -386,28 +390,19 @@ export function useExportRunner(input: ExportRunnerInput) {
 							// Preferred path: main process already holds the finished MP4 on
 							// disk, so we just ask it to move the temp file into place. This
 							// avoids ever allocating a multi-GiB ArrayBuffer in the renderer.
-							saveResult = await window.electronAPI.finalizeExportedVideo({
-								tempPath: result.tempFilePath,
-								fileName,
-								outputPath:
-									smokeExportConfig.enabled && smokeExportConfig.outputPath
-										? smokeExportConfig.outputPath
-										: null,
-								captionSidecar: sidecarForThisExport,
-							});
-							if (exportWasCancelled()) {
-								await discardCancelledTemp({
-									fileName,
-									tempFilePath: result.tempFilePath,
-									captionSidecar: sidecarForThisExport,
-								});
-								return;
-							}
 							pendingOnCancel = {
 								fileName,
 								tempFilePath: result.tempFilePath,
 								captionSidecar: sidecarForThisExport,
 							};
+							saveResult = await savePendingExport(
+								pendingOnCancel,
+								smokeExportConfig.enabled ? smokeExportConfig.outputPath : null,
+							);
+							if (exportWasCancelled()) {
+								await discardCancelledTemp(pendingOnCancel);
+								return;
+							}
 						} else if (result.blob) {
 							// Legacy fallback: some export paths still surface a Blob, but in
 							// Electron we stream it into a temp file first so save/finalize

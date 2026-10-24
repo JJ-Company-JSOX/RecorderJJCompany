@@ -14,6 +14,47 @@ export interface PendingExportSave {
 
 const EXPORT_BLOB_STREAM_CHUNK_BYTES = 16 * 1024 * 1024;
 
+export interface ExportSaveResult {
+	success: boolean;
+	path?: string;
+	message?: string;
+	error?: string;
+	canceled?: boolean;
+}
+
+/** A failed save still owns the completed render, so it can be retried verbatim. */
+export async function savePendingExport(
+	pending: PendingExportSave,
+	outputPath: string | null = null,
+): Promise<ExportSaveResult> {
+	try {
+		if (pending.tempFilePath) {
+			return await window.electronAPI.finalizeExportedVideo({
+				tempPath: pending.tempFilePath,
+				fileName: pending.fileName,
+				outputPath,
+				captionSidecar: pending.captionSidecar,
+			});
+		}
+		if (pending.arrayBuffer) {
+			return outputPath
+				? await window.electronAPI.writeExportedVideoToPath(
+						pending.arrayBuffer,
+						outputPath,
+						pending.captionSidecar,
+					)
+				: await window.electronAPI.saveExportedVideo(
+						pending.arrayBuffer,
+						pending.fileName,
+						pending.captionSidecar,
+					);
+		}
+		return { success: false, message: "No pending export to save" };
+	} catch (error) {
+		return { success: false, message: error instanceof Error ? error.message : String(error) };
+	}
+}
+
 export async function streamExportBlobToTempFile(
 	blob: Blob,
 	extension: string,
@@ -78,22 +119,18 @@ export async function saveExportBlob(
 		typeof window.electronAPI?.closeExportStream === "function";
 	let streamError: unknown = null;
 
+	let tempFilePath: string | null = null;
 	try {
-		const tempFilePath = await streamExportBlobToTempFile(blob, extension);
-		if (tempFilePath) {
-			return {
-				saveResult: await window.electronAPI.finalizeExportedVideo({
-					tempPath: tempFilePath,
-					fileName,
-					outputPath,
-					captionSidecar,
-				}),
-				pendingSave: { fileName, tempFilePath, captionSidecar } satisfies PendingExportSave,
-			};
-		}
+		tempFilePath = await streamExportBlobToTempFile(blob, extension);
 	} catch (error) {
 		streamError = error;
 		console.warn("[export] Temp-file blob save failed", error);
+	}
+	if (tempFilePath) {
+		const pendingSave: PendingExportSave = { fileName, tempFilePath, captionSidecar };
+		// Finalization errors must not trigger another dialog or allocate another
+		// whole-file buffer. Keep the completed temp file available for Save Again.
+		return { saveResult: await savePendingExport(pendingSave, outputPath), pendingSave };
 	}
 
 	if (!canUseInMemoryExportSaveFallback({ blobSize: blob.size, extension, hasExportStreamApi })) {
@@ -115,15 +152,10 @@ export async function saveExportBlob(
 		hasExportStreamApi,
 	});
 	const arrayBuffer = await blob.arrayBuffer();
+	const pendingSave: PendingExportSave = { fileName, arrayBuffer, captionSidecar };
 	return {
-		saveResult: outputPath
-			? await window.electronAPI.writeExportedVideoToPath(
-					arrayBuffer,
-					outputPath,
-					captionSidecar,
-				)
-			: await window.electronAPI.saveExportedVideo(arrayBuffer, fileName, captionSidecar),
-		pendingSave: { fileName, arrayBuffer, captionSidecar } satisfies PendingExportSave,
+		saveResult: await savePendingExport(pendingSave, outputPath),
+		pendingSave,
 	};
 }
 

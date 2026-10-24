@@ -22,7 +22,9 @@ export function useExportSession() {
 		pendingExportSaveRef.current = null;
 		setHasPendingExportSave(false);
 		if (pendingSave?.tempFilePath && typeof window !== "undefined") {
-			void window.electronAPI.discardExportedTemp?.(pendingSave.tempFilePath);
+			void window.electronAPI
+				.discardExportedTemp?.(pendingSave.tempFilePath)
+				.catch(() => undefined);
 		}
 	}, []);
 

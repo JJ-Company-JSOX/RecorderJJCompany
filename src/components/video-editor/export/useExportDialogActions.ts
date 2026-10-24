@@ -1,8 +1,9 @@
-import { type RefObject, useCallback } from "react";
+import { type RefObject, useCallback, useRef } from "react";
 import { toast } from "@/components/ui/toast";
 import type { ExportFormat, ExportSettings } from "@/lib/exporter";
 import { resolveExportStartSettings, resolveShareExportSettings } from "../exportStartSettings";
 import type { VideoPlaybackRef } from "../VideoPlayback";
+import { savePendingExport } from "./exportPersistence";
 import type { useExportSession } from "./useExportSession";
 import type { useExportSettings } from "./useExportSettings";
 
@@ -31,6 +32,7 @@ export function useExportDialogActions({
 	handleExport,
 	showExportSuccessToast,
 }: UseExportDialogActionsInput) {
+	const retrySaveInFlightRef = useRef(false);
 	const handleOpenExportDropdown = useCallback(() => {
 		if (!videoPath) {
 			toast.error("No video loaded");
@@ -40,7 +42,8 @@ export function useExportDialogActions({
 		if (session.hasPendingExportSave) {
 			session.setShowExportDropdown(true);
 			session.setExportError(
-				"Save dialog canceled. Click Save Again to save without re-rendering.",
+				session.exportError ??
+					"Save not completed. Click Save Again to save without re-rendering.",
 			);
 			return;
 		}
@@ -125,43 +128,35 @@ export function useExportDialogActions({
 
 	const handleRetrySaveExport = useCallback(async () => {
 		const pendingSave = session.pendingExportSaveRef.current;
-		if (!pendingSave) return;
-
-		const saveResult = pendingSave.tempFilePath
-			? await window.electronAPI.finalizeExportedVideo({
-					tempPath: pendingSave.tempFilePath,
-					fileName: pendingSave.fileName,
-					outputPath: null,
-					captionSidecar: pendingSave.captionSidecar,
-				})
-			: pendingSave.arrayBuffer
-				? await window.electronAPI.saveExportedVideo(
-						pendingSave.arrayBuffer,
-						pendingSave.fileName,
-						pendingSave.captionSidecar,
-					)
-				: { success: false, message: "No pending export to save" };
-
-		if (saveResult.canceled) {
-			session.setExportError(
-				"Save dialog canceled. Click Save Again to save without re-rendering.",
-			);
-			toast.info("Save canceled. You can try again.");
-			return;
+		if (!pendingSave || retrySaveInFlightRef.current) return;
+		retrySaveInFlightRef.current = true;
+		try {
+			const saveResult = await savePendingExport(pendingSave);
+			// Closing the menu or starting another export discards this save session.
+			// A late dialog result must not overwrite the new session's status.
+			if (session.pendingExportSaveRef.current !== pendingSave) return;
+			if (saveResult.canceled) {
+				session.setExportError(
+					"Save dialog canceled. Click Save Again to save without re-rendering.",
+				);
+				toast.info("Save canceled. You can try again.");
+				return;
+			}
+			if (saveResult.success && saveResult.path) {
+				session.pendingExportSaveRef.current = null;
+				session.setHasPendingExportSave(false);
+				session.setExportError(null);
+				session.setExportedFilePath(saveResult.path);
+				showExportSuccessToast(saveResult.path);
+				session.setShowExportDropdown(true);
+				return;
+			}
+			const errorMessage = saveResult.message || saveResult.error || "Failed to save video";
+			session.setExportError(errorMessage);
+			toast.error(errorMessage);
+		} finally {
+			retrySaveInFlightRef.current = false;
 		}
-		if (saveResult.success && saveResult.path) {
-			session.pendingExportSaveRef.current = null;
-			session.setHasPendingExportSave(false);
-			session.setExportError(null);
-			session.setExportedFilePath(saveResult.path);
-			showExportSuccessToast(saveResult.path);
-			session.setShowExportDropdown(true);
-			return;
-		}
-
-		const errorMessage = saveResult.message || "Failed to save video";
-		session.setExportError(errorMessage);
-		toast.error(errorMessage);
 	}, [session, showExportSuccessToast]);
 
 	const revealExportedFile = useCallback(async () => {

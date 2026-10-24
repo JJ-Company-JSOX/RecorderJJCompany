@@ -142,6 +142,23 @@ export async function moveExportedTempFile(tempPath: string, destinationPath: st
 	}
 }
 
+async function writeExportedVideoFile(destinationPath: string, videoData: ArrayBuffer) {
+	await ensureExportDestinationSpace(destinationPath, videoData.byteLength);
+	await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+	const partialPath = getPartialExportDestinationPath(destinationPath);
+	try {
+		// Never truncate the user's previous export before all new bytes are on disk.
+		await fs.writeFile(partialPath, Buffer.from(videoData), { flag: "wx", flush: true });
+		await moveExportedTempFile(partialPath, destinationPath);
+	} finally {
+		await fs.rm(partialPath, { force: true }).catch(() => undefined);
+	}
+}
+
+function describeExportSaveFailure(message: string, error: unknown) {
+	return `${message}: ${error instanceof Error ? error.message : String(error)}`;
+}
+
 async function resolveAllowedReadableFilePath(
 	filePath: string,
 	label: string,
@@ -888,8 +905,7 @@ export function registerExportHandlers() {
 					};
 				}
 
-				await ensureExportDestinationSpace(result.filePath, videoData.byteLength);
-				await fs.writeFile(result.filePath, Buffer.from(videoData));
+				await writeExportedVideoFile(result.filePath, videoData);
 				const captionSidecarResult = await writeCaptionSidecarsBestEffort(
 					result.filePath,
 					sidecarPayload,
@@ -908,7 +924,7 @@ export function registerExportHandlers() {
 				console.error("Failed to save exported video:", error);
 				return {
 					success: false,
-					message: "Failed to save exported video",
+					message: describeExportSaveFailure("Failed to save exported video", error),
 					error: String(error),
 				};
 			}
@@ -936,9 +952,7 @@ export function registerExportHandlers() {
 				}
 
 				const resolvedPath = path.resolve(outputPath);
-				await ensureExportDestinationSpace(resolvedPath, videoData.byteLength);
-				await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-				await fs.writeFile(resolvedPath, Buffer.from(videoData));
+				await writeExportedVideoFile(resolvedPath, videoData);
 				const captionSidecarResult = await writeCaptionSidecarsBestEffort(
 					resolvedPath,
 					sidecarPayload,
@@ -958,7 +972,7 @@ export function registerExportHandlers() {
 				console.error("Failed to write exported video to path:", error);
 				return {
 					success: false,
-					message: "Failed to write exported video",
+					message: describeExportSaveFailure("Failed to write exported video", error),
 					canceled: false,
 					error: String(error),
 				};
@@ -1069,7 +1083,7 @@ export function registerExportHandlers() {
 				return {
 					success: false,
 					canceled: false,
-					message: "Failed to save exported video",
+					message: describeExportSaveFailure("Failed to save exported video", error),
 					error: String(error),
 				};
 			}

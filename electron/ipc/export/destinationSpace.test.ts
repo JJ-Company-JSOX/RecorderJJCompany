@@ -41,4 +41,24 @@ describe("export destination space", () => {
 		);
 		await expect(ensureExportDestinationSpace("video.mp4", 10)).rejects.toThrow("denied");
 	});
+	it.each([
+		"ENOSYS",
+		"ENOTSUP",
+		"EOPNOTSUPP",
+	])("allows a writable destination when its filesystem cannot report space (%s)", async (code) => {
+		vi.spyOn(fs, "statfs").mockRejectedValue(Object.assign(new Error("unsupported"), { code }));
+		await expect(
+			ensureExportDestinationSpace(path.join(os.tmpdir(), "export.mp4"), 1024),
+		).resolves.toBeUndefined();
+	});
+	it.each([
+		"EACCES",
+		"EIO",
+		"ENOSPC",
+	])("preserves genuine space-check failures (%s)", async (code) => {
+		vi.spyOn(fs, "statfs").mockRejectedValue(Object.assign(new Error(code), { code }));
+		await expect(
+			ensureExportDestinationSpace(path.join(os.tmpdir(), "export.mp4"), 1024),
+		).rejects.toThrow(code);
+	});
 });

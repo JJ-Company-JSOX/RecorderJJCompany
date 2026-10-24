@@ -22,6 +22,7 @@ import {
 	type EditState,
 	type EditSuggestion,
 } from "./plan";
+import { readinessMessages } from "./readinessMessages";
 import { addSpeechSuggestions } from "./speechPlan";
 import { buildTextCutPlan, textLines } from "./textCuts";
 import { addVisualSuggestions } from "./vision";
@@ -79,6 +80,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const n = narrationMessages[language];
 	const g = guideMessages[language];
 	const w = wizardMessages[language];
+	const setup = readinessMessages[language];
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
@@ -117,7 +119,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const [narrationLanguage, setNarrationLanguage] = useState<PlanLanguage>("zh");
 	const [bundledStatus, setBundledStatus] = useState<BundledAiStatus | null>(null);
 	const [keepFullFrame, setKeepFullFrame] = useState(false);
-	const [speechReady, setSpeechReady] = useState<boolean | null>(null);
+	const [speechStatus, setSpeechStatus] = useState<Awaited<
+		ReturnType<Window["electronAPI"]["getBundledSpeechStatus"]>
+	> | null>(null);
+	const [statusChecking, setStatusChecking] = useState(true);
+	const [statusCheckFailed, setStatusCheckFailed] = useState(false);
+	const [statusRevision, setStatusRevision] = useState(0);
 	const [autoApply, setAutoApply] = useState(true);
 	const [speechStage, setSpeechStage] = useState("");
 	const [summary, setSummary] = useState<{
@@ -168,25 +175,34 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		liveBaselines.current.add(baselineFor(state, source));
 	}, [state, source]);
 	const generation = useRef(0);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: The revision explicitly reruns metadata checks after the user prepares resources or frees memory.
 	useEffect(() => {
 		if (!open) return;
 		let active = true;
-		setSpeechReady(null);
-		void window.electronAPI
-			.getBundledSpeechStatus?.()
-			.then((status) => {
-				if (active) setSpeechReady(status.available);
+		setStatusChecking(true);
+		setStatusCheckFailed(false);
+		setSpeechStatus(null);
+		setBundledStatus(null);
+		void Promise.allSettled([
+			Promise.resolve().then(() => window.electronAPI.getBundledAiStatus()),
+			Promise.resolve().then(() => window.electronAPI.getBundledSpeechStatus()),
+		])
+			.then(([ai, speech]) => {
+				if (!active) return;
+				const aiStatus =
+					ai.status === "fulfilled" && typeof ai.value?.available === "boolean"
+						? ai.value
+						: null;
+				const voiceStatus =
+					speech.status === "fulfilled" && typeof speech.value?.available === "boolean"
+						? speech.value
+						: null;
+				setBundledStatus(aiStatus);
+				setSpeechStatus(voiceStatus);
+				setStatusCheckFailed(!aiStatus || !voiceStatus);
 			})
-			.catch(() => {
-				if (active) setSpeechReady(false);
-			});
-		void window.electronAPI
-			.getBundledAiStatus?.()
-			.then((status) => {
-				if (active) setBundledStatus(status);
-			})
-			.catch(() => {
-				if (active) setBundledStatus(null);
+			.finally(() => {
+				if (active) setStatusChecking(false);
 			});
 		void window.electronAPI
 			.getBundledTtsStatus?.()
@@ -199,7 +215,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		return () => {
 			active = false;
 		};
-	}, [open]);
+	}, [open, statusRevision]);
 	useEffect(() => window.electronAPI.onAutoEditFrameProgress?.(setProgress), []);
 	useEffect(() => window.electronAPI.onCompleteAutoEditProgress?.(setSpeechStage), []);
 	// Switching to another sidebar tab keeps work running; leaving the editor cancels it.
@@ -220,7 +236,19 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const available = plan?.suggestions.filter((s) => !s.blocked) ?? [];
 	const pending = available.filter((s) => !decisions[s.id] || decisions[s.id] === "pending");
 	const accepted = available.filter((s) => decisions[s.id] === "accept");
-	const ready = bundledStatus?.available && speechReady;
+	const speechReady = speechStatus?.available;
+	const memoryLow =
+		!!bundledStatus?.available &&
+		bundledStatus.freeMemoryBytes < bundledStatus.requiredMemoryBytes;
+	const ready =
+		!statusChecking &&
+		!statusCheckFailed &&
+		!!bundledStatus?.available &&
+		!!speechReady &&
+		!memoryLow;
+	const noVideo = !source || !state.clipRegions.length;
+	const unsupported =
+		bundledStatus?.reason === "unsupported" || speechStatus?.reason === "unsupported";
 	// The Kokoro Chinese voice also says English words, so on-screen English labels can stay.
 	const mixedLanguage = !!ttsStatus?.mixedLanguage;
 	// Mirrors the main-process check: each bundled voice can only read its own script.
@@ -709,7 +737,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								aria-hidden="true"
 								className={`mr-1.5 inline-block size-2 rounded-full ${ready ? "bg-emerald-500" : "bg-amber-500"}`}
 							/>
-							{ready ? ui.ready : !bundledStatus ? ui.checking : m.offlineTitle} ·{" "}
+							{statusChecking ? ui.checking : ready ? ui.ready : setup.unavailable} ·{" "}
 							{ui.badge}
 						</p>
 					</div>
@@ -760,6 +788,59 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							<h3 className="text-base font-semibold">{w.chooseTitle}</h3>
 							<p className="text-xs text-muted-foreground">{w.chooseHelp}</p>
 						</div>
+						{(!ready || noVideo) && (
+							<div
+								data-auto-edit-readiness
+								role="status"
+								aria-live="polite"
+								className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+							>
+								{statusChecking ? (
+									<p>{ui.checking}</p>
+								) : statusCheckFailed ? (
+									<p>{setup.checkFailed}</p>
+								) : unsupported ? (
+									<p>{setup.unsupported}</p>
+								) : (
+									<>
+										{!bundledStatus?.available && <p>{m.offlineMissing}</p>}
+										{!speechReady && <p>{m.speechMissing}</p>}
+										{memoryLow && <p>{setup.memoryLow}</p>}
+									</>
+								)}
+								{noVideo && <p>{setup.noVideo}</p>}
+								{!statusChecking &&
+									!statusCheckFailed &&
+									!unsupported &&
+									(!bundledStatus?.available || !speechReady) && (
+										<p className="text-xs text-muted-foreground">
+											{setup.setup}
+										</p>
+									)}
+								<Button
+									variant="secondary"
+									disabled={!!busy || statusChecking}
+									onClick={() => setStatusRevision((revision) => revision + 1)}
+								>
+									{setup.recheck}
+								</Button>
+								{!noVideo && (
+									<>
+										<Button
+											variant="secondary"
+											className="w-full"
+											disabled={!!busy}
+											onClick={() => void analyze()}
+										>
+											{setup.local}
+										</Button>
+										<p className="text-xs text-muted-foreground">
+											{setup.localHelp}
+										</p>
+									</>
+								)}
+							</div>
+						)}
 						<label className="flex flex-col gap-2 text-sm">
 							<span>{ui.recognitionLanguage}</span>
 							<select
@@ -792,18 +873,16 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 						<Button
 							className="min-h-12 w-full text-base font-semibold"
 							aria-label={m.completeEdit}
-							disabled={
-								!!busy ||
-								!bundledStatus?.available ||
-								!speechReady ||
-								!source ||
-								!state.clipRegions.length
-							}
+							disabled={!!busy || !ready || noVideo}
 							onClick={() => void analyze(true, true, false, true)}
 						>
 							{ui.start}
 						</Button>
-						<p className="text-center text-xs text-muted-foreground">{ui.actionHelp}</p>
+						{ready && (
+							<p className="text-center text-xs text-muted-foreground">
+								{ui.actionHelp}
+							</p>
+						)}
 						<div className="grid grid-cols-1 gap-3">
 							<label
 								className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${autoApply ? "border-primary/50 bg-primary/5" : "border-separator"}`}
@@ -859,10 +938,6 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							>
 								{w.textEntry}
 							</Button>
-						)}
-						{speechReady === false && <p className="text-sm">{m.speechMissing}</p>}
-						{bundledStatus && !bundledStatus.available && (
-							<p className="text-sm">{m.offlineMissing}</p>
 						)}
 					</section>
 				)}

@@ -7,7 +7,7 @@ export const messages = {
 		completeEdit: "Automatically edit speech and video",
 		autoDraft: "Apply the automatic draft when ready (Undo is available)",
 		speechMissing:
-			"Speech editing requires the full offline speech edition, with its included model.",
+			"The speech model or runtime is missing. Speech editing requires the full offline speech edition or prepared source-build assets.",
 		media: "Checking video and audio timing…",
 		transcribe: "Recognizing speech locally…",
 		understand: "Understanding speech and finding repeated takes…",
@@ -21,7 +21,7 @@ export const messages = {
 			"Analyze video on this computer. No internet, account, model installation or API key is needed. AI loads only during analysis and closes when finished or canceled. Preview suggestions before applying.",
 		offlineReady: "The included AI is ready.",
 		offlineMissing:
-			"This build does not contain a complete offline AI bundle. Use the full offline AI edition; no separate AI setup is needed.",
+			"This build does not contain a complete offline AI bundle. Use the full offline AI edition with its models, or prepare the bundled assets for a source build.",
 		offlineAnalyze: "Generate offline AI plan",
 		offlineBusy: "Offline AI is analyzing…",
 		"webcam-alignment-unverified":
@@ -107,7 +107,8 @@ export const messages = {
 		speechCaution: "识别不确定、可能删去独有内容的片段会保留。导出前请检查剪辑结果。",
 		completeEdit: "一键自动剪辑语音和视频",
 		autoDraft: "完成后直接应用自动剪辑草稿（可以撤销）",
-		speechMissing: "语音剪辑需要包含内置语音模型的完整离线语音版。",
+		speechMissing:
+			"缺少语音识别模型或运行组件。请使用完整离线语音版，或为源码开发版准备对应资源。",
 		media: "检查画面与音频时间对齐…",
 		transcribe: "正在本机识别语音…",
 		understand: "理解语句并查找重复录制内容…",
@@ -120,7 +121,8 @@ export const messages = {
 		offlineInfo:
 			"在本机分析视频，无需联网、账号、安装模型或 API Key。AI 仅在分析时加载，完成或取消后关闭。应用前可预览建议。",
 		offlineReady: "随软件提供的 AI 已就绪。",
-		offlineMissing: "此版本未包含完整离线 AI 组件。请使用完整离线 AI 版，无需单独配置 AI。",
+		offlineMissing:
+			"此版本未包含完整离线 AI 模型或运行组件。请使用随附模型的完整离线版，或为源码开发版准备对应资源。",
 		offlineAnalyze: "生成离线 AI 方案",
 		offlineBusy: "离线 AI 正在分析…",
 		"webcam-alignment-unverified": "独立摄像头轨道尚未完成画面分析或对齐，不生成时间删改建议。",
@@ -199,7 +201,8 @@ export const messages = {
 			"Pertuturan yang tidak pasti dan kandungan unik dikekalkan. Semak draf sebelum mengeksport.",
 		completeEdit: "Sunting pertuturan dan video secara automatik",
 		autoDraft: "Gunakan draf automatik apabila siap (boleh buat asal)",
-		speechMissing: "Suntingan pertuturan memerlukan edisi pertuturan luar talian lengkap.",
+		speechMissing:
+			"Model atau runtime pertuturan tiada. Gunakan edisi pertuturan luar talian lengkap atau sediakan aset binaan kod sumber.",
 		media: "Menyemak masa video dan audio…",
 		transcribe: "Mengecam pertuturan setempat…",
 		understand: "Memahami pertuturan dan mencari ulangan…",
@@ -213,7 +216,7 @@ export const messages = {
 			"Analisis video pada komputer ini. Tiada internet, akaun, pemasangan model atau kunci API diperlukan. AI dimuatkan hanya semasa analisis dan ditutup setelah selesai atau dibatalkan. Pratonton cadangan sebelum digunakan.",
 		offlineReady: "AI yang disertakan sudah sedia.",
 		offlineMissing:
-			"Binaan ini tidak mengandungi pakej AI luar talian yang lengkap. Gunakan edisi AI luar talian penuh; tiada persediaan AI berasingan diperlukan.",
+			"Binaan ini tidak mengandungi pakej AI luar talian lengkap. Gunakan edisi penuh dengan modelnya, atau sediakan aset untuk binaan kod sumber.",
 		offlineAnalyze: "Jana pelan AI luar talian",
 		offlineBusy: "AI luar talian sedang menganalisis…",
 		"webcam-alignment-unverified":

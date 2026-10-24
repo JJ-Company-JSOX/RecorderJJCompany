@@ -9,6 +9,7 @@ test("included offline AI needs one click, no model setup, and keeps Apply and U
 }) => {
 	await installDesktopBridge(page, "filmstrip.mp4", { signedIn: false });
 	await installDesktopBridgeOverrides(page, () => {
+		window.electronAPI.getBundledSpeechStatus = async () => ({ available: true });
 		window.electronAPI.getBundledAiStatus = async () => ({
 			available: true,
 			modelName: "Bundled fixture",
@@ -75,11 +76,12 @@ test("included offline AI needs one click, no model setup, and keeps Apply and U
 	await expect(page.locator('[data-variant="zoom"]')).toHaveCount(0);
 });
 
-test("a build without model assets explains the full edition and does not prompt customer setup", async ({
+test("a build without model assets explains the full edition and source-build resources", async ({
 	page,
 }) => {
 	await installDesktopBridge(page, "filmstrip.mp4", { signedIn: false });
 	await installDesktopBridgeOverrides(page, () => {
+		window.electronAPI.getBundledSpeechStatus = async () => ({ available: true });
 		window.electronAPI.getBundledAiStatus = async () => ({
 			available: false,
 			reason: "missing",
@@ -97,7 +99,7 @@ test("a build without model assets explains the full edition and does not prompt
 	await expect(panel.getByRole("button", { name: "Generate offline AI plan" })).toBeDisabled();
 	await expect(panel.getByText(/Use the full offline AI edition/)).toBeVisible();
 	await page.getByLabel("Plan language").selectOption("zh");
-	await expect(panel.getByText(/无需单独配置 AI/)).toBeVisible();
+	await expect(panel.getByText(/源码开发版准备对应资源/)).toBeVisible();
 });
 
 test("after applying, AI voice-over drafts, waits for approval and adds an audio track", async ({

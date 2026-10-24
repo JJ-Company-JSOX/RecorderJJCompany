@@ -373,7 +373,7 @@ test("a missing speech bundle disables complete editing and explains the full ed
 	).toBeDisabled();
 	await expect(
 		panel.getByText(
-			"Speech editing requires the full offline speech edition, with its included model.",
+			"The speech model or runtime is missing. Speech editing requires the full offline speech edition or prepared source-build assets.",
 			{ exact: true },
 		),
 	).toBeVisible();

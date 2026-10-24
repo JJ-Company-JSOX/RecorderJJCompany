@@ -10,6 +10,7 @@ import {
 	legacyBorderRadiusPixelsToPercent,
 	normalizeProjectEditor,
 	resolveVideoUrl,
+	validateProjectData,
 } from "./projectPersistence";
 import { ADVANCED_VERTICAL_PADDING_MAX, DEFAULT_AUTO_CAPTION_SETTINGS } from "./types";
 
@@ -309,4 +310,28 @@ it("ignores legacy export preferences when opening and resaving a project", asyn
 		expect(createProjectData("/clip.mp4", legacyEditor).editor).not.toHaveProperty(key);
 	}
 	expect(legacyEditor.exportQuality).toBe("high");
+});
+
+describe("project version compatibility", () => {
+	it.each([1, 2])("preserves support for version %s", (version) => {
+		expect(validateProjectData({ version, videoPath: "C:/clip.mp4", editor: {} })).toBe(true);
+	});
+	it.each([
+		999,
+		1.5,
+		-1,
+		0,
+		Infinity,
+		NaN,
+		"2",
+		null,
+	])("rejects unsupported version %s before normalization", (version) => {
+		expect(
+			validateProjectData({
+				version,
+				videoPath: "C:/clip.mp4",
+				editor: { futureField: true },
+			}),
+		).toBe(false);
+	});
 });

@@ -512,4 +512,27 @@ describe("local media path policy", () => {
 			code: "ENOENT",
 		});
 	});
+	it("rejects a future project before approving media or changing the session, preserving bytes", async () => {
+		const manager = await import("./manager");
+		const state = await import("../state");
+		const projectPath = path.join(tempRoot, "future.recordly");
+		const source = path.join(tempRoot, "future.mp4");
+		await fs.writeFile(source, "original-media");
+		const data = JSON.stringify({
+			version: 999,
+			videoPath: source,
+			editor: { futureField: { keep: true } },
+		});
+		await fs.writeFile(projectPath, data);
+		const oldProject = state.currentProjectPath;
+		const oldVideo = state.currentVideoPath;
+		const result = await manager.loadProjectFromPath(projectPath);
+		expect(result.success).toBe(false);
+		expect(result.message).toContain("newer version");
+		expect(state.currentProjectPath).toBe(oldProject);
+		expect(state.currentVideoPath).toBe(oldVideo);
+		expect(await manager.resolveApprovedLocalMediaPath(source)).toBeNull();
+		expect(await fs.readFile(projectPath, "utf8")).toBe(data);
+		expect(await fs.readFile(source, "utf8")).toBe("original-media");
+	});
 });

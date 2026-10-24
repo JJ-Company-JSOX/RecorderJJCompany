@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { createProjectFirstFrameThumbnail } from "./firstFrameThumbnail";
-import { buildMediaUrl, getMediaServerBaseUrl } from "../../mediaServer";
-import type { ProjectPreviewData } from "../../../src/types/projectPreview";
-import { hasFreshProjectThumbnail } from "./thumbnailFreshness";
-import { type Stats, existsSync, constants as fsConstants, realpathSync } from "node:fs";
+import { existsSync, constants as fsConstants, realpathSync, type Stats } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
+import type { ProjectPreviewData } from "../../../src/types/projectPreview";
+import { isSupportedProjectVersion, PROJECT_VERSION } from "../../../src/types/projectVersion";
 import { RECORDINGS_DIR, USER_DATA_PATH } from "../../appPaths";
+import { buildMediaUrl, getMediaServerBaseUrl } from "../../mediaServer";
 import { isSupportedLocalMediaPath } from "../../mediaTypes";
 import {
 	COMPANION_AUDIO_LAYOUTS,
@@ -35,6 +34,8 @@ import {
 	normalizeVideoSourcePath,
 	parseJsonWithByteOrderMark,
 } from "../utils";
+import { createProjectFirstFrameThumbnail } from "./firstFrameThumbnail";
+import { hasFreshProjectThumbnail } from "./thumbnailFreshness";
 
 export { normalizePath, normalizeVideoSourcePath };
 
@@ -524,7 +525,7 @@ function isLoadableProjectData(projectData: unknown) {
 	};
 
 	return (
-		typeof candidate.version === "number" &&
+		isSupportedProjectVersion(candidate.version) &&
 		(candidate.projectId === undefined || typeof candidate.projectId === "string") &&
 		typeof candidate.videoPath === "string" &&
 		candidate.videoPath.trim().length > 0 &&
@@ -567,6 +568,19 @@ export async function loadProjectFromPath(projectPath: string) {
 			success: false,
 			canceled: false,
 			message: `Failed to read project file: ${error instanceof Error ? error.message : String(error)}`,
+		};
+	}
+	if (
+		project &&
+		typeof project === "object" &&
+		"version" in project &&
+		typeof project.version === "number" &&
+		project.version > PROJECT_VERSION
+	) {
+		return {
+			success: false,
+			canceled: false,
+			message: `This project uses version ${project.version}, but this application supports versions 1–${PROJECT_VERSION}. Open it with a newer version of the app. The original project has not been changed.`,
 		};
 	}
 	if (!isLoadableProjectData(project)) {

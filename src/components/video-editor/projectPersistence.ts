@@ -2,6 +2,7 @@ import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/a
 import { getLocalMediaServerPath } from "@/lib/localMediaUrl";
 import { DEFAULT_WALLPAPER_PATH } from "@/lib/wallpapers";
 import { ASPECT_RATIOS, type AspectRatio, isCustomAspectRatio } from "@/utils/aspectRatioUtils";
+import { isSupportedProjectVersion, PROJECT_VERSION } from "../../types/projectVersion";
 import { closeClipGaps, rippleRegionAnchors, rippleRegions } from "./clipSequence";
 import { CURSOR_MOTION_PRESETS } from "./cursorMotionPresets";
 import {
@@ -65,7 +66,7 @@ import {
 } from "./types";
 import { convertLegacyWebcamRadiusToRoundness, normalizeWebcamCropRegion } from "./webcamOverlay";
 
-export const PROJECT_VERSION = 2;
+export { PROJECT_VERSION };
 export const MACOS_DEFAULT_BORDER_RADIUS_PERCENT = 8;
 const LEGACY_BORDER_RADIUS_REFERENCE_PX = 1080;
 
@@ -295,7 +296,7 @@ export async function resolveVideoUrl(sourcePath: string): Promise<string> {
 export function validateProjectData(candidate: unknown): candidate is EditorProjectData {
 	if (!candidate || typeof candidate !== "object") return false;
 	const project = candidate as Partial<EditorProjectData>;
-	if (typeof project.version !== "number") return false;
+	if (!isSupportedProjectVersion(project.version)) return false;
 	if (project.projectId !== undefined && typeof project.projectId !== "string") return false;
 	if (typeof project.videoPath !== "string" || !project.videoPath) return false;
 	if (!project.editor || typeof project.editor !== "object") return false;

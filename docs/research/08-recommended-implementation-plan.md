@@ -1,5 +1,7 @@
 # 08 — 推荐执行计划与研究交付
 
+统一执行顺序见[合并开发建议](00-unified-development-plan.md)；本报告保留研究统计、参考项目及原批次说明。
+
 日期：2026-10-24。以当前 RecorderJJCompany 为准，保留 Electron/React/TypeScript/PixiJS/FFmpeg/native 架构。原研究提示要求只研究；后续明确授权“先完成审计，再按优先级推进修复”，因此只实施01中已复现的工程版本保护，其余整合保持计划状态。
 
 ## 研究统计（实际检查，不是Stars排行）

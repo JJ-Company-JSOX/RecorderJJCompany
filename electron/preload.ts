@@ -193,8 +193,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		language?: string;
 		track?: "mic" | "mixed";
 	}) => ipcRenderer.invoke("offline-tools-run", input),
-	analyzeCompleteAutoEdit: (input: { videoPath: string; language?: string }) =>
-		ipcRenderer.invoke("auto-edit-complete", input),
+	analyzeCompleteAutoEdit: (input: {
+		videoPath: string;
+		language?: string;
+		mode?: "speech" | "full";
+	}) => ipcRenderer.invoke("auto-edit-complete", input),
 	onCompleteAutoEditProgress: (callback: (stage: string) => void) => {
 		const listener = (_event: unknown, stage: string) => callback(stage);
 		ipcRenderer.on("auto-edit-complete-progress", listener);

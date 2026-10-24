@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+
 const fixture = vi.hoisted(() => ({
 	handlers: new Map<string, (...args: unknown[]) => Promise<Record<string, unknown>>>(),
 	approved: vi.fn(),
@@ -43,8 +44,10 @@ vi.mock("../ffmpeg/binary", () => ({
 vi.mock("../project/manager", () => ({ resolveApprovedLocalMediaPath: fixture.approved }));
 vi.mock("../recording/diagnostics", () => ({ getCompanionAudioStartDelayMs: async () => 0 }));
 vi.mock("../utils", () => ({ normalizeVideoSourcePath: (value: string) => value }));
-import { registerAutoEditHandlers } from "./autoEdit";
+
 import { NoCaptionAudioError } from "../captions/generate";
+import { registerAutoEditHandlers } from "./autoEdit";
+
 const event = () => ({
 	sender: {
 		id: 7,
@@ -93,6 +96,34 @@ it("refuses unapproved media before analysis or model startup", async () => {
 		videoPath: "/private.mp4",
 	});
 	expect(result.success).toBe(false);
+	expect(fixture.recognize).not.toHaveBeenCalled();
+	expect(fixture.start).not.toHaveBeenCalled();
+});
+it("speech mode returns grounded subtitles without loading or calling the vision/reasoning model", async () => {
+	const result = await fixture.handlers.get("auto-edit-complete")!(event(), {
+		videoPath: "/approved.mp4",
+		language: "ms",
+		mode: "speech",
+	});
+	expect(result.success).toBe(true);
+	expect(result.speech).toMatchObject({
+		transcript: { cues: [{ id: "a", text: "Save", startMs: 200, endMs: 1200 }] },
+		cuts: [],
+	});
+	expect(fixture.recognize.mock.calls[0][0].language).toBe("ms");
+	expect(fixture.start).not.toHaveBeenCalled();
+	expect(fixture.complete).not.toHaveBeenCalled();
+	expect(fixture.vision).not.toHaveBeenCalled();
+	expect(fixture.close).not.toHaveBeenCalled();
+});
+
+it("rejects unknown analysis modes before touching media or models", async () => {
+	const result = await fixture.handlers.get("auto-edit-complete")!(event(), {
+		videoPath: "/approved.mp4",
+		mode: "turbo-unknown",
+	});
+	expect(result.success).toBe(false);
+	expect(fixture.media).not.toHaveBeenCalled();
 	expect(fixture.recognize).not.toHaveBeenCalled();
 	expect(fixture.start).not.toHaveBeenCalled();
 });

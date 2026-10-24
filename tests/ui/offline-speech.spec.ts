@@ -129,6 +129,7 @@ async function setup(
 	});
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
 	const panel = page.locator("[data-auto-edit-panel]");
+	await panel.getByLabel("Editing mode", { exact: true }).selectOption("full");
 	await expect(
 		panel.getByRole("button", { name: "Automatically edit speech and video", exact: true }),
 	).toBeEnabled();
@@ -300,10 +301,10 @@ test("cancel ignores a late completed model reply without applying any edits", a
 	await expect(
 		panel.getByRole("status").filter({ hasText: "Recognizing speech locally" }),
 	).toBeVisible();
-	await expect(panel.locator("[data-analysis-progress]")).toBeInViewport();
+	await expect(panel.locator("[data-analysis-progress]")).toBeInViewport({ ratio: 1 });
 	await expect(
 		panel.getByRole("button", { name: "Cancel analysis", exact: true }),
-	).toBeInViewport();
+	).toBeInViewport({ ratio: 1 });
 	await panel.getByRole("button", { name: "Cancel analysis", exact: true }).click();
 	await expect(page.locator("html")).toHaveAttribute("data-speech-cancelled", "true");
 	await page.evaluate(() => window.dispatchEvent(new Event("test-finish-speech")));
@@ -368,6 +369,7 @@ test("a missing speech bundle disables complete editing and explains the full ed
 	await expect(page.locator('[data-variant="clip"]')).toBeVisible({ timeout: 60000 });
 	await page.getByRole("button", { name: "Auto edit plan", exact: true }).click();
 	const panel = page.locator("[data-auto-edit-panel]");
+	await panel.getByLabel("Editing mode", { exact: true }).selectOption("full");
 	await expect(
 		panel.getByRole("button", { name: "Automatically edit speech and video", exact: true }),
 	).toBeDisabled();
@@ -452,7 +454,7 @@ test("small screens keep the sidebar workflow usable in Chinese and English", as
 						: "Automatically edit speech and video",
 				exact: true,
 			}),
-		).toBeInViewport();
+		).toBeInViewport({ ratio: 1 });
 		await panel.screenshot({ path: `test-results/ai-workflow-${language}-1024.png` });
 	}
 	await panel.locator("[data-hardware-guide] > summary").click();

@@ -10,6 +10,7 @@ async function openEditor(page: Page) {
 	});
 	const panel = page.locator("[data-auto-edit-panel]");
 	await expect(panel).toBeVisible();
+	await panel.getByLabel("Editing mode", { exact: true }).selectOption("full");
 	return panel;
 }
 

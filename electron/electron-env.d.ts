@@ -250,7 +250,11 @@ interface Window {
 					asset: import("./ipc/audioEnhancement/rnnoise").VoiceEnhancementAsset;
 			  }
 		>;
-		analyzeCompleteAutoEdit: (input: { videoPath: string; language?: string }) => Promise<{
+		analyzeCompleteAutoEdit: (input: {
+			videoPath: string;
+			language?: string;
+			mode?: "speech" | "full";
+		}) => Promise<{
 			success: boolean;
 			error?: string;
 			errorCode?: "NO_AUDIO";

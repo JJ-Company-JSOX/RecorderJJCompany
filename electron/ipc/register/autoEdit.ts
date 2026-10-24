@@ -2,39 +2,39 @@ import path from "node:path";
 import { app, ipcMain } from "electron";
 import { BUNDLED_MODEL_ID } from "../../../src/components/video-editor/auto-edit/bundledTypes";
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
+import type { SpeechTranscript } from "../../../src/components/video-editor/auto-edit/speechTypes";
 import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bundled";
 import { analyzeLocalMedia } from "../autoEdit/media";
-import { isNarrationStyle } from "../autoEdit/tutorialScript";
 import {
 	describeNarrationFrames,
 	isNarrationFrame,
 	type NarrationFrame,
 } from "../autoEdit/narrationFrames";
-import type { OcrEngine } from "../autoEdit/ocrTypes";
-import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
 import {
 	generateBundledNarration,
 	isNarrationLanguage,
 	LocalNarrationGenerator,
 } from "../autoEdit/narrator";
+import type { OcrEngine } from "../autoEdit/ocrTypes";
+import { inspectLocalModel, LocalPlanReviewer } from "../autoEdit/reviewer";
+import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
+import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
 import { isSubtitleLines, type SubtitleLine, translateSubtitles } from "../autoEdit/translate";
 import {
 	getBundledTtsStatus,
 	previewBundledVoice,
 	synthesizeBundledNarration,
 } from "../autoEdit/tts";
+import { isNarrationStyle } from "../autoEdit/tutorialScript";
 import { analyzeVideoFrames } from "../autoEdit/vision";
-import { analyzeSpeechWindow, mergeSpeechPlans } from "../autoEdit/speechPlan";
-import { boundSpeechCues, speechWindows } from "../autoEdit/transcript";
-import type { SpeechTranscript } from "../../../src/components/video-editor/auto-edit/speechTypes";
 import { generateBundledSpeechTranscript, getBundledSpeechStatus } from "../captions/bundledSpeech";
 import { NoCaptionAudioError, resolveCaptionAudioCandidates } from "../captions/generate";
+import { protectSilenceWithVad } from "../captions/vadProtection";
 import { getFfmpegBinaryPath, getFfprobeBinaryPath } from "../ffmpeg/binary";
 import { resolveApprovedLocalMediaPath } from "../project/manager";
 import { getCompanionAudioStartDelayMs } from "../recording/diagnostics";
 import { normalizeVideoSourcePath } from "../utils";
 import { registerOfflineTools } from "./offlineTools";
-import { protectSilenceWithVad } from "../captions/vadProtection";
 
 export type AutoEditHandlerOptions = {
 	/**
@@ -69,7 +69,10 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 	ipcMain.handle("auto-edit-speech-status", () => getBundledSpeechStatus());
 	ipcMain.handle(
 		"auto-edit-complete",
-		async (event, input: { videoPath: string; language?: string }) => {
+		async (
+			event,
+			input: { videoPath: string; language?: string; mode?: "speech" | "full" },
+		) => {
 			if (running.has(event.sender.id))
 				return { success: false, error: "Analysis already running" };
 			const controller = new AbortController();
@@ -85,7 +88,8 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 				if (
 					!input ||
 					typeof input.videoPath !== "string" ||
-					(input.language !== undefined && !/^(auto|en|zh|ms)$/.test(input.language))
+					(input.language !== undefined && !/^(auto|en|zh|ms)$/.test(input.language)) ||
+					(input.mode !== undefined && input.mode !== "speech" && input.mode !== "full")
 				)
 					throw Error("Invalid speech editing request");
 				const normalized = normalizeVideoSourcePath(input.videoPath);
@@ -140,6 +144,10 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 						!candidates.some((c) => c.label === "linked webcam recording"),
 					cues,
 				};
+				if (input.mode === "speech") {
+					// Subtitles and grounded pauses do not need a vision/reasoning model.
+					return { success: true, evidence, speech: mergeSpeechPlans(transcript, []) };
+				}
 				progress("understand");
 				session = await startBundledAi(bundledRoot(), controller.signal);
 				// Bounded windows keep the model context small; no transcript is sent off-device.

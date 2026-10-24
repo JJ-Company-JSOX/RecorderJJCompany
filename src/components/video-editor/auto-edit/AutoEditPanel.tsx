@@ -24,6 +24,7 @@ import {
 } from "./plan";
 import { readinessMessages } from "./readinessMessages";
 import { addSpeechSuggestions } from "./speechPlan";
+import { speedMessages } from "./speedMessages";
 import { buildTextCutPlan, textLines } from "./textCuts";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
@@ -32,6 +33,13 @@ import { wizardMessages } from "./wizardMessages";
 /** Spoken language is independent from the editing interface language. */
 type RecognitionLanguage = "auto" | "zh" | "en" | "ms";
 const RECOGNITION_LANGUAGE_SETTING = "recordly.autoEdit.recognitionLanguage";
+const EDIT_MODE_SETTING = "recordly.autoEdit.mode";
+type EditMode = "fast" | "speech" | "full";
+type AnalysisStage = "media" | "transcribe" | "understand" | "vision";
+function savedEditMode(): EditMode {
+	const mode = loadAppSetting<unknown>(EDIT_MODE_SETTING);
+	return mode === "speech" || mode === "full" ? mode : "fast";
+}
 function savedRecognitionLanguage(): RecognitionLanguage {
 	const saved = loadAppSetting<unknown>(RECOGNITION_LANGUAGE_SETTING);
 	return saved === "zh" || saved === "en" || saved === "ms" ? saved : "auto";
@@ -81,6 +89,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const g = guideMessages[language];
 	const w = wizardMessages[language];
 	const setup = readinessMessages[language];
+	const speed = speedMessages[language];
+	const [editMode, setEditMode] = useState<EditMode>(savedEditMode);
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
@@ -127,6 +137,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const [statusRevision, setStatusRevision] = useState(0);
 	const [autoApply, setAutoApply] = useState(true);
 	const [speechStage, setSpeechStage] = useState("");
+	const [stages, setStages] = useState<AnalysisStage[]>(["media"]);
 	const [summary, setSummary] = useState<{
 		cuts: number;
 		speedUps: number;
@@ -248,7 +259,17 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		!memoryLow;
 	const noVideo = !source || !state.clipRegions.length;
 	const unsupported =
-		bundledStatus?.reason === "unsupported" || speechStatus?.reason === "unsupported";
+		(editMode === "full" && bundledStatus?.reason === "unsupported") ||
+		speechStatus?.reason === "unsupported";
+	const modeReady =
+		editMode === "fast" || (editMode === "speech" ? !statusChecking && !!speechReady : ready);
+	const requiredStatusFailed = editMode === "full" ? statusCheckFailed : !speechStatus;
+	const startLabel =
+		editMode === "fast"
+			? speed.startFast
+			: editMode === "speech"
+				? speed.startSpeech
+				: ui.start;
 	// The Kokoro Chinese voice also says English words, so on-screen English labels can stay.
 	const mixedLanguage = !!ttsStatus?.mixedLanguage;
 	// Mirrors the main-process check: each bundled voice can only read its own script.
@@ -309,8 +330,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			if (run === generation.current) setBusy(null);
 		}
 	};
-	const stages = ["media", "transcribe", "understand", "vision"] as const;
-	const activeStage = stages.indexOf(speechStage as (typeof stages)[number]);
+	const activeStage = stages.findIndex((stage) => stage === speechStage);
 	const summarize = (next: EditPlan, choices: Record<string, Decision>) => {
 		const selected = next.suggestions.filter((s) => choices[s.id] === "accept");
 		const length = (s: EditSuggestion) => s.endMs - s.startMs;
@@ -425,7 +445,16 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		setError("");
 		setSilentFallback(fromSilentVideo);
 		setApplied(false);
-		setSpeechStage("");
+		setSpeechStage("media");
+		setStages(
+			withSpeech
+				? withAi
+					? ["media", "transcribe", "understand", "vision"]
+					: ["media", "transcribe"]
+				: withAi
+					? ["media", "vision"]
+					: ["media"],
+		);
 		setSummary(null);
 		setUndone(false);
 		setVoiceOpen(false);
@@ -441,13 +470,13 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				? await window.electronAPI.analyzeCompleteAutoEdit({
 						videoPath: source,
 						language: recognitionLanguage,
+						mode: withAi ? "full" : "speech",
 					})
 				: undefined;
 			if (complete?.errorCode === "NO_AUDIO") {
 				if (run !== generation.current) return;
 				// A silent recording is edited from the picture: frozen parts, idle parts and clicks.
-				setKeepFullFrame(false);
-				return analyze(!!bundledStatus?.available, false, true, main);
+				return analyze(withAi && !!bundledStatus?.available, false, true, main);
 			}
 			const result = complete ?? (await window.electronAPI.analyzeAutoEdit(source));
 			if (run !== generation.current) return;
@@ -466,6 +495,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				});
 			if (withAi) {
 				setBusy("vision");
+				setSpeechStage("vision");
 				setProgress({ completed: 0, total: 8 });
 				const frames =
 					complete ??
@@ -477,12 +507,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				if (run !== generation.current) return;
 				if (!frames.success || !frames.analysis) throw Error(frames.error || m.error);
 				next = addVisualSuggestions(next, state, source, frames.analysis);
-				if (keepFullFrame && !fromSilentVideo)
-					next = {
-						...next,
-						suggestions: next.suggestions.filter((s) => s.kind !== "zoom"),
-					};
 			}
+			if (keepFullFrame)
+				next = { ...next, suggestions: next.suggestions.filter((s) => s.kind !== "zoom") };
 			// Only offer what can actually be applied; anything that would touch existing work is left out.
 			next = { ...next, suggestions: next.suggestions.filter((s) => !s.blocked) };
 			if (main && autoApply) {
@@ -737,8 +764,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								aria-hidden="true"
 								className={`mr-1.5 inline-block size-2 rounded-full ${ready ? "bg-emerald-500" : "bg-amber-500"}`}
 							/>
-							{statusChecking ? ui.checking : ready ? ui.ready : setup.unavailable} ·{" "}
-							{ui.badge}
+							{modeReady
+								? ui.ready
+								: statusChecking
+									? ui.checking
+									: setup.unavailable}{" "}
+							· {ui.badge}
 						</p>
 					</div>
 					<select
@@ -786,9 +817,55 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					<section className="space-y-4" aria-label={m.offlineTitle}>
 						<div>
 							<h3 className="text-base font-semibold">{w.chooseTitle}</h3>
-							<p className="text-xs text-muted-foreground">{w.chooseHelp}</p>
+							<p className="text-xs text-muted-foreground">
+								{editMode === "full"
+									? w.chooseHelp
+									: editMode === "fast"
+										? speed.fastHelp
+										: speed.speechHelp}
+							</p>
 						</div>
-						{(!ready || noVideo) && (
+						<Button
+							className="min-h-12 w-full text-base font-semibold"
+							aria-label={editMode === "full" ? m.completeEdit : startLabel}
+							disabled={!!busy || !modeReady || noVideo}
+							onClick={() =>
+								void analyze(editMode === "full", editMode !== "fast", false, true)
+							}
+						>
+							{startLabel}
+						</Button>
+						{modeReady && (
+							<p className="text-center text-xs text-muted-foreground">
+								{ui.actionHelp}
+							</p>
+						)}
+						<label className="flex flex-col gap-2 text-sm">
+							<span>{speed.mode}</span>
+							<select
+								aria-label={speed.mode}
+								value={editMode}
+								disabled={!!busy}
+								className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-foreground"
+								onChange={(event) => {
+									const value = event.target.value;
+									if (value !== "fast" && value !== "speech" && value !== "full")
+										return;
+									setEditMode(value);
+									saveAppSetting(EDIT_MODE_SETTING, value);
+								}}
+							>
+								<option value="fast">{speed.fast}</option>
+								<option value="speech">{speed.speech}</option>
+								<option value="full">{speed.full}</option>
+							</select>
+							{editMode === "full" && (
+								<span className="text-xs text-muted-foreground">
+									{speed.fullHelp}
+								</span>
+							)}
+						</label>
+						{(!modeReady || noVideo) && (
 							<div
 								data-auto-edit-readiness
 								role="status"
@@ -797,22 +874,27 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							>
 								{statusChecking ? (
 									<p>{ui.checking}</p>
-								) : statusCheckFailed ? (
+								) : requiredStatusFailed ? (
 									<p>{setup.checkFailed}</p>
 								) : unsupported ? (
 									<p>{setup.unsupported}</p>
 								) : (
 									<>
-										{!bundledStatus?.available && <p>{m.offlineMissing}</p>}
+										{editMode === "full" && !bundledStatus?.available && (
+											<p>{m.offlineMissing}</p>
+										)}
 										{!speechReady && <p>{m.speechMissing}</p>}
-										{memoryLow && <p>{setup.memoryLow}</p>}
+										{editMode === "full" && memoryLow && (
+											<p>{setup.memoryLow}</p>
+										)}
 									</>
 								)}
 								{noVideo && <p>{setup.noVideo}</p>}
 								{!statusChecking &&
-									!statusCheckFailed &&
+									!requiredStatusFailed &&
 									!unsupported &&
-									(!bundledStatus?.available || !speechReady) && (
+									((editMode === "full" && !bundledStatus?.available) ||
+										!speechReady) && (
 										<p className="text-xs text-muted-foreground">
 											{setup.setup}
 										</p>
@@ -841,47 +923,36 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								)}
 							</div>
 						)}
-						<label className="flex flex-col gap-2 text-sm">
-							<span>{ui.recognitionLanguage}</span>
-							<select
-								value={recognitionLanguage}
-								aria-label={ui.recognitionLanguage}
-								disabled={!!busy}
-								onChange={(event) => {
-									const value = event.target.value;
-									if (
-										value !== "auto" &&
-										value !== "zh" &&
-										value !== "en" &&
-										value !== "ms"
-									)
-										return;
-									setRecognitionLanguage(value);
-									saveAppSetting(RECOGNITION_LANGUAGE_SETTING, value);
-								}}
-								className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-foreground"
-							>
-								<option value="auto">{ui.detectLanguage}</option>
-								<option value="zh">中文</option>
-								<option value="en">English</option>
-								<option value="ms">Bahasa Melayu</option>
-							</select>
-							<span className="text-xs text-muted-foreground">
-								{ui.recognitionLanguageHelp}
-							</span>
-						</label>
-						<Button
-							className="min-h-12 w-full text-base font-semibold"
-							aria-label={m.completeEdit}
-							disabled={!!busy || !ready || noVideo}
-							onClick={() => void analyze(true, true, false, true)}
-						>
-							{ui.start}
-						</Button>
-						{ready && (
-							<p className="text-center text-xs text-muted-foreground">
-								{ui.actionHelp}
-							</p>
+						{editMode !== "fast" && (
+							<label className="flex flex-col gap-2 text-sm">
+								<span>{ui.recognitionLanguage}</span>
+								<select
+									value={recognitionLanguage}
+									aria-label={ui.recognitionLanguage}
+									disabled={!!busy}
+									onChange={(event) => {
+										const value = event.target.value;
+										if (
+											value !== "auto" &&
+											value !== "zh" &&
+											value !== "en" &&
+											value !== "ms"
+										)
+											return;
+										setRecognitionLanguage(value);
+										saveAppSetting(RECOGNITION_LANGUAGE_SETTING, value);
+									}}
+									className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-foreground"
+								>
+									<option value="auto">{ui.detectLanguage}</option>
+									<option value="zh">中文</option>
+									<option value="en">English</option>
+									<option value="ms">Bahasa Melayu</option>
+								</select>
+								<span className="text-xs text-muted-foreground">
+									{ui.recognitionLanguageHelp}
+								</span>
+							</label>
 						)}
 						<div className="grid grid-cols-1 gap-3">
 							<label

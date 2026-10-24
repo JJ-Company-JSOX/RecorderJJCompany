@@ -69,6 +69,11 @@ export async function analyzeLocalMedia(options: {
 		!metadata.streams.some((s) => s.codec_type === "video")
 	)
 		throw new Error("Cannot determine video duration");
+	const embeddedAudio = metadata.streams.filter((s) => s.codec_type === "audio");
+	// A single embedded track can be scanned in the same demux/decode pass as video.
+	// Keep original resolution, frame rate and detection thresholds: sampling a
+	// smaller picture could mistake small UI changes for a safe static interval.
+	const combinedAudio = embeddedAudio.length === 1 ? embeddedAudio[0] : undefined;
 	const video = await run(options.ffmpegPath, [
 		"-hide_banner",
 		"-nostdin",
@@ -79,10 +84,11 @@ export async function analyzeLocalMedia(options: {
 		options.videoPath,
 		"-map",
 		"0:v:0",
-		"-an",
+		...(combinedAudio ? ["-map", `0:${combinedAudio.index}`] : ["-an"]),
 		"-vf",
 		// -60 dB tolerates encoder noise (keyframes never decode bit-identical) but not real changes.
 		"setpts=PTS-STARTPTS,freezedetect=n=-60dB:d=1.5",
+		...(combinedAudio ? ["-af", "asetpts=PTS-STARTPTS,silencedetect=n=-50dB:d=1.5"] : []),
 		"-filter_threads",
 		"1",
 		"-f",
@@ -120,23 +126,26 @@ export async function analyzeLocalMedia(options: {
 				silentRanges = [];
 				continue;
 			}
-			const audio = await run(options.ffmpegPath, [
-				"-hide_banner",
-				"-nostdin",
-				"-nostats",
-				"-threads",
-				"2",
-				"-i",
-				file.path,
-				"-map",
-				`0:${stream.index}`,
-				"-vn",
-				"-af",
-				"asetpts=PTS-STARTPTS,silencedetect=n=-50dB:d=1.5",
-				"-f",
-				"null",
-				"-",
-			]);
+			const audio =
+				file.path === options.videoPath && stream.index === combinedAudio?.index
+					? video
+					: await run(options.ffmpegPath, [
+							"-hide_banner",
+							"-nostdin",
+							"-nostats",
+							"-threads",
+							"2",
+							"-i",
+							file.path,
+							"-map",
+							`0:${stream.index}`,
+							"-vn",
+							"-af",
+							"asetpts=PTS-STARTPTS,silencedetect=n=-50dB:d=1.5",
+							"-f",
+							"null",
+							"-",
+						]);
 			const ranges = parseDetectedRanges(audio.stderr, "silence", audioDuration).map((s) => ({
 				startMs: s.startMs + file.delayMs,
 				endMs: s.endMs + file.delayMs,

@@ -411,9 +411,11 @@ export class OfflineAudioProcessor extends AudioMediaProcessor {
 		if (localEndSec <= 0 || localStartSec >= chunkDurationSec) return;
 
 		// Clip to chunk bounds
-		let bufferOffsetSec = 0;
+		let bufferOffsetSec = Number.isFinite(region.sourceOffsetMs)
+			? Math.max(0, region.sourceOffsetMs!) / 1000
+			: 0;
 		if (localStartSec < 0) {
-			bufferOffsetSec = -localStartSec;
+			bufferOffsetSec += -localStartSec;
 			localStartSec = 0;
 		}
 		if (localEndSec > chunkDurationSec) {

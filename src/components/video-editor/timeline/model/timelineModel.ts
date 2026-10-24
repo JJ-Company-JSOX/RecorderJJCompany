@@ -1,4 +1,5 @@
 import { formatClipSpeedLabel } from "../../clipSpeedChange";
+import { audioSourceOffsetMs } from "../../audio/audioRegionTiming";
 import type {
 	AnnotationRegion,
 	AudioRegion,
@@ -91,6 +92,10 @@ export function buildTimelineItems(params: {
 		id: region.id,
 		rowId: getAudioTrackRowId(region.trackIndex ?? 0),
 		span: { start: region.startMs, end: region.endMs },
+		sourceSpan: {
+			start: audioSourceOffsetMs(region),
+			end: audioSourceOffsetMs(region) + region.endMs - region.startMs,
+		},
 		label: getAudioLabel(region),
 		audioPath: region.audioPath,
 		audioGain: region.volume,

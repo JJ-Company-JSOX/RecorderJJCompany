@@ -1,6 +1,60 @@
 import { expect, test } from "@playwright/test";
 import { installDesktopBridge } from "./bridge";
 
+test("trimmed audio preview mapping and export scheduler use the same preserved source offset", async ({
+	page,
+}) => {
+	await installDesktopBridge(page, "filmstrip.mp4");
+	await page.goto("/?windowType=editor");
+	const samples = await page.evaluate(async () => {
+		const { OfflineAudioProcessor } = await import(
+			"/src/lib/exporter/offlineAudioProcessor.ts"
+		);
+		const { buildResolvedAudioPlan } = await import("/src/lib/exporter/audioRoutingEngine.ts");
+		const region = {
+			id: "voice",
+			startMs: 100,
+			endMs: 600,
+			sourceOffsetMs: 300,
+			audioPath: "test",
+			volume: 1,
+		};
+		const plan = buildResolvedAudioPlan({
+			videoResource: null,
+			sourceAudioFallbackPaths: [],
+			audioRegions: [region],
+		});
+		const values = [];
+		for (const chunkStart of [0, 0.37]) {
+			const context = new OfflineAudioContext(1, 17760, 48000);
+			const buffer = context.createBuffer(1, 48000, 48000);
+			for (let i = 0; i < 48000; i++) buffer.getChannelData(0)[i] = i / 48000;
+			new OfflineAudioProcessor().scheduleRegionForChunk(
+				context,
+				buffer,
+				region,
+				[],
+				chunkStart,
+				0.37,
+				true,
+			);
+			const rendered = await context.startRendering();
+			for (const local of [0.02, 0.15, 0.3]) {
+				const timelineMs = (chunkStart + local) * 1000;
+				const previewSourceMs =
+					(plan.tracks[0].sourceRef.offsetMs ?? 0) + timelineMs - region.startMs;
+				values.push({
+					timelineMs,
+					expected: timelineMs >= 100 && timelineMs < 600 ? previewSourceMs / 1000 : 0,
+					actual: rendered.getChannelData(0)[Math.round(local * 48000)],
+				});
+			}
+		}
+		return values;
+	});
+	for (const sample of samples) expect(sample.actual).toBeCloseTo(sample.expected, 3);
+});
+
 test("offline audio renders fades consistently across export chunks and decodes click WAV", async ({
 	page,
 }) => {

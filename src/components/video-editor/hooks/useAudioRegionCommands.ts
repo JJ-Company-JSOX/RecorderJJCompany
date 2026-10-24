@@ -1,6 +1,7 @@
 import type { Span } from "dnd-timeline";
 import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback } from "react";
 import type { AudioRegion, EditorEffectSection } from "../types";
+import { changeAudioRegionSpan, splitAudioRegion } from "../audio/audioRegionTiming";
 
 interface UseAudioRegionCommandsParams {
 	setSelectedClipId: Dispatch<SetStateAction<string | null>>;
@@ -87,14 +88,7 @@ export function useAudioRegionCommands({
 			setAudioRegions((current) =>
 				current.map((region) =>
 					region.id === id
-						? {
-								...region,
-								startMs: Math.round(span.start),
-								endMs: Math.round(span.end),
-								...(normalizedTrackIndex === undefined
-									? {}
-									: { trackIndex: normalizedTrackIndex }),
-							}
+						? changeAudioRegionSpan(region, span, normalizedTrackIndex)
 						: region,
 				),
 			);
@@ -113,6 +107,17 @@ export function useAudioRegionCommands({
 			);
 		},
 		[selectedAudioId, setAudioRegions],
+	);
+	const handleAudioSplit = useCallback(
+		(id: string, splitMs: number) => {
+			const rightId = `audio-${nextAudioIdRef.current++}`;
+			setAudioRegions((regions) =>
+				regions.flatMap((region) =>
+					region.id === id ? splitAudioRegion(region, splitMs, rightId) : [region],
+				),
+			);
+		},
+		[nextAudioIdRef, setAudioRegions],
 	);
 
 	const handleAudioDelete = useCallback(
@@ -160,6 +165,7 @@ export function useAudioRegionCommands({
 		handleSelectAudio,
 		handleAudioAdded,
 		handleAudioSpanChange,
+		handleAudioSplit,
 		handleAudioVolumeChange,
 		handleAudioDelete,
 		handleAudioNormalizeChange,

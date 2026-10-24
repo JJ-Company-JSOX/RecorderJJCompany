@@ -17,7 +17,10 @@ export async function acquireBrowserScreenCapture({
 	onAudioFallback: () => void;
 }): Promise<MediaStream> {
 	try {
-		return await request(audio);
+		const stream = await request(audio);
+		// Chromium can resolve successfully with video only even when audio was requested.
+		if (audio && stream.getAudioTracks().length === 0) onAudioFallback();
+		return stream;
 	} catch (error) {
 		if (!audio || (usePortal && isCapturePermissionDismissed(error))) throw error;
 		onAudioFallback();

@@ -76,6 +76,7 @@ import {
 	waitForNativeCaptureStop,
 } from "../recording/mac";
 import { resolveRecordedVideoStoragePath } from "../recording/storagePath";
+import { isWindowsSystemAudioUnavailable } from "../recording/windowsAudioStatus";
 import {
 	attachWindowsCaptureLifecycle,
 	isNativeWindowsCaptureAvailable,
@@ -586,6 +587,11 @@ export function registerRecordingHandlers(
 					});
 
 					await waitForWindowsCaptureStart(wcProc);
+					const systemAudioUnavailable = await isWindowsSystemAudioUnavailable(
+						captureOutput,
+						Boolean(options?.capturesSystemAudio),
+						tempSystemAudioPath,
+					);
 					const microphoneFallbackRequired =
 						browserMicFallbackRequested ||
 						shouldUseWindowsBrowserMicrophoneFallback(captureOutput, options);
@@ -612,7 +618,7 @@ export function registerRecordingHandlers(
 						microphonePath,
 						processOutput: captureOutput.trim() || undefined,
 					});
-					return { success: true, microphoneFallbackRequired };
+					return { success: true, microphoneFallbackRequired, systemAudioUnavailable };
 				} catch (error) {
 					recordNativeCaptureDiagnostics({
 						backend: "windows-wgc",

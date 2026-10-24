@@ -199,5 +199,35 @@
 	"preview": {
 		"fullscreen": "Vista previa a pantalla completa",
 		"exitFullscreen": "Salir de pantalla completa (Esc)"
+	},
+	"textToSpeech": {
+		"menu": "Texto a voz",
+		"title": "Texto a voz",
+		"description": "Escribe lo que debe decir la voz. Se añade a la línea de tiempo en el cabezal, un clip por párrafo.",
+		"textLabel": "Texto",
+		"placeholder": "Escribe o pega lo que debe decir la voz…",
+		"parts": "{{count}} clips",
+		"language": "Idioma",
+		"chinese": "Chino",
+		"english": "Inglés",
+		"voice": "Voz",
+		"preview": "Escuchar voz",
+		"previewing": "Cargando la voz…",
+		"notInstalled": "La voz sin conexión no está instalada. Instala el paquete sin conexión completo o ejecuta npm run prepare:offline-tts en un equipo de desarrollo.",
+		"olderVoice": "Esta es la voz antigua: lee un idioma por línea y omite las palabras en inglés del texto en chino.",
+		"noVideo": "Abre primero un vídeo.",
+		"tooMany": "El texto tiene demasiados párrafos. Usa {{max}} como máximo.",
+		"add": "Añadir a la línea de tiempo",
+		"generating": "Creando la voz…",
+		"error": "No se pudo crear la voz:",
+		"nothingSpoken": "La voz no pudo decir nada de este texto.",
+		"noRoom": "No hay espacio para la voz en el cabezal. Mueve el cabezal o libera una pista de audio.",
+		"skipped": "{{count}} parte(s) no tenían nada que la voz pudiera decir y se omitieron.",
+		"notPlaced": "{{count}} parte(s) no cabían antes del final del vídeo.",
+		"trimmed": "La voz se cortó donde termina el vídeo.",
+		"added": "Voz añadida a la línea de tiempo",
+		"checking": "Checking offline voices…",
+		"statusFailed": "Could not check offline voices. Try again.",
+		"recheck": "Recheck voices"
 	}
 }

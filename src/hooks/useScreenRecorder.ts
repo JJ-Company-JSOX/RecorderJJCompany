@@ -4,6 +4,7 @@ import { toast } from "@/components/ui/toast";
 import { useI18n } from "@/contexts/I18nContext";
 import { getEffectiveRecordingDurationMs } from "@/lib/mediaTiming";
 import { acquireBrowserScreenCapture, isCapturePermissionDismissed } from "./browserScreenCapture";
+import { systemAudioUnavailableMessage } from "./recordingAudioMessages";
 import {
 	getVideoExtensionForMimeType,
 	isWebmMimeType,
@@ -369,7 +370,7 @@ async function createAudioInputDeviceSnapshot(): Promise<
 }
 
 export function useScreenRecorder(): UseScreenRecorderReturn {
-	const { t } = useI18n();
+	const { t, locale } = useI18n();
 	const [recording, setRecordingValue] = useState(false);
 	const recordingActive = useRef(false);
 	const setRecording = useCallback((value: boolean) => {
@@ -1744,6 +1745,12 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				}
 
 				if (nativeResult.success) {
+					if (systemAudioEnabled && nativeResult.systemAudioUnavailable) {
+						toast.warning(systemAudioUnavailableMessage(locale), {
+							id: "recording-system-audio-unavailable",
+							duration: 15000,
+						});
+					}
 					nativeScreenRecording.current = true;
 					nativeWindowsRecording.current = useNativeWindowsCapture;
 					if (shouldWarmStartNativeCapture) {
@@ -2000,9 +2007,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 									video: browserScreenVideoConstraints,
 								}),
 					onAudioFallback: () => {
-						alert(
-							"System audio is not available for this source. Recording will continue without system audio.",
-						);
+						toast.warning(systemAudioUnavailableMessage(locale), {
+							id: "recording-system-audio-unavailable",
+							duration: 15000,
+						});
 					},
 				});
 

@@ -563,6 +563,8 @@ export interface AudioRegion {
 	startMs: number;
 	endMs: number;
 	audioPath: string;
+	/** Offset into the preserved source audio after trimming the left edge. */
+	sourceOffsetMs?: number;
 	volume: number;
 	normalize?: boolean;
 	muted?: boolean;

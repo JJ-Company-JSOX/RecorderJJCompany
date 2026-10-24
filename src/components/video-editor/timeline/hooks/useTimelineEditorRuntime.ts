@@ -58,6 +58,7 @@ interface UseTimelineEditorRuntimeParams {
 	audioRegions: AudioRegion[];
 	onAudioAdded?: (span: Span, audioPath: string, trackIndex?: number) => void;
 	onAudioSpanChange?: (id: string, span: Span, trackIndex?: number) => void;
+	onAudioSplit?: (id: string, splitMs: number) => void;
 	onAudioDelete?: (id: string) => void;
 	selectedAudioId?: string | null;
 	onSelectAudio?: (id: string | null) => void;
@@ -108,6 +109,7 @@ export function useTimelineEditorRuntime({
 	audioRegions,
 	onAudioAdded,
 	onAudioSpanChange,
+	onAudioSplit,
 	onAudioDelete,
 	selectedAudioId,
 	onSelectAudio,
@@ -229,13 +231,17 @@ export function useTimelineEditorRuntime({
 		});
 
 	const handleSplitClip = useCallback(() => {
+		if (selectedAudioId) {
+			onAudioSplit?.(selectedAudioId, currentTimeMs);
+			return;
+		}
 		if (!videoDuration || videoDuration === 0 || totalMs === 0 || !onClipSplit) {
 			return;
 		}
 		onClipSplit(currentTimeMs);
-	}, [videoDuration, totalMs, currentTimeMs, onClipSplit]);
+	}, [videoDuration, totalMs, currentTimeMs, onClipSplit, selectedAudioId, onAudioSplit]);
 
-	const { handleAddAudio } = useTimelineAudioActions({
+	const { handleAddAudio, handleAddAudioClips } = useTimelineAudioActions({
 		timeline: { videoDuration, totalMs, currentTimeMs },
 		regions: { audio: audioRegions },
 		onAudioAdded,
@@ -295,11 +301,13 @@ export function useTimelineEditorRuntime({
 			splitClip: handleSplitClip,
 			addAnnotation: handleAddAnnotation,
 			addAudio: handleAddAudio,
+			addAudioClips: handleAddAudioClips,
 			keyframes,
 		}),
 		[
 			handleAddAnnotation,
 			handleAddAudio,
+			handleAddAudioClips,
 			handleAddZoom,
 			handleSuggestZooms,
 			handleSplitClip,

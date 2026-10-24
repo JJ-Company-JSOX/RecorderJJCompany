@@ -436,6 +436,7 @@ interface Window {
 			error?: string;
 			userNotified?: boolean;
 			microphoneFallbackRequired?: boolean;
+			systemAudioUnavailable?: boolean;
 		}>;
 		stopNativeScreenRecording: () => Promise<{
 			success: boolean;

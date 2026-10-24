@@ -49,6 +49,7 @@ import type { useAppearanceState } from "../state/useAppearanceState";
 import type { useTimelineState } from "../state/useTimelineState";
 import type { TimelineEditorHandle } from "../timeline/TimelineEditor";
 import type { VideoPlaybackRef } from "../VideoPlayback";
+import { TextToSpeechDialog } from "../textToSpeech/TextToSpeechDialog";
 import { EditorVideoPreview } from "./EditorVideoPreview";
 
 type Props = {
@@ -133,6 +134,7 @@ export function EditorPreviewPanel(props: Props) {
 	// Full screen shows the preview at the size of the display, rendered at its native density.
 	const panelRef = useRef<HTMLDivElement>(null);
 	const [isFullscreen, setIsFullscreen] = useState(false);
+	const [textToSpeechOpen, setTextToSpeechOpen] = useState(false);
 	useEffect(() => {
 		const sync = () => setIsFullscreen(document.fullscreenElement === panelRef.current);
 		document.addEventListener("fullscreenchange", sync);
@@ -355,6 +357,12 @@ export function EditorPreviewPanel(props: Props) {
 							>
 								{t("timeline.audio.label")}
 							</DropdownMenuItem>
+							<DropdownMenuItem
+								onClick={() => setTextToSpeechOpen(true)}
+								className="cursor-pointer text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+							>
+								{t("editor.textToSpeech.menu", "Text to speech")}
+							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
 					<Button
@@ -471,6 +479,13 @@ export function EditorPreviewPanel(props: Props) {
 					</Popover>
 				</div>
 			</div>
+			<TextToSpeechDialog
+				open={textToSpeechOpen}
+				onOpenChange={setTextToSpeechOpen}
+				hasVideo={projection.timelineDuration > 0}
+				sourceKey={videoPath}
+				addClips={(clips, gapMs) => timelineRef.current?.addAudioClips(clips, gapMs)}
+			/>
 		</div>
 	);
 }

@@ -1,5 +1,7 @@
 # RecorderJJCompany 统一开发建议
 
+最新修复：[录制原声检查与可编辑文字配音](../bugfix-recorded-audio-and-text-to-speech-2026-10-25.md)，包括本机声音检测命令、时间轴音频裁剪 / 拆分与验证限制。
+
 日期：2026-10-24。将“审计后优先修复稳定性”与“借鉴开源项目完善界面和 AI”合为一份执行顺序。[07 优先级路线图](07-feature-priority-roadmap.md)提供逐项估算与测试细节，[08 推荐执行计划](08-recommended-implementation-plan.md)提供研究统计与参考项目；本文件是两者的统一入口。
 
 ## 共同基础

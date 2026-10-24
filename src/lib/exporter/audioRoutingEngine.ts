@@ -2,6 +2,7 @@ import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/a
 import { SOURCE_AUDIO_NORMALIZE_GAIN } from "@/components/video-editor/audio/audioTypes";
 import type { AudioRegion } from "@/components/video-editor/types";
 import { resolveSourceAudioFallbackPaths } from "./sourceAudioFallback";
+import { audioSourceOffsetMs } from "@/components/video-editor/audio/audioRegionTiming";
 
 export function resolveEnhancedAudioPath(
 	originalPath: string,
@@ -56,6 +57,7 @@ export interface ResolvedAudioTrack {
 	sourceRef: {
 		path: string;
 		startDelayMs: number;
+		offsetMs?: number;
 	};
 	gain: number;
 	fadeInMs?: number;
@@ -125,6 +127,7 @@ export function buildResolvedAudioPlan(input: {
 		sourceRef: {
 			path: region.audioPath,
 			startDelayMs: 0,
+			offsetMs: audioSourceOffsetMs(region),
 		},
 		gain: region.muted
 			? 0

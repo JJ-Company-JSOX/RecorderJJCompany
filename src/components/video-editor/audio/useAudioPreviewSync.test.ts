@@ -35,6 +35,53 @@ afterEach(() => {
 
 describe("source preview playback ownership", () => {
 	it.each([
+		false,
+		true,
+	])("user audio seeks into its trimmed source and does not restart past the end (%s)", async (pastEnd) => {
+		const audio = {
+			src: "file:///voice.wav",
+			duration: pastEnd ? 0.7 : 2,
+			currentTime: 0,
+			playbackRate: 1,
+			paused: true,
+			volume: 1,
+			load: vi.fn(),
+			pause: vi.fn(),
+			play: vi.fn().mockResolvedValue(undefined),
+		};
+		vi.stubGlobal("Audio", function () {
+			return audio;
+		});
+		useAudioPreviewSync({
+			audioRegions: [
+				{
+					id: "voice",
+					startMs: 0,
+					endMs: 1000,
+					sourceOffsetMs: 300,
+					audioPath: "/voice.wav",
+					volume: 1,
+				},
+			],
+			previewVolume: 1,
+			isPlaying: true,
+			currentTime: 0.5,
+			timelineTime: 0.5,
+			duration: 2,
+			sourcePlaybackRate: 1,
+			previewSourceAudioFallbackPaths: [],
+			sourceAudioFallbackStartDelayMsByPath: {},
+			sourceAudioResourceVersion: 0,
+			isCurrentClipMuted: false,
+			getSourceTrackPreviewGain: () => 1,
+			onSourceFallbackLoadError: vi.fn(),
+		});
+		for (const effect of harness.effects) effect();
+		await Promise.resolve();
+		expect(audio.play).toHaveBeenCalledTimes(pastEnd ? 0 : 1);
+		if (!pastEnd) expect(audio.currentTime).toBeCloseTo(0.8);
+	});
+	it.each([
 		{
 			name: "sub-second offset",
 			muted: false,

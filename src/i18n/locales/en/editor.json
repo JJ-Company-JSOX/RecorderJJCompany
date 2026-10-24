@@ -207,5 +207,35 @@
 	"preview": {
 		"fullscreen": "Full screen preview",
 		"exitFullscreen": "Exit full screen (Esc)"
+	},
+	"textToSpeech": {
+		"menu": "Text to speech",
+		"title": "Text to speech",
+		"description": "Type what the voice should say. It is added to the timeline at the playhead, one clip per paragraph.",
+		"textLabel": "Text",
+		"placeholder": "Type or paste what the voice should say…",
+		"parts": "{{count}} clips",
+		"language": "Language",
+		"chinese": "Chinese",
+		"english": "English",
+		"voice": "Voice",
+		"preview": "Preview voice",
+		"previewing": "Loading the voice…",
+		"notInstalled": "The offline voice is not installed. Install the complete offline package, or run npm run prepare:offline-tts on a development machine.",
+		"olderVoice": "This is the older voice: it reads one language per line and skips English words in Chinese text.",
+		"noVideo": "Open a video first.",
+		"tooMany": "The text has too many paragraphs. Keep it to {{max}} or fewer.",
+		"add": "Add to timeline",
+		"generating": "Making the voice…",
+		"error": "Could not make the voice:",
+		"nothingSpoken": "The voice could not say any of this text.",
+		"noRoom": "There is no room for the voice at the playhead. Move the playhead or free an audio track.",
+		"skipped": "{{count}} part(s) had nothing the voice could say and were skipped.",
+		"notPlaced": "{{count}} part(s) did not fit before the end of the video.",
+		"trimmed": "The voice was cut where the video ends.",
+		"added": "Voice added to the timeline",
+		"checking": "Checking offline voices…",
+		"statusFailed": "Could not check offline voices. Try again.",
+		"recheck": "Recheck voices"
 	}
 }

@@ -27,6 +27,7 @@ import type { ClipSequenceSpan } from "./core/timelineTypes";
 import { useTimelineAudioPeaks } from "./hooks/useTimelineAudioPeaks";
 import { useTimelineEditorRuntime } from "./hooks/useTimelineEditorRuntime";
 import { useTimelineRange } from "./hooks/useTimelineRange";
+import type { PlacedAudioClip } from "./hooks/utils/timelineAudioPlacement";
 import {
 	buildSourceSidecarPathCandidates,
 	buildTimelineSourceAudioTracks,
@@ -67,6 +68,7 @@ export interface TimelineEditorProps {
 	audioRegions?: AudioRegion[];
 	onAudioAdded?: (span: Span, audioPath: string, trackIndex?: number) => void;
 	onAudioSpanChange?: (id: string, span: Span, trackIndex?: number) => void;
+	onAudioSplit?: (id: string, splitMs: number) => void;
 	onAudioDelete?: (id: string) => void;
 	selectedAudioId?: string | null;
 	onSelectAudio?: (id: string | null) => void;
@@ -110,6 +112,11 @@ export interface TimelineEditorHandle {
 	splitClip: () => void;
 	addAnnotation: (trackIndex?: number) => void;
 	addAudio: (trackIndex?: number) => Promise<void>;
+	/** Adds existing audio files one after another from the playhead; returns where they went. */
+	addAudioClips: (
+		clips: Array<{ audioPath: string; durationMs: number }>,
+		gapMs?: number,
+	) => PlacedAudioClip[];
 	keyframes: { id: string; time: number }[];
 }
 
@@ -150,6 +157,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			audioRegions = [],
 			onAudioAdded,
 			onAudioSpanChange,
+			onAudioSplit,
 			onAudioDelete,
 			selectedAudioId,
 			onSelectAudio,
@@ -389,6 +397,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			audioRegions,
 			onAudioAdded,
 			onAudioSpanChange,
+			onAudioSplit,
 			onAudioDelete,
 			selectedAudioId,
 			onSelectAudio,

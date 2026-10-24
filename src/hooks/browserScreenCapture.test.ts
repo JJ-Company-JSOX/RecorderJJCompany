@@ -2,6 +2,36 @@ import { describe, expect, it, vi } from "vitest";
 import { acquireBrowserScreenCapture } from "./browserScreenCapture";
 
 describe("browser screen capture fallback", () => {
+	it("reports a successful video-only stream when system audio was requested", async () => {
+		const stream = { getAudioTracks: () => [] } as unknown as MediaStream;
+		const request = vi.fn().mockResolvedValue(stream);
+		const onAudioFallback = vi.fn();
+		expect(
+			await acquireBrowserScreenCapture({
+				request,
+				audio: true,
+				usePortal: false,
+				onAudioFallback,
+			}),
+		).toBe(stream);
+		expect(request).toHaveBeenCalledExactlyOnceWith(true);
+		expect(onAudioFallback).toHaveBeenCalledOnce();
+	});
+
+	it.each([
+		true,
+		false,
+	])("does not warn for a healthy stream with audio requested=%s", async (audio) => {
+		const stream = { getAudioTracks: () => (audio ? [{}] : []) } as unknown as MediaStream;
+		const onAudioFallback = vi.fn();
+		await acquireBrowserScreenCapture({
+			request: vi.fn().mockResolvedValue(stream),
+			audio,
+			usePortal: false,
+			onAudioFallback,
+		});
+		expect(onAudioFallback).not.toHaveBeenCalled();
+	});
 	for (const name of ["NotAllowedError", "AbortError"]) {
 		it(`does not reopen a dismissed Wayland portal (${name})`, async () => {
 			const error = new DOMException("Cancelled", name);

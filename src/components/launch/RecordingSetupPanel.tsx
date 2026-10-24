@@ -30,6 +30,9 @@ const copy = {
 		camera: "Camera",
 		microphone: "Microphone",
 		system: "System audio",
+		systemOffHint: "Computer sound is off. Turn on System audio to record videos or music.",
+		systemOnHint:
+			"Records sound from the default output device. Keep videos or music on that device while recording.",
 		off: "Off",
 		on: "On · captured with the screen",
 		default: "System default",
@@ -72,6 +75,8 @@ const copy = {
 		camera: "摄像头",
 		microphone: "麦克风",
 		system: "系统声音",
+		systemOffHint: "电脑声音已关闭。录制视频或音乐的原声，请开启系统声音。",
+		systemOnHint: "录制默认输出设备的声音。请让视频或音乐使用该设备播放。",
 		off: "关闭",
 		on: "开启 · 随屏幕捕获",
 		default: "系统默认设备",
@@ -433,6 +438,9 @@ export function RecordingSetupPanel(props: Props) {
 							))}
 						</select>
 					</label>
+					<p className={styles.audioHint} role="status">
+						{props.systemAudioEnabled ? m.systemOnHint : m.systemOffHint}
+					</p>
 					{props.webcamEnabled && props.canPreviewCamera && (
 						<label className={styles.preview}>
 							<input

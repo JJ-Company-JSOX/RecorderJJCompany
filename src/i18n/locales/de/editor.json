@@ -198,5 +198,35 @@
 	"preview": {
 		"fullscreen": "Vollbildvorschau",
 		"exitFullscreen": "Vollbild beenden (Esc)"
+	},
+	"textToSpeech": {
+		"menu": "Text zu Sprache",
+		"title": "Text zu Sprache",
+		"description": "Gib ein, was die Stimme sagen soll. Es wird an der Abspielposition in die Zeitleiste eingefügt, ein Clip pro Absatz.",
+		"textLabel": "Text",
+		"placeholder": "Text eingeben oder einfügen…",
+		"parts": "{{count}} Clips",
+		"language": "Sprache",
+		"chinese": "Chinesisch",
+		"english": "Englisch",
+		"voice": "Stimme",
+		"preview": "Stimme anhören",
+		"previewing": "Stimme wird geladen…",
+		"notInstalled": "Die Offline-Stimme ist nicht installiert. Installiere das vollständige Offline-Paket oder führe auf einem Entwicklungsrechner npm run prepare:offline-tts aus.",
+		"olderVoice": "Dies ist die ältere Stimme: Sie liest eine Sprache pro Zeile und überspringt englische Wörter in chinesischem Text.",
+		"noVideo": "Öffne zuerst ein Video.",
+		"tooMany": "Der Text hat zu viele Absätze. Höchstens {{max}}.",
+		"add": "Zur Zeitleiste hinzufügen",
+		"generating": "Stimme wird erstellt…",
+		"error": "Stimme konnte nicht erstellt werden:",
+		"nothingSpoken": "Die Stimme konnte nichts von diesem Text sprechen.",
+		"noRoom": "An der Abspielposition ist kein Platz für die Stimme. Verschiebe die Abspielposition oder gib eine Audiospur frei.",
+		"skipped": "{{count}} Teil(e) enthielten nichts Sprechbares und wurden übersprungen.",
+		"notPlaced": "{{count}} Teil(e) passten nicht mehr vor das Videoende.",
+		"trimmed": "Die Stimme wurde am Videoende abgeschnitten.",
+		"added": "Stimme zur Zeitleiste hinzugefügt",
+		"checking": "Checking offline voices…",
+		"statusFailed": "Could not check offline voices. Try again.",
+		"recheck": "Recheck voices"
 	}
 }

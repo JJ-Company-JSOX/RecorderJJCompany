@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { installDesktopBridge } from "./bridge";
+import { installDesktopBridge, installDesktopBridgeOverrides } from "./bridge";
 
 async function setup(page: Page, options = { chinese: false, selected: false }) {
 	await installDesktopBridge(page);
@@ -74,6 +74,33 @@ async function setup(page: Page, options = { chinese: false, selected: false }) 
 	await page.goto("/?windowType=hud-overlay");
 }
 
+test("native system audio startup failure is visible while screen recording remains available", async ({
+	page,
+}) => {
+	await installDesktopBridge(page);
+	await installDesktopBridgeOverrides(page, () => {
+		window.electronAPI.getPlatform = async () => "win32";
+		window.electronAPI.getCountdownDelay = async () => ({ success: true, delay: 0 });
+		window.electronAPI.isNativeWindowsCaptureAvailable = async () => ({ available: true });
+		window.electronAPI.startNativeScreenRecording = async (_source, options) => {
+			document.documentElement.dataset.systemAudioRequested = String(
+				options?.capturesSystemAudio,
+			);
+			return { success: true, systemAudioUnavailable: true };
+		};
+		window.electronAPI.setRecordingState = async (active) => {
+			document.documentElement.dataset.captureActive = String(active);
+		};
+	});
+	await page.goto("/?windowType=hud-overlay");
+	await page.getByTitle("Record", { exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-system-audio-requested", "true");
+	await expect(
+		page.getByText("System audio could not be captured.", { exact: false }),
+	).toBeVisible();
+	await expect(page.locator("html")).toHaveAttribute("data-capture-active", "true");
+});
+
 test("screen selection is filtered, explicit, and enables recording only after confirmation", async ({
 	page,
 }) => {
@@ -132,8 +159,12 @@ test("source enumeration failure can be refreshed without losing the previous so
 
 test("device settings use the existing recording preferences", async ({ page }) => {
 	await setup(page);
+	await expect(page.getByText("Computer sound is off.", { exact: false })).toBeVisible();
 	await page.getByRole("combobox", { name: "Microphone", exact: true }).selectOption("mic-1");
 	await page.getByRole("combobox", { name: "System audio", exact: true }).selectOption("on");
+	await expect(
+		page.getByText("Records sound from the default output device.", { exact: false }),
+	).toBeVisible();
 	await expect
 		.poll(async () =>
 			JSON.parse((await page.locator("html").getAttribute("data-preferences")) ?? "{}"),

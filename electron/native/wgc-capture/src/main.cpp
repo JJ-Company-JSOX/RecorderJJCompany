@@ -410,6 +410,12 @@ int main(int argc, char* argv[]) {
     if (audioInitialized) {
         audioActive = loopback.start();
     }
+    if (config.captureSystemAudio && !audioActive) {
+        // Same pipe as "Recording started" so Electron cannot miss this status
+        // when stdout and stderr arrive in a different order.
+        std::cout << "SYSTEM_AUDIO_CAPTURE_UNAVAILABLE" << std::endl;
+        std::cout.flush();
+    }
     if (micInitialized) {
         micActive = micCapture.start();
         if (!micActive) {

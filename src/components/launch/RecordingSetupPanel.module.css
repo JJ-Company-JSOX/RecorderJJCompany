@@ -229,6 +229,13 @@
 	font-weight: 500;
 	margin: 1px 0 17px;
 }
+.audioHint {
+	color: #b9c4d1;
+	font-size: 11px;
+	line-height: 1.5;
+	margin: 0;
+	grid-column: 1 / -1;
+}
 .devices label {
 	display: flex;
 	flex-direction: column;

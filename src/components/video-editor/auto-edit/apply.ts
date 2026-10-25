@@ -68,11 +68,15 @@ export function applyEditPlan(
 				end = boundaries[i + 1];
 			const edit = changes.find((s) => start >= s.startMs && end <= s.endMs);
 			if (edit?.kind === "trim") continue;
+			const id = clips.some((c) => c.id === clip.id)
+				? `${clip.id}-auto-${plan.id}-${i}`
+				: clip.id;
 			clips.push({
 				...clip,
-				id: clips.some((c) => c.id === clip.id)
-					? `${clip.id}-auto-${plan.id}-${i}`
-					: clip.id,
+				id,
+				...(id !== clip.id
+					? { parentClipIds: [...new Set([...(clip.parentClipIds ?? []), clip.id])] }
+					: {}),
 				sourceStartMs: getClipSourceStartMs(clip) + (start - clip.startMs) * clip.speed,
 				startMs: mapTime(start),
 				endMs: mapTime(end),

@@ -1,3 +1,4 @@
+import { captionMatchesClip } from "./captionTimeline";
 import { Application, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import { getPreviewResolution, usePreviewQuality } from "@/lib/previewQuality";
 import { MotionBlurFilter } from "pixi-filters/motion-blur";
@@ -640,13 +641,16 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			measurementContext.font = `${CAPTION_FONT_WEIGHT} ${fontSize}px ${autoCaptionSettings.fontFamily || getDefaultCaptionFontFamily()}`;
 
 			return buildActiveCaptionLayout({
-				cues: autoCaptions,
+				cues: (() => {
+					const clip = findPreviewClipAtTimelineTime(timelineTime * 1000, clipRegions);
+					return clip ? autoCaptions.filter((cue) => captionMatchesClip(cue, clip)) : [];
+				})(),
 				timeMs: Math.round(currentTime * 1000),
 				settings: autoCaptionSettings,
 				maxWidthPx: maxTextWidthPx,
 				measureText: (text) => measurementContext.measureText(text).width,
 			});
-		}, [autoCaptionSettings, autoCaptions, currentTime]);
+		}, [autoCaptionSettings, autoCaptions, currentTime, timelineTime, clipRegions]);
 		const isCaptionEditing = captionEditSession !== null;
 		const captionEditDraft = captionEditSession?.draft ?? "";
 		const captionEditTargetId = captionEditSession?.target.id ?? null;

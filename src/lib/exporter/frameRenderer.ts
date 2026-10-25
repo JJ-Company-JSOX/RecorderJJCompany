@@ -44,7 +44,10 @@ import {
 } from "@/components/video-editor/videoPlayback/motionSmoothing";
 import { getSceneEffectMetrics } from "@/components/video-editor/videoPlayback/sceneEffects";
 import { resolveSceneZoomTarget } from "@/components/video-editor/videoPlayback/sceneMotion";
-import { getWebcamMediaTargetTimeSeconds, isWebcamVisibleAtSourceTime } from "@/components/video-editor/videoPlayback/webcamSync";
+import {
+	getWebcamMediaTargetTimeSeconds,
+	isWebcamVisibleAtSourceTime,
+} from "@/components/video-editor/videoPlayback/webcamSync";
 import {
 	applyZoomTransform,
 	computeZoomTransform,
@@ -76,7 +79,6 @@ import { renderCaptions } from "./captionRenderer";
 import { ForwardFrameSource } from "./forwardFrameSource";
 import { resolveMediaElementSource } from "./localMediaSource";
 
-
 interface FrameRenderConfig {
 	timelineEffects?: boolean;
 	width: number;
@@ -107,6 +109,8 @@ interface FrameRenderConfig {
 	videoHeight: number;
 	annotationRegions?: AnnotationRegion[];
 	autoCaptions?: CaptionCue[];
+	/** Caption cues are preprojected for an edited timeline; omitted means legacy source time. */
+	captionCoordinateSpace?: "source" | "timeline";
 	autoCaptionSettings?: AutoCaptionSettings;
 	speedRegions?: SpeedRegion[];
 	previewWidth?: number;
@@ -1525,7 +1529,9 @@ export class FrameRenderer {
 				this.config.autoCaptionSettings,
 				this.config.width,
 				this.config.height,
-				timestamp / 1000,
+				this.config.captionCoordinateSpace === "timeline"
+					? backgroundTimelineTimestamp / 1000
+					: timestamp / 1000,
 			);
 		}
 	}
@@ -1739,7 +1745,11 @@ export class FrameRenderer {
 		const webcam = this.config.webcam;
 		const webcamDecodedFrame = this.webcamDecodedFrame;
 		const webcamVideo = this.webcamVideoElement;
-		if (!webcam?.enabled || !isWebcamVisibleAtSourceTime(webcam, this.currentVideoTime) || (!webcamDecodedFrame && !webcamVideo)) {
+		if (
+			!webcam?.enabled ||
+			!isWebcamVisibleAtSourceTime(webcam, this.currentVideoTime) ||
+			(!webcamDecodedFrame && !webcamVideo)
+		) {
 			return;
 		}
 

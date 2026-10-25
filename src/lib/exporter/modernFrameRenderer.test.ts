@@ -817,7 +817,10 @@ describe("ModernFrameRenderer webcam export fallback", () => {
 });
 
 describe("ModernFrameRenderer frame sequencing", () => {
-	it("resumes visual layers after a background gap", async () => {
+	it.each([
+		undefined,
+		"timeline",
+	] as const)("resumes layers after a gap with %s caption coordinates", async (captionCoordinateSpace) => {
 		const renderer = createRenderer();
 		const sceneCanvas = createMockCanvas();
 		const gapCanvas = createMockCanvas();
@@ -836,6 +839,7 @@ describe("ModernFrameRenderer frame sequencing", () => {
 				width: 1920,
 				height: 1080,
 				timelineEffects: true,
+				captionCoordinateSpace,
 				zoomMotionBlur: 0.5,
 			},
 			app: { canvas: sceneCanvas, render },
@@ -879,6 +883,8 @@ describe("ModernFrameRenderer frame sequencing", () => {
 		expect(syncWebcam).toHaveBeenLastCalledWith(6);
 		expect(syncBackground).toHaveBeenLastCalledWith(2);
 		expect(updateAnnotations).toHaveBeenLastCalledWith(2000);
-		expect(updateCaptions).toHaveBeenLastCalledWith(6000);
+		expect(updateCaptions).toHaveBeenLastCalledWith(
+			captionCoordinateSpace === "timeline" ? 2000 : 6000,
+		);
 	});
 });

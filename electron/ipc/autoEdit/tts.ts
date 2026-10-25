@@ -708,6 +708,8 @@ export async function speakLine(
 					return null;
 				throw error;
 			});
+		// Native inference cannot stop mid-sentence; discard its result as soon as it returns.
+		signal?.throwIfAborted();
 		const shaped = audio?.samples.length
 			? shapeSentence(audio.samples, audio.sampleRate)
 			: null;
@@ -983,7 +985,7 @@ export async function synthesizeBundledNarration(options: {
 	for (const cue of cues)
 		if (!voice.speaks(voice.spoken?.(cue.text) ?? cue.text))
 			throw new Error(voice.wrongLanguage);
-	return use(async (tts) => {
+	const clips = await use(async (tts) => {
 		// Earlier audio tracks keep pointing at their own files, so never reuse a name.
 		const run = `${language}-${Date.now().toString(36)}`;
 		await fs.mkdir(outputDirectory, { recursive: true });
@@ -1000,16 +1002,20 @@ export async function synthesizeBundledNarration(options: {
 				kokoro: voice.bundle === "kokoro",
 				signal,
 			});
+			signal?.throwIfAborted();
 			// Nothing in it the voice can say: left out, and the editor reports it.
 			if (!line) continue;
 			const audioPath = path.join(outputDirectory, `narration-${run}-${cue.id}.wav`);
 			// Written by Node rather than sherpa-onnx's writeWave, which opens the path with
 			// narrow file calls (a profile folder such as C:\Users\张三\ fails there) and only
 			// returns false when the file cannot be written.
+			signal?.throwIfAborted();
 			try {
-				await fs.writeFile(audioPath, pcm16Wav(line.samples, line.sampleRate));
+				await fs.writeFile(audioPath, pcm16Wav(line.samples, line.sampleRate), { signal });
+				signal?.throwIfAborted();
 			} catch (error) {
 				await fs.rm(audioPath, { force: true }).catch(() => undefined);
+				signal?.throwIfAborted();
 				throw new Error(
 					`The narration audio could not be saved: ${error instanceof Error ? error.message : String(error)}`,
 				);
@@ -1023,6 +1029,8 @@ export async function synthesizeBundledNarration(options: {
 		}
 		return results;
 	});
+	signal?.throwIfAborted();
+	return clips;
 }
 
 /** Says one short fixed sentence with the chosen voice, for the editor to play. */
@@ -1044,6 +1052,7 @@ export async function previewBundledVoice(options: {
 			signal,
 		}),
 	);
+	signal?.throwIfAborted();
 	if (!line) throw new Error("Narration preview produced no audio");
 	return { samples: line.samples, sampleRate: line.sampleRate, durationMs: line.durationMs };
 }

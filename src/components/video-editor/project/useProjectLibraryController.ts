@@ -1,3 +1,4 @@
+import { captionRenderConfig } from "@/lib/exporter/captionProjection";
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: grouped editor domain objects contain the thumbnail renderer dependencies. */
 import { type RefObject, useCallback, useEffect, useRef } from "react";
 import { PROJECT_THUMBNAIL_WIDTH, PROJECT_THUMBNAIL_HEIGHT } from "@/lib/projectThumbnail";
@@ -200,7 +201,7 @@ export function useProjectLibraryController({
 					videoWidth: previewVideo.videoWidth,
 					videoHeight: previewVideo.videoHeight,
 					annotationRegions,
-					autoCaptions,
+					...captionRenderConfig(autoCaptions, clipRegions),
 					autoCaptionSettings,
 					speedRegions: (() => {
 						const clipDerived: SpeedRegion[] = clipRegions

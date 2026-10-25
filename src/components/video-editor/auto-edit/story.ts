@@ -1,3 +1,12 @@
+import {
+	MAX_STORY_TRANSCRIPT_CHARACTERS,
+	MAX_STORY_TRANSCRIPT_CUES,
+	MAX_STORY_TRANSCRIPT_CUE_CHARACTERS,
+	storyBriefCharacterCount,
+	storyTextBudget,
+	storySpanCoveredByScenes,
+	type StoryTranscriptCue,
+} from "./storyTranscript";
 import { getClipSourceStartMs, sortClipRegions, type ClipRegion } from "../types";
 export interface StoryBrief {
 	topic: string;
@@ -6,6 +15,8 @@ export interface StoryBrief {
 	ending: string;
 	notes: string;
 	analyzeVideo: boolean;
+	/** Explicit consent to include existing edited original-speech subtitles in local planning. */
+	includeTranscript?: boolean;
 }
 export interface StoryScene {
 	id: string;
@@ -18,6 +29,8 @@ export interface StoryRequest {
 	scenes: StoryScene[];
 	videoPath: string;
 	style?: "concise" | "tutorial" | "detailed";
+	/** Existing subtitle evidence mapped to timeline milliseconds, never a raw media path. */
+	transcript?: StoryTranscriptCue[];
 }
 export const emptyStoryBrief = (): StoryBrief => ({
 	topic: "",
@@ -26,6 +39,7 @@ export const emptyStoryBrief = (): StoryBrief => ({
 	ending: "",
 	notes: "",
 	analyzeVideo: true,
+	includeTranscript: false,
 });
 export function isStoryRequest(value: unknown): value is StoryRequest {
 	if (!value || typeof value !== "object") return false;
@@ -35,10 +49,12 @@ export function isStoryRequest(value: unknown): value is StoryRequest {
 		!b ||
 		(v.style !== undefined && !["concise", "tutorial", "detailed"].includes(v.style)) ||
 		typeof b.analyzeVideo !== "boolean" ||
+		(b.includeTranscript !== undefined && typeof b.includeTranscript !== "boolean") ||
 		![b.topic, b.audience, b.facts, b.ending, b.notes].every(
 			(t) => typeof t === "string" && t.length <= 2000,
 		) ||
 		!b.topic.trim() ||
+		storyBriefCharacterCount(b) > storyTextBudget(b) ||
 		typeof v.videoPath !== "string" ||
 		v.videoPath.length > 4096 ||
 		!Array.isArray(v.scenes) ||
@@ -46,7 +62,7 @@ export function isStoryRequest(value: unknown): value is StoryRequest {
 		v.scenes.length > 8
 	)
 		return false;
-	return v.scenes.every(
+	const validScenes = v.scenes.every(
 		(s, i) =>
 			s &&
 			s.id === `story-${i + 1}` &&
@@ -55,6 +71,34 @@ export function isStoryRequest(value: unknown): value is StoryRequest {
 			) &&
 			s.endMs > s.startMs &&
 			(i === 0 || s.startMs >= v.scenes[i - 1].endMs),
+	);
+	if (!validScenes) return false;
+	if (v.transcript !== undefined && b.includeTranscript !== true) return false;
+	if (v.transcript === undefined) return true;
+	if (!Array.isArray(v.transcript) || v.transcript.length > MAX_STORY_TRANSCRIPT_CUES)
+		return false;
+	let textCharacters = 0;
+	for (let i = 0; i < v.transcript.length; i++) {
+		const cue = v.transcript[i];
+		if (
+			!cue ||
+			typeof cue.text !== "string" ||
+			!cue.text.trim() ||
+			cue.text.length > MAX_STORY_TRANSCRIPT_CUE_CHARACTERS ||
+			!Number.isFinite(cue.startMs) ||
+			!Number.isFinite(cue.endMs) ||
+			cue.startMs < 0 ||
+			cue.endMs <= cue.startMs ||
+			cue.endMs > 86400000 ||
+			(i > 0 && cue.startMs < v.transcript[i - 1].startMs) ||
+			!storySpanCoveredByScenes(cue, v.scenes)
+		)
+			return false;
+		textCharacters += cue.text.length;
+	}
+	return (
+		textCharacters <= MAX_STORY_TRANSCRIPT_CHARACTERS &&
+		textCharacters + storyBriefCharacterCount(b) <= storyTextBudget(b)
 	);
 }
 /** Up to eight real clip spans, evenly covering kept footage; no invented moments in gaps. */

@@ -42,6 +42,7 @@ export function useEditorHistory({
 		annotationRegions,
 		audioRegions,
 		autoCaptions,
+		storyWorkspace,
 		selectedZoomId,
 		selectedClipId,
 		selectedAnnotationId,
@@ -52,6 +53,7 @@ export function useEditorHistory({
 		setAnnotationRegions,
 		setAudioRegions,
 		setAutoCaptions,
+		setStoryWorkspace,
 		setSelectedZoomId,
 		setSelectedClipId,
 		setSelectedAnnotationId,
@@ -79,6 +81,7 @@ export function useEditorHistory({
 			annotationRegions,
 			audioRegions,
 			autoCaptions,
+			storyWorkspace,
 			selectedZoomId,
 			selectedClipId,
 			selectedAnnotationId,
@@ -93,6 +96,7 @@ export function useEditorHistory({
 			annotationRegions,
 			audioRegions,
 			autoCaptions,
+			storyWorkspace,
 			selectedZoomId,
 			selectedClipId,
 			selectedAnnotationId,
@@ -112,6 +116,7 @@ export function useEditorHistory({
 			setAnnotationRegions(cloned.annotationRegions);
 			setAudioRegions(cloned.audioRegions);
 			setAutoCaptions(cloned.autoCaptions);
+			setStoryWorkspace(cloned.storyWorkspace ?? null);
 			setSelectedZoomId(cloned.selectedZoomId);
 			setSelectedClipId(cloned.selectedClipId);
 			setSelectedAnnotationId(cloned.selectedAnnotationId);
@@ -145,6 +150,7 @@ export function useEditorHistory({
 			setAnnotationRegions,
 			setAudioRegions,
 			setAutoCaptions,
+			setStoryWorkspace,
 			setSelectedZoomId,
 			setSelectedClipId,
 			setSelectedAnnotationId,

@@ -968,3 +968,72 @@ describe("loading the sherpa-onnx voice engine", () => {
 		expect(out).toBe("undefined function");
 	});
 });
+
+it("rejects a native sentence that finishes after cancellation instead of shaping or returning it", async () => {
+	const controller = new AbortController();
+	const generateAsync = vi.fn(async () => {
+		controller.abort();
+		return { samples: tone(1), sampleRate: 8000 };
+	});
+	await expect(
+		speakLine({ generateAsync }, "Finish this sentence. Then another.", {
+			speakerId: 0,
+			signal: controller.signal,
+		}),
+	).rejects.toMatchObject({ name: "AbortError" });
+	expect(generateAsync).toHaveBeenCalledTimes(1);
+});
+
+it("does not write a WAV or start the next cue when native speech finishes after cancellation", async () => {
+	asWindows();
+	const { root } = await fixture();
+	const out = path.join(root, "cancel-after-native");
+	const controller = new AbortController();
+	mocks.createAsync.mockResolvedValue({ generateAsync: mocks.generateAsync });
+	mocks.generateAsync.mockImplementation(async () => {
+		controller.abort();
+		return { samples: tone(1), sampleRate: 8000 };
+	});
+	await expect(
+		synthesizeBundledNarration({
+			cues: [
+				{ id: "first", text: "你好。" },
+				{ id: "second", text: "再见。" },
+			],
+			outputDirectory: out,
+			signal: controller.signal,
+		}),
+	).rejects.toMatchObject({ name: "AbortError" });
+	expect(mocks.generateAsync).toHaveBeenCalledTimes(1);
+	expect(await fs.readdir(out)).toEqual([]);
+});
+
+it("removes the just-written WAV and preserves cancellation when aborted during the write", async () => {
+	asWindows();
+	const { root } = await fixture();
+	const out = path.join(root, "cancel-during-write");
+	const controller = new AbortController();
+	mocks.createAsync.mockResolvedValue({ generateAsync: mocks.generateAsync });
+	speaking();
+	const write = fs.writeFile.bind(fs);
+	const spy = vi.spyOn(fs, "writeFile").mockImplementation(async (...args) => {
+		await write(...args);
+		if (String(args[0]).endsWith(".wav")) controller.abort();
+	});
+	try {
+		await expect(
+			synthesizeBundledNarration({
+				cues: [
+					{ id: "first", text: "你好。" },
+					{ id: "second", text: "再见。" },
+				],
+				outputDirectory: out,
+				signal: controller.signal,
+			}),
+		).rejects.toMatchObject({ name: "AbortError" });
+	} finally {
+		spy.mockRestore();
+	}
+	expect(mocks.generateAsync).toHaveBeenCalledTimes(1);
+	expect(await fs.readdir(out)).toEqual([]);
+});

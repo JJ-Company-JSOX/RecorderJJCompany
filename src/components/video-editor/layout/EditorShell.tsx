@@ -142,6 +142,10 @@ export function EditorShell(props: Props) {
 		],
 	);
 	// Memoized so the always-mounted AI panel skips re-rendering while the playhead moves.
+	const openStoryCaptions = useCallback(
+		() => ui.setActiveEffectSection("captions"),
+		[ui.setActiveEffectSection],
+	);
 	const autoEditState = useMemo(
 		() => ({
 			clipRegions: timeline.clipRegions,
@@ -482,6 +486,9 @@ export function EditorShell(props: Props) {
 							state={autoEditState}
 							source={snapshot.currentSourcePath ?? ""}
 							cursor={timeline.cursorTelemetry}
+							storyWorkspace={timeline.storyWorkspace}
+							onStoryWorkspaceChange={timeline.setStoryWorkspace}
+							onOpenCaptions={openStoryCaptions}
 							onSeek={playback.handleTimelineSeek}
 							onApply={applyAutoEdit}
 						/>,

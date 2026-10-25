@@ -340,7 +340,9 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 		async (event, request: StoryRequest, model: string, language?: string) => {
 			try {
 				if (!isStoryRequest(request) || !isNarrationLanguage(language))
-					throw Error("Invalid story request");
+					throw Error(
+						"Invalid story request: check scene timing, subtitle consent and text limits (2000 combined characters with video frames or 4000 without, up to 80 subtitle cues / 3000 subtitle characters).",
+					);
 				const draft = await runLocalTask(event, async (signal) => {
 					const normalized =
 						request.brief.analyzeVideo && normalizeVideoSourcePath(request.videoPath);

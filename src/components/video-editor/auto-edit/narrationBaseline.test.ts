@@ -75,3 +75,11 @@ it("ignores its own previous voice-over so regeneration remains possible", () =>
 		),
 	).toBe(narrationBaselineFor(state, "a.mp4"));
 });
+
+it("survives property order changes in serialized captions", () => {
+	const first = base();
+	first.autoCaptions = [{ id: "c", startMs: 0, endMs: 1000, text: "Hello" }];
+	const second = base();
+	second.autoCaptions = [{ text: "Hello", endMs: 1000, id: "c", startMs: 0 }];
+	expect(narrationBaselineFor(first, "a.mp4")).toBe(narrationBaselineFor(second, "a.mp4"));
+});

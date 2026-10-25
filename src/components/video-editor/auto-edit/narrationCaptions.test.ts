@@ -144,3 +144,75 @@ describe("narration subtitles", () => {
 		expect(skipped).toBe(1);
 	});
 });
+
+it("keeps distinct story subtitles for repeated uses of the same source footage", async () => {
+	const { projectCaptionCues } = await import("../captionTimeline");
+	const s = state({
+		clipRegions: [
+			{ id: "first", startMs: 0, endMs: 4000, sourceStartMs: 0, speed: 1 },
+			{ id: "second", startMs: 4000, endMs: 8000, sourceStartMs: 0, speed: 1 },
+		],
+	});
+	const { cues, skipped } = narrationCaptions(
+		s,
+		[region("first", 1000, 2000), region("second", 5000, 6000)],
+		[
+			{ id: "first", text: "First scene." },
+			{ id: "second", text: "Second scene." },
+		],
+	);
+	expect(skipped).toBe(0);
+	expect(cues.map((c) => c.clipId)).toEqual(["first", "second"]);
+	expect(
+		projectCaptionCues(cues, s.clipRegions).map((c) => [c.text, c.startMs, c.endMs]),
+	).toEqual([
+		["First scene.", 1000, 2000],
+		["Second scene.", 5000, 6000],
+	]);
+});
+
+it("splits a single spoken subtitle chunk across a source cut instead of losing its tail", () => {
+	const { cues, skipped } = narrationCaptions(
+		state(),
+		[region("cross", 3000, 5000)],
+		[{ id: "cross", text: "Across a cut." }],
+		{ cross: [{ text: "Across a cut.", endMs: 2000 }] },
+	);
+	expect(skipped).toBe(0);
+	expect(cues.map((c) => [c.clipId, c.startMs, c.endMs])).toEqual([
+		["a", 3000, 4000],
+		["b", 10000, 12000],
+	]);
+});
+
+it("bound subtitles on another source reuse do not block this scene, but real speech does", () => {
+	const repeated = [
+		{ id: "first", startMs: 0, endMs: 4000, sourceStartMs: 0, speed: 1 },
+		{ id: "second", startMs: 4000, endMs: 8000, sourceStartMs: 0, speed: 1 },
+	];
+	const s = state({
+		clipRegions: repeated,
+		autoCaptions: [
+			{ id: "old", clipId: "first", startMs: 1000, endMs: 2000, text: "Only first" },
+		],
+	});
+	expect(
+		narrationCaptions(
+			s,
+			[region("second", 5000, 6000)],
+			[{ id: "second", text: "Now second." }],
+		).skipped,
+	).toBe(0);
+	expect(
+		narrationCaptions(
+			{
+				...s,
+				autoCaptions: [
+					{ id: "speech", startMs: 1000, endMs: 2000, text: "Original speech" },
+				],
+			},
+			[region("second", 5000, 6000)],
+			[{ id: "second", text: "Now second." }],
+		).skipped,
+	).toBe(1);
+});

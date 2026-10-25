@@ -91,6 +91,8 @@ vi.mock("./localMediaSource", () => ({
 }));
 
 import { FrameRenderer } from "./frameRenderer";
+import { renderCaptions } from "./captionRenderer";
+vi.mock("./captionRenderer", () => ({ renderCaptions: vi.fn() }));
 
 const rendererSource = readFileSync(
 	fileURLToPath(new URL("./frameRenderer.ts", import.meta.url)),
@@ -603,4 +605,38 @@ describe("FrameRenderer webcam export path", () => {
 		expect(renderer.backgroundForwardFrameSource).toBeNull();
 		expect(renderer.backgroundVideoElement).toBeTruthy();
 	});
+});
+
+it.each([
+	undefined,
+	"timeline",
+] as const)("burns captions using %s coordinates without changing media source time", async (captionCoordinateSpace) => {
+	const renderer = createRenderer();
+	Object.assign(renderer, {
+		config: {
+			width: 1920,
+			height: 1080,
+			timelineEffects: true,
+			captionCoordinateSpace,
+			autoCaptions: [{ id: "c", startMs: 0, endMs: 3000, text: "Story" }],
+			autoCaptionSettings: {},
+		},
+		app: { stage: {}, renderer: { render: vi.fn() } },
+		videoContainer: {},
+		cameraContainer: { visible: true },
+		compositeCtx: createMockContext(),
+		videoSprite: {},
+		videoTextureSource: { update: vi.fn() },
+		layoutCache: {
+			stageSize: { width: 1920, height: 1080 },
+			maskRect: { x: 0, y: 0, width: 1920, height: 1080 },
+		},
+		updateLayout: vi.fn(),
+		updateAnimationState: vi.fn(),
+		compositeWithShadows: vi.fn(),
+	});
+	await renderer.renderFrame({} as VideoFrame, 6000000, 6000000, 33333, 2000000);
+	expect(vi.mocked(renderCaptions).mock.calls.at(-1)?.[5]).toBe(
+		captionCoordinateSpace === "timeline" ? 2000 : 6000,
+	);
 });

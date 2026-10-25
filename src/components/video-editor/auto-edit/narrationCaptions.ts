@@ -1,4 +1,4 @@
-import { captionSpanToSource } from "../captionTimeline";
+import { captionMatchesClip, captionSpanToSource } from "../captionTimeline";
 import { type AudioRegion, type CaptionCue, sortClipRegions } from "../types";
 import { type EditState, overlaps, validSpan } from "./plan";
 import { splitNarrationLine } from "./narrationText";
@@ -50,22 +50,27 @@ export function narrationCaptions(
 			const start = chunkStart;
 			const end = region.startMs + chunk.endMs;
 			chunkStart = end;
-			const clip = clips.find((c) => start >= c.startMs && start < c.endMs);
-			const span = clip && captionSpanToSource(clip, { start, end });
-			if (
-				!span ||
-				!validSpan(span) ||
-				[...state.autoCaptions, ...cues].some((c) => overlaps(c, span))
-			) {
-				skipped++;
-				return;
+			const pieces = clips.filter((clip) => start < clip.endMs && end > clip.startMs);
+			if (!pieces.length) skipped++;
+			for (const clip of pieces) {
+				const span = captionSpanToSource(clip, { start, end });
+				if (
+					!validSpan(span) ||
+					[...state.autoCaptions, ...cues].some(
+						(c) => captionMatchesClip(c, clip) && overlaps(c, span),
+					)
+				) {
+					skipped++;
+					continue;
+				}
+				cues.push({
+					id: `${region.id}-${index + 1}-${crypto.randomUUID()}`,
+					clipId: clip.id,
+					startMs: span.startMs,
+					endMs: span.endMs,
+					text: chunk.text,
+				});
 			}
-			cues.push({
-				id: `${region.id}-${index + 1}-${crypto.randomUUID()}`,
-				startMs: span.startMs,
-				endMs: span.endMs,
-				text: chunk.text,
-			});
 		});
 	}
 	return { cues, skipped };

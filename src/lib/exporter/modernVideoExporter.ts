@@ -1,3 +1,4 @@
+import { captionRenderConfig } from "./captionProjection";
 import type {
 	AnnotationRegion,
 	AudioRegion,
@@ -631,7 +632,7 @@ export class ModernVideoExporter {
 					videoWidth: videoInfo.width,
 					videoHeight: videoInfo.height,
 					annotationRegions: this.config.annotationRegions,
-					autoCaptions: this.config.autoCaptions,
+					...captionRenderConfig(this.config.autoCaptions, this.config.clipRegions),
 					autoCaptionSettings: this.config.autoCaptionSettings,
 					speedRegions: this.config.speedRegions,
 					previewWidth: this.config.previewWidth,

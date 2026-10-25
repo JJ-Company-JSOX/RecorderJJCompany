@@ -1,4 +1,5 @@
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: editor domain setters and refs are stable. */
+import { normalizeStoryWorkspace } from "../auto-edit/storyWorkspace";
 import {
 	type Dispatch,
 	type MutableRefObject,
@@ -86,6 +87,9 @@ export function useProjectLifecycle(input: Input) {
 		const persistedEditor = stripPersistedDevMotionBlurSettings(loadedProject.editor ?? {});
 		const editor = normalizeProjectEditor({
 			...persistedEditor,
+			storyWorkspace: normalizeStoryWorkspace(persistedEditor.storyWorkspace, {
+				clearApproval: true,
+			}),
 			borderRadius:
 				loadedProject.version < 2 && typeof persistedEditor.borderRadius === "number"
 					? persistedEditor.borderRadius === 0
@@ -184,6 +188,7 @@ export function useProjectLifecycle(input: Input) {
 		timeline.setSourceAudioTrackSettingsByClip(editor.sourceAudioTrackSettingsByClip ?? {});
 		timeline.setDefaultSourceAudioTrackSettings(editor.defaultSourceAudioTrackSettings ?? {});
 		timeline.setAutoCaptions(editor.autoCaptions);
+		timeline.setStoryWorkspace(editor.storyWorkspace ?? null);
 		timeline.setAutoCaptionSettings(editor.autoCaptionSettings);
 		current.setAspectRatio(editor.aspectRatio);
 		timeline.setSelectedZoomId(null);
@@ -339,6 +344,7 @@ export function useProjectLifecycle(input: Input) {
 		timeline.setDefaultSourceAudioTrackSettings({});
 		timeline.setHasClipSourceAudio(false);
 		timeline.setAutoCaptions([]);
+		timeline.setStoryWorkspace(null);
 		timeline.setAutoCaptionSettings((previous) => ({ ...previous, enabled: false }));
 		timeline.setSelectedZoomId(null);
 		timeline.setSelectedClipId(null);

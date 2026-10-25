@@ -1,3 +1,4 @@
+import { captionRenderConfig } from "./captionProjection";
 import { requiresClipTimelineRendering } from "./clipTimeline";
 import type {
 	AnnotationRegion,
@@ -244,7 +245,7 @@ export class VideoExporter {
 				videoWidth: videoInfo.width,
 				videoHeight: videoInfo.height,
 				annotationRegions: this.config.annotationRegions,
-				autoCaptions: this.config.autoCaptions,
+				...captionRenderConfig(this.config.autoCaptions, this.config.clipRegions),
 				autoCaptionSettings: this.config.autoCaptionSettings,
 				speedRegions: this.config.speedRegions,
 				previewWidth: this.config.previewWidth,

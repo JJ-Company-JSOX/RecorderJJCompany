@@ -15,11 +15,21 @@ export function captionSpanToSource(clip: ClipRegion, span: { start: number; end
 	return { startMs: sourceTime(span.start), endMs: sourceTime(span.end) };
 }
 
+/** Bound narration follows only its intended clip and explicit split/trim descendants. */
+export function captionMatchesClip(cue: Pick<CaptionCue, "clipId">, clip: ClipRegion): boolean {
+	return (
+		cue.clipId === undefined ||
+		cue.clipId === clip.id ||
+		!!clip.parentClipIds?.includes(cue.clipId)
+	);
+}
+
 export function projectCaptionCues(cues: CaptionCue[], clips: ClipRegion[]) {
 	return sortClipRegions(clips).flatMap((clip) => {
 		const sourceStart = getClipSourceStartMs(clip);
 		const sourceEnd = getClipSourceEndMs(clip);
 		return cues.flatMap((cue) => {
+			if (!captionMatchesClip(cue, clip)) return [];
 			const start = Math.max(cue.startMs, sourceStart);
 			const end = Math.min(cue.endMs, sourceEnd);
 			if (start >= end) return [];

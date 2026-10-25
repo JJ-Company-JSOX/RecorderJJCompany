@@ -1,3 +1,4 @@
+import type { StoryWorkspace } from "../auto-edit/storyWorkspace";
 import { useState } from "react";
 import type { SourceAudioTrackSettings } from "../audio/audioTypes";
 import type {
@@ -14,6 +15,7 @@ import type {
 import { DEFAULT_AUTO_CAPTION_SETTINGS } from "../types";
 
 export function useTimelineState() {
+	const [storyWorkspace, setStoryWorkspace] = useState<StoryWorkspace | null>(null);
 	const [zoomRegions, setZoomRegions] = useState<ZoomRegion[]>([]);
 	const [cursorTelemetry, setCursorTelemetry] = useState<CursorTelemetryPoint[]>([]);
 	const [cursorTelemetrySourcePath, setCursorTelemetrySourcePath] = useState<string | null>(null);
@@ -40,6 +42,8 @@ export function useTimelineState() {
 	);
 
 	return {
+		storyWorkspace,
+		setStoryWorkspace,
 		zoomRegions,
 		setZoomRegions,
 		cursorTelemetry,

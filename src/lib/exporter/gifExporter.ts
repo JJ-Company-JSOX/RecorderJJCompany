@@ -1,3 +1,4 @@
+import { captionRenderConfig } from "./captionProjection";
 import GIF from "gif.js";
 import type {
 	AnnotationRegion,
@@ -125,7 +126,7 @@ export function buildGifFrameRendererConfig(
 		videoWidth: videoInfo.width,
 		videoHeight: videoInfo.height,
 		annotationRegions: config.annotationRegions,
-		autoCaptions: config.autoCaptions,
+		...captionRenderConfig(config.autoCaptions, config.clipRegions),
 		autoCaptionSettings: config.autoCaptionSettings,
 		speedRegions: config.speedRegions,
 		previewWidth: config.previewWidth,

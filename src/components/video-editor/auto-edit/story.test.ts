@@ -69,3 +69,78 @@ it("rejects story timing in gaps or overlaps and keeps fitted audio in its scene
 	});
 	expect(() => placeStoryAudio([{ id: "story-1", durationMs: 5000 }], cues)).toThrow("story-1");
 });
+
+it("requires transcript consent and validates bounded timeline-aligned subtitle evidence", () => {
+	const r = {
+		brief: { ...emptyStoryBrief(), topic: "Product", includeTranscript: true },
+		videoPath: "test.mp4",
+		scenes: [{ id: "story-1", startMs: 0, endMs: 10000, sourceTimeMs: 5000 }],
+		transcript: [{ startMs: 100, endMs: 200, text: "Edited subtitle" }],
+	};
+	expect(isStoryRequest(r)).toBe(true);
+	for (const patch of [
+		{ brief: { ...r.brief, includeTranscript: false } },
+		{ transcript: [{ startMs: -1, endMs: 200, text: "Invalid" }] },
+		{ transcript: [{ startMs: 11000, endMs: 12000, text: "Outside the current story" }] },
+		{ transcript: Array.from({ length: 81 }, () => r.transcript[0]) },
+		{ transcript: [{ startMs: 100, endMs: 200, text: "x".repeat(501) }] },
+		{
+			transcript: Array.from({ length: 7 }, () => ({
+				startMs: 100,
+				endMs: 200,
+				text: "x".repeat(500),
+			})),
+		},
+		{
+			brief: {
+				...r.brief,
+				facts: "x".repeat(2000),
+				notes: "x".repeat(2000),
+				ending: "x".repeat(2000),
+			},
+		},
+	])
+		expect(isStoryRequest({ ...r, ...patch })).toBe(false);
+});
+
+it("rejects subtitle evidence crossing a gap in the selected story footage", () => {
+	expect(
+		isStoryRequest({
+			brief: { ...emptyStoryBrief(), topic: "Product", includeTranscript: true },
+			videoPath: "test.mp4",
+			scenes: [
+				{ id: "story-1", startMs: 0, endMs: 1000, sourceTimeMs: 500 },
+				{ id: "story-2", startMs: 2000, endMs: 3000, sourceTimeMs: 2500 },
+			],
+			transcript: [{ startMs: 500, endMs: 2500, text: "Includes a removed middle section" }],
+		}),
+	).toBe(false);
+});
+
+it("uses a conservative smaller aggregate text budget when video frames share model context", () => {
+	const r = {
+		brief: { ...emptyStoryBrief(), topic: "Product", facts: "x".repeat(1993) },
+		videoPath: "test.mp4",
+		scenes: [{ id: "story-1", startMs: 0, endMs: 10000, sourceTimeMs: 5000 }],
+	};
+	expect(isStoryRequest(r)).toBe(true);
+	expect(isStoryRequest({ ...r, brief: { ...r.brief, notes: "x" } })).toBe(false);
+	const textOnly = {
+		...r,
+		brief: {
+			...r.brief,
+			analyzeVideo: false,
+			facts: "x".repeat(2000),
+			notes: "x".repeat(1993),
+		},
+	};
+	expect(isStoryRequest(textOnly)).toBe(true);
+	expect(isStoryRequest({ ...textOnly, brief: { ...textOnly.brief, ending: "x" } })).toBe(false);
+	expect(
+		isStoryRequest({
+			...r,
+			brief: { ...r.brief, includeTranscript: true },
+			transcript: [{ startMs: 0, endMs: 1000, text: "x" }],
+		}),
+	).toBe(false);
+});

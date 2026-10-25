@@ -31,14 +31,17 @@ export function planClipSplit(params: {
 		return null;
 	}
 
+	const parentClipIds = [...new Set([...(target.parentClipIds ?? []), target.id])];
 	const left: ClipRegion = {
 		...target,
 		id: createId(),
+		parentClipIds,
 		endMs: splitAtMs,
 	};
 	const right: ClipRegion = {
 		...target,
 		id: createId(),
+		parentClipIds,
 		startMs: splitAtMs,
 		endMs: target.endMs,
 		sourceStartMs: getClipSourceEndMs(left),

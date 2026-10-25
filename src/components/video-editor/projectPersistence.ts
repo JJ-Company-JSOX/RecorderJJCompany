@@ -1,3 +1,4 @@
+import { normalizeStoryWorkspace, type StoryWorkspace } from "./auto-edit/storyWorkspace";
 import type { SourceAudioTrackSettings } from "@/components/video-editor/audio/audioTypes";
 import { getLocalMediaServerPath } from "@/lib/localMediaUrl";
 import { DEFAULT_WALLPAPER_PATH } from "@/lib/wallpapers";
@@ -83,6 +84,7 @@ export function legacyBorderRadiusPixelsToPercent(value: number): number {
 const DEFAULT_MOTION_PRESET = CURSOR_MOTION_PRESETS.focused;
 
 export interface ProjectEditorState {
+	storyWorkspace?: StoryWorkspace | null;
 	wallpaper: string;
 	shadowIntensity: number;
 	backgroundBlur: number;
@@ -468,6 +470,20 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 						sourceStartMs,
 						sourceMinMs,
 						sourceMaxMs,
+						...(Array.isArray(region.parentClipIds)
+							? {
+									parentClipIds: [
+										...new Set(
+											region.parentClipIds.filter(
+												(id): id is string =>
+													typeof id === "string" &&
+													id.trim().length > 0 &&
+													id.length <= 1024,
+											),
+										),
+									].slice(-128),
+								}
+							: {}),
 						speed: isFiniteNumber(region.speed) && region.speed > 0 ? region.speed : 1,
 						muted: typeof region.muted === "boolean" ? region.muted : false,
 						showSourceAudio:
@@ -652,7 +668,16 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		(editor as Partial<ProjectEditorState>).autoCaptions,
 	)
 		? ((editor as Partial<ProjectEditorState>).autoCaptions as CaptionCue[])
-				.filter((cue): cue is CaptionCue => Boolean(cue && typeof cue.id === "string"))
+				.filter((cue): cue is CaptionCue =>
+					Boolean(
+						cue &&
+							typeof cue.id === "string" &&
+							(cue.clipId === undefined ||
+								(typeof cue.clipId === "string" &&
+									cue.clipId.trim().length > 0 &&
+									cue.clipId.length <= 1024)),
+					),
+				)
 				.map((cue) => {
 					const rawStart = isFiniteNumber(cue.startMs) ? Math.round(cue.startMs) : 0;
 					const rawEnd = isFiniteNumber(cue.endMs)
@@ -695,6 +720,7 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 
 					return {
 						id: cue.id,
+						...(cue.clipId !== undefined ? { clipId: cue.clipId } : {}),
 						startMs,
 						endMs,
 						text: typeof cue.text === "string" ? cue.text.trim() : "",
@@ -958,6 +984,9 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 			? rippleRegionAnchors(normalizedAudioRegions, normalizedClipRegions, sequenceClips)
 			: normalizedAudioRegions,
 		autoCaptions: normalizedAutoCaptions,
+		storyWorkspace: normalizeStoryWorkspace(
+			(editor as Partial<ProjectEditorState>).storyWorkspace,
+		),
 		autoCaptionSettings: normalizedAutoCaptionSettings,
 		webcam: {
 			visibleRanges: Array.isArray(webcam.visibleRanges)

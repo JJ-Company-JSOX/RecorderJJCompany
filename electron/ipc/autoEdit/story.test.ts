@@ -106,3 +106,38 @@ it("does not return late model output after cancellation", async () => {
 	});
 	await expect(run(request(), controller.signal)).rejects.toThrow();
 });
+
+it("sends edited subtitle evidence only with explicit consent and does not claim raw-audio analysis", async () => {
+	const r = request();
+	r.brief.analyzeVideo = false;
+	r.brief.includeTranscript = true;
+	r.transcript = [
+		{ startMs: 500, endMs: 1500, text: "A feature actually described in the source subtitles" },
+	];
+	await run(r);
+	const body = fixture.request.mock.calls[0][1];
+	const content = JSON.parse(body.messages[1].content);
+	expect(content.editedSubtitleEvidence).toEqual(r.transcript);
+	expect(content.evidence).toContain("recorded audio were not analyzed");
+	expect(body.messages[0].content).toContain("not audio you have listened to");
+	expect(JSON.stringify(body)).not.toContain("PRIVATE_SOURCE");
+});
+it("rejects unconsented or stale subtitle data before media decoding or inference", async () => {
+	const r = request();
+	r.transcript = [{ startMs: 0, endMs: 500, text: "DO NOT SEND" }];
+	await expect(run(r)).rejects.toThrow("subtitle consent");
+	expect(fixture.inspect).not.toHaveBeenCalled();
+	expect(fixture.request).not.toHaveBeenCalled();
+	r.brief.includeTranscript = true;
+	r.transcript[0].startMs = 20000;
+	r.transcript[0].endMs = 22000;
+	await expect(run(r)).rejects.toThrow("scene timing");
+	expect(fixture.request).not.toHaveBeenCalled();
+});
+it("keeps existing brief-only requests free of subtitle evidence", async () => {
+	const r = request();
+	r.brief.analyzeVideo = false;
+	await run(r);
+	const content = JSON.parse(fixture.request.mock.calls[0][1].messages[1].content);
+	expect(content.editedSubtitleEvidence).toBeUndefined();
+});

@@ -1,5 +1,7 @@
 # Video story planning from a creative brief (2026-10-25)
 
+Follow-up: [2026-10-26 workspace, subtitle context and reliability](feature-story-workspace-context-reliability-2026-10-26.md) implements draft persistence, opt-in subtitle evidence and related fixes; the limits below describe this initial delivery.
+
 The user wants product storytelling matched to footage, not narration of individual clicks. The existing tutorial flow remains available. In AI auto edit → Ollama advanced → AI voice-over, choose **Narration task → Plan a whole-video story**.
 
 The brief collects topic/product, audience, verified selling points, desired ending and scene notes. A single structured model call plans coherent stages, spoken lines and short on-screen headings for up to eight footage sections. A short video gets one section instead of simultaneous intro/outro lines. Source sampling respects kept clips, cuts, speed changes and timeline gaps. Generated timestamps are bound to the supplied footage spans, not trusted from model output. The user can edit each line, heading and time range, approve the result, then add titles, text-only subtitles or synthesized narration with spoken subtitles.

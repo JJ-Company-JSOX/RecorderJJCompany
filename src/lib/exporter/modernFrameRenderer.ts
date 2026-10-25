@@ -53,7 +53,10 @@ import {
 } from "@/components/video-editor/videoPlayback/motionSmoothing";
 import { getSceneEffectMetrics } from "@/components/video-editor/videoPlayback/sceneEffects";
 import { resolveSceneZoomTarget } from "@/components/video-editor/videoPlayback/sceneMotion";
-import { getWebcamMediaTargetTimeSeconds, isWebcamVisibleAtSourceTime } from "@/components/video-editor/videoPlayback/webcamSync";
+import {
+	getWebcamMediaTargetTimeSeconds,
+	isWebcamVisibleAtSourceTime,
+} from "@/components/video-editor/videoPlayback/webcamSync";
 import {
 	applyZoomTransform,
 	computeZoomTransform,
@@ -126,6 +129,8 @@ interface FrameRenderConfig {
 	videoHeight: number;
 	annotationRegions?: AnnotationRegion[];
 	autoCaptions?: CaptionCue[];
+	/** Caption cues are preprojected for an edited timeline; omitted means legacy source time. */
+	captionCoordinateSpace?: "source" | "timeline";
 	autoCaptionSettings?: AutoCaptionSettings;
 	speedRegions?: SpeedRegion[];
 	previewWidth?: number;
@@ -2725,7 +2730,12 @@ export class FrameRenderer {
 
 	private updateWebcamOverlay(referenceTimeSeconds = this.currentVideoTime): void {
 		const webcam = this.config.webcam;
-		if (!webcam?.enabled || !isWebcamVisibleAtSourceTime(webcam, referenceTimeSeconds) || !this.webcamRootContainer || !this.webcamMaskGraphics) {
+		if (
+			!webcam?.enabled ||
+			!isWebcamVisibleAtSourceTime(webcam, referenceTimeSeconds) ||
+			!this.webcamRootContainer ||
+			!this.webcamMaskGraphics
+		) {
 			if (this.webcamRootContainer) {
 				this.webcamRootContainer.visible = false;
 			}
@@ -2952,7 +2962,11 @@ export class FrameRenderer {
 		});
 
 		this.updateAnnotationLayer(timeMs);
-		this.updateCaptionLayer(timestamp / 1000);
+		this.updateCaptionLayer(
+			this.config.captionCoordinateSpace === "timeline"
+				? backgroundTimelineTimestamp / 1000
+				: timestamp / 1000,
+		);
 		this.updateWebcamOverlay();
 		await this.renderOutput(timeMs);
 	}

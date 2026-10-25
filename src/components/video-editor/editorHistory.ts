@@ -1,3 +1,4 @@
+import type { StoryWorkspace } from "./auto-edit/storyWorkspace";
 import type { PresentationHistoryState } from "./presentationHistory";
 import type {
 	AnnotationRegion,
@@ -9,6 +10,7 @@ import type {
 } from "./types";
 
 export type EditorHistorySnapshot = {
+	storyWorkspace?: StoryWorkspace | null;
 	presentation?: Partial<PresentationHistoryState>;
 	sourceAudioTrackSettingsByClip?: Record<
 		string,

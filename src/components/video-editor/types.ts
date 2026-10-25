@@ -230,6 +230,8 @@ export interface TrimRegion {
 
 export interface ClipRegion {
 	id: string;
+	/** Explicit split/trim ancestry for captions bound to one footage occurrence. */
+	parentClipIds?: string[];
 	/** Where the clip sits on the timeline. */
 	startMs: number;
 	/** Where the clip ends on the timeline (`startMs` + source duration / speed). */
@@ -575,6 +577,8 @@ export interface AudioRegion {
 
 export interface CaptionCue {
 	id: string;
+	/** Missing for source-wide speech captions; generated narration belongs to one clip. */
+	clipId?: string;
 	startMs: number;
 	endMs: number;
 	text: string;

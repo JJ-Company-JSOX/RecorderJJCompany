@@ -103,6 +103,9 @@
 		"cancelCountdown": "Cancel countdown",
 		"start": "Start recording",
 		"hide": "Hide recorder",
-		"close": "Close recorder"
+		"close": "Close recorder",
+		"back": "뒤로",
+		"on": "켜짐",
+		"off": "꺼짐"
 	}
 }

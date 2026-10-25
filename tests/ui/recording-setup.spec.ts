@@ -312,3 +312,91 @@ test("Start on the ready bar runs the existing countdown and cancellation keeps 
 	await expect(ready.getByRole("button", { name: "Start recording", exact: true })).toBeEnabled();
 	await expect(page.getByRole("button", { name: "Full screen Choose a display" })).toHaveCount(0);
 });
+
+test("ready panel remains readable and clickable at desktop and narrow fallback sizes, and Back preserves settings", async ({
+	page,
+}) => {
+	await setup(page);
+	await page.getByRole("button", { name: "Full screen Choose a display" }).click();
+	await page.getByRole("button", { name: "Display 1", exact: true }).click();
+	const ready = page.getByRole("group", { name: "Ready to record", exact: true });
+	await ready.getByRole("button", { name: /^Microphone/ }).click();
+	await expect(ready.getByRole("button", { name: /^Microphone/ })).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(ready).toHaveCSS("background-color", "rgb(23, 27, 34)");
+	for (const width of [1440, 860, 560, 420]) {
+		await page.setViewportSize({ width, height: width >= 1440 ? 540 : 320 });
+		await expect(ready).toBeInViewport();
+		for (const label of [
+			"Back",
+			"Start recording",
+			"Recording settings",
+			"Hide recorder",
+			"Close recorder",
+		]) {
+			const button = ready.getByRole("button", { name: label, exact: true });
+			await expect(button).toBeInViewport();
+			expect(
+				await button.evaluate((el) => el.getBoundingClientRect().height),
+			).toBeGreaterThanOrEqual(44);
+			await expect
+				.poll(() =>
+					button.evaluate((el) => {
+						const r = el.getBoundingClientRect();
+						return el.contains(
+							document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2),
+						);
+					}),
+				)
+				.toBe(true);
+		}
+		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+			true,
+		);
+	}
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.screenshot({ path: "/tmp/recordly-ready-panel.png", animations: "disabled" });
+	await ready.getByRole("button", { name: "Back", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-setup-visible", "true");
+	await expect(page.getByRole("combobox", { name: "Microphone", exact: true })).toHaveValue(
+		"mic-1",
+	);
+	await expect(page.getByRole("button", { name: "Start recording", exact: true })).toBeEnabled();
+});
+
+test("Back cancels countdown before returning to setup without starting capture", async ({
+	page,
+}) => {
+	await setup(page);
+	await page.evaluate(() => {
+		let finish: (result: { success: boolean; cancelled: boolean }) => void;
+		window.electronAPI.isNativeWindowsCaptureAvailable = async () => ({ available: false });
+		window.electronAPI.startCountdown = async () => {
+			document.documentElement.dataset.countdownStarted = "true";
+			return new Promise((resolve) => {
+				finish = resolve;
+			});
+		};
+		window.electronAPI.cancelCountdown = async () => {
+			document.documentElement.dataset.countdownCanceled = "true";
+			finish?.({ success: false, cancelled: true });
+			return { success: true };
+		};
+		window.electronAPI.setRecordingState = async (active) => {
+			document.documentElement.dataset.captureActive = String(active);
+		};
+	});
+	await page.getByRole("button", { name: "Full screen Choose a display" }).click();
+	await page.getByRole("button", { name: "Display 1", exact: true }).click();
+	const ready = page.getByRole("group", { name: "Ready to record", exact: true });
+	await ready.getByRole("button", { name: "Start recording", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-countdown-started", "true");
+	await ready.getByRole("button", { name: "Back", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-countdown-canceled", "true");
+	await expect(
+		page.getByRole("region", { name: "Choose what to record", exact: true }),
+	).toBeVisible();
+	await expect(page.locator("html")).not.toHaveAttribute("data-capture-active", "true");
+});

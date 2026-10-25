@@ -7,6 +7,7 @@ export interface HudOverlayWorkArea {
 
 const NON_PASSTHROUGH_HUD_WIDTH_DIP = 860;
 const NON_PASSTHROUGH_HUD_COMPACT_HEIGHT_DIP = 160;
+const NON_PASSTHROUGH_HUD_READY_HEIGHT_DIP = 320;
 const NON_PASSTHROUGH_HUD_EXPANDED_HEIGHT_DIP = 540;
 
 /** Bound the interactive setup so it cannot intercept the entire desktop. */
@@ -29,6 +30,7 @@ export function getHudOverlayWindowBounds(
 	workArea: HudOverlayWorkArea,
 	mousePassthroughSupported: boolean,
 	fallbackExpanded = false,
+	readyVisible = false,
 ): HudOverlayWorkArea {
 	if (mousePassthroughSupported) {
 		return { ...workArea };
@@ -39,7 +41,9 @@ export function getHudOverlayWindowBounds(
 		workArea.height,
 		fallbackExpanded
 			? NON_PASSTHROUGH_HUD_EXPANDED_HEIGHT_DIP
-			: NON_PASSTHROUGH_HUD_COMPACT_HEIGHT_DIP,
+			: readyVisible
+				? NON_PASSTHROUGH_HUD_READY_HEIGHT_DIP
+				: NON_PASSTHROUGH_HUD_COMPACT_HEIGHT_DIP,
 	);
 
 	return {
@@ -70,8 +74,9 @@ export function resizeHudOverlayFallbackBounds(
 	workArea: HudOverlayWorkArea,
 	currentBounds: HudOverlayWorkArea,
 	fallbackExpanded: boolean,
+	readyVisible = false,
 ): HudOverlayWorkArea {
-	const nextBounds = getHudOverlayWindowBounds(workArea, false, fallbackExpanded);
+	const nextBounds = getHudOverlayWindowBounds(workArea, false, fallbackExpanded, readyVisible);
 	const maxX = workArea.x + workArea.width - nextBounds.width;
 	const maxY = workArea.y + workArea.height - nextBounds.height;
 

@@ -423,9 +423,47 @@ export function registerSourceHandlers({
 					"That window or screen is no longer available. Refresh the source list.",
 				);
 			source = validated;
-		}
-		if (source.id?.startsWith("window:")) {
-			await bringSelectedWindowForward(source);
+		} else if (process.platform === "win32") {
+			// Confirm the live capturable identity without raising a different app or compiling
+			// a foreground-window helper. Recording raises the target at its capture boundary.
+			const sourceId = typeof source?.id === "string" ? source.id : "";
+			const kind = sourceId.startsWith("screen:")
+				? "screen"
+				: sourceId.startsWith("window:")
+					? "window"
+					: null;
+			if (!kind || typeof source?.name !== "string") {
+				throw new Error(
+					"That window or screen is no longer available. Refresh the source list.",
+				);
+			}
+			const liveSources = await getDesktopSources(
+				{ types: [kind], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false },
+				{ strict: true },
+			);
+			const live = liveSources.find(
+				(entry) =>
+					entry.id === source.id &&
+					(kind === "screen"
+						? entry.display_id === source.display_id
+						: (entry.windowTitle ?? entry.name) ===
+								(source.windowTitle ?? source.name) &&
+							(!source.appName || entry.appName === source.appName)),
+			);
+			if (!live) {
+				throw new Error(
+					"That window or screen is no longer available. Refresh the source list.",
+				);
+			}
+			source = {
+				id: live.id,
+				name: live.name,
+				display_id: live.display_id,
+				sourceType: kind,
+				...(kind === "window"
+					? { windowTitle: live.windowTitle ?? live.name, appName: live.appName }
+					: {}),
+			};
 		}
 		if (isCursorCaptureActive) return selectedSource;
 		if (fromSelector && getSourceSelectorWindow()?.webContents !== event.sender)

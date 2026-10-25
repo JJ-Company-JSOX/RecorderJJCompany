@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { enumerateMediaDevices, onMediaDevicesChanged } from "./mediaDeviceEnumeration";
 
 export interface VideoDevice {
 	deviceId: string;
@@ -14,6 +15,7 @@ export function useVideoDevices(enabled: boolean = true) {
 
 	useEffect(() => {
 		if (!enabled) {
+			setIsLoading(false);
 			return;
 		}
 
@@ -29,7 +31,7 @@ export function useVideoDevices(enabled: boolean = true) {
 					setError(null);
 				}
 
-				const allDevices = await navigator.mediaDevices.enumerateDevices();
+				const allDevices = await enumerateMediaDevices();
 				const videoInputs = allDevices
 					.filter((device) => device.kind === "videoinput")
 					.map((device, index) => ({
@@ -71,17 +73,15 @@ export function useVideoDevices(enabled: boolean = true) {
 			}
 		};
 
-		void loadDevices();
-
 		const handleDeviceChange = () => {
 			void loadDevices();
 		};
-
-		navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
+		const unsubscribe = onMediaDevicesChanged(handleDeviceChange);
+		void loadDevices();
 
 		return () => {
 			mounted = false;
-			navigator.mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+			unsubscribe();
 		};
 	}, [enabled]);
 

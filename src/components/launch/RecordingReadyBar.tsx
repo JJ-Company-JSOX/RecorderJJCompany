@@ -1,5 +1,15 @@
+import {
+	ArrowLeft,
+	Gear,
+	MicrophoneIcon,
+	MinusIcon,
+	MonitorIcon,
+	SpeakerHighIcon,
+	VideoCameraIcon,
+	XIcon,
+} from "@/components/ui/icons";
 import { useScopedT } from "@/contexts/I18nContext";
-import styles from "./LaunchWindow.module.css";
+import styles from "./RecordingReadyBar.module.css";
 
 interface Props {
 	source: string;
@@ -8,6 +18,7 @@ interface Props {
 	microphone: boolean;
 	camera: boolean;
 	systemAudio: boolean;
+	onBack: () => void;
 	onMicrophone: () => void;
 	onCamera: () => void;
 	onSystemAudio: () => void;
@@ -22,90 +33,128 @@ interface Props {
 export function RecordingReadyBar(props: Props) {
 	const t = useScopedT("launch");
 	const disabled = props.disabled || props.countdown;
+	const devices = [
+		{
+			label: t("ready.microphone", "Microphone"),
+			enabled: props.microphone,
+			onClick: props.onMicrophone,
+			Icon: MicrophoneIcon,
+		},
+		{
+			label: t("ready.camera", "Camera"),
+			enabled: props.camera,
+			onClick: props.onCamera,
+			Icon: VideoCameraIcon,
+		},
+		{
+			label: t("ready.systemAudio", "System audio"),
+			enabled: props.systemAudio,
+			onClick: props.onSystemAudio,
+			Icon: SpeakerHighIcon,
+		},
+	];
 	return (
-		<div
-			role="group"
-			aria-label={t("ready.title", "Ready to record")}
-			className={`flex items-center gap-2 px-2 py-2 ${styles.electronNoDrag}`}
-		>
-			<button
-				type="button"
-				disabled={disabled}
-				onClick={props.onSettings}
-				className="max-w-44 truncate rounded-lg px-3 py-2 text-sm hover:bg-white/10"
-				title={props.source}
-			>
-				{props.source}
-			</button>
-			<button
-				type="button"
-				disabled={disabled}
-				aria-pressed={props.microphone}
-				onClick={props.onMicrophone}
-				className="rounded-lg px-2 py-2 text-xs hover:bg-white/10"
-			>
-				{t("ready.microphone", "Microphone")} {props.microphone ? "✓" : "—"}
-			</button>
-			<button
-				type="button"
-				disabled={disabled}
-				aria-pressed={props.camera}
-				onClick={props.onCamera}
-				className="rounded-lg px-2 py-2 text-xs hover:bg-white/10"
-			>
-				{t("ready.camera", "Camera")} {props.camera ? "✓" : "—"}
-			</button>
-			<button
-				type="button"
-				disabled={disabled}
-				aria-pressed={props.systemAudio}
-				onClick={props.onSystemAudio}
-				className="rounded-lg px-2 py-2 text-xs hover:bg-white/10"
-			>
-				{t("ready.systemAudio", "System audio")} {props.systemAudio ? "✓" : "—"}
-			</button>
-			<button
-				type="button"
-				disabled={disabled}
-				onClick={props.onSettings}
-				className="rounded-lg px-2 py-2 text-xs hover:bg-white/10"
-			>
-				{t("ready.settings", "Recording settings")}
-			</button>
-			{props.countdown ? (
+		<div role="group" aria-label={t("ready.title", "Ready to record")} className={styles.panel}>
+			<div className={styles.header}>
 				<button
 					type="button"
-					onClick={props.onCancelCountdown}
-					className="rounded-full bg-red-500 px-4 py-2 text-sm text-white"
+					onClick={props.onBack}
+					className={styles.back}
+					aria-label={t("ready.back", "Back")}
 				>
-					{t("ready.cancelCountdown", "Cancel countdown")}
+					<ArrowLeft size={18} aria-hidden="true" />
+					<span>{t("ready.back", "Back")}</span>
 				</button>
-			) : (
 				<button
 					type="button"
-					disabled={props.disabled}
-					onClick={props.onStart}
-					className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+					disabled={disabled}
+					onClick={props.onSettings}
+					className={styles.source}
+					title={props.source}
+					aria-label={props.source}
 				>
-					{t("ready.start", "Start recording")}
+					<MonitorIcon size={22} aria-hidden="true" />
+					<span className={styles.sourceCopy}>
+						<span className={styles.heading}>
+							{t("ready.title", "Ready to record")}
+						</span>
+						<span className={styles.sourceName}>{props.source}</span>
+					</span>
 				</button>
-			)}
-			<button
-				type="button"
-				onClick={props.onHide}
-				className="rounded-lg px-2 py-2"
-				aria-label={t("ready.hide", "Hide recorder")}
-			>
-				−
-			</button>
-			<button
-				type="button"
-				onClick={props.onClose}
-				className="rounded-lg px-2 py-2"
-				aria-label={t("ready.close", "Close recorder")}
-			>
-				×
-			</button>
+				<div className={styles.windowActions}>
+					<button
+						type="button"
+						onClick={props.onHide}
+						className={styles.windowButton}
+						aria-label={t("ready.hide", "Hide recorder")}
+						title={t("ready.hide", "Hide recorder")}
+					>
+						<MinusIcon size={19} aria-hidden="true" />
+					</button>
+					<button
+						type="button"
+						onClick={props.onClose}
+						className={`${styles.windowButton} ${styles.close}`}
+						aria-label={t("ready.close", "Close recorder")}
+						title={t("ready.close", "Close recorder")}
+					>
+						<XIcon size={19} aria-hidden="true" />
+					</button>
+				</div>
+			</div>
+			<div className={styles.controls}>
+				<div className={styles.devices}>
+					{devices.map(({ label, enabled, onClick, Icon }) => (
+						<button
+							key={label}
+							type="button"
+							disabled={disabled}
+							aria-pressed={enabled}
+							onClick={onClick}
+							className={styles.device}
+						>
+							<Icon size={18} aria-hidden="true" />
+							<span className={styles.deviceCopy}>
+								<span>{label}</span>
+								<span className={styles.deviceState}>
+									{enabled ? t("ready.on", "On") : t("ready.off", "Off")}
+								</span>
+							</span>
+						</button>
+					))}
+				</div>
+				<div className={styles.actions}>
+					<button
+						type="button"
+						disabled={disabled}
+						onClick={props.onSettings}
+						className={styles.settings}
+					>
+						<Gear size={18} aria-hidden="true" />
+						<span>{t("ready.settings", "Recording settings")}</span>
+					</button>
+					{props.countdown ? (
+						<button
+							type="button"
+							onClick={props.onCancelCountdown}
+							className={`${styles.start} ${styles.cancelCountdown}`}
+						>
+							<span className={styles.cancelMark} aria-hidden="true" />
+							{t("ready.cancelCountdown", "Cancel countdown")}
+						</button>
+					) : (
+						<button
+							type="button"
+							disabled={props.disabled}
+							onClick={props.onStart}
+							className={styles.start}
+						>
+							<span className={styles.recordDot} aria-hidden="true" />
+							{t("ready.start", "Start recording")}
+						</button>
+					)}
+				</div>
+			</div>
 		</div>
 	);
 }

@@ -103,6 +103,9 @@
 		"cancelCountdown": "取消倒计时",
 		"start": "开始录制",
 		"hide": "隐藏录制条",
-		"close": "关闭录制条"
+		"close": "关闭录制条",
+		"back": "返回",
+		"on": "开启",
+		"off": "关闭"
 	}
 }

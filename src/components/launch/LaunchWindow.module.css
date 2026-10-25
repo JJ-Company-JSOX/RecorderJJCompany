@@ -58,6 +58,27 @@
 	z-index: 1;
 }
 
+.readyBar {
+	width: min(800px, calc(100vw - 48px));
+	max-width: calc(100vw - 24px);
+	padding: 6px;
+	gap: 4px;
+	background: #171b22;
+	border: 1px solid #566173;
+	border-radius: 16px;
+	box-shadow: 0 12px 38px #0009;
+	color: #f4f7fb;
+}
+
+.readyViewport,
+.readyState {
+	display: block;
+	width: 100%;
+	min-width: 0;
+	white-space: normal;
+	padding: 0;
+}
+
 .setupViewport,
 .setupState {
 	display: block;

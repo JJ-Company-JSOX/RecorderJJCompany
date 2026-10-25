@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowClockwiseIcon, DotsThreeVerticalIcon } from "@/components/ui/icons";
 import { toast } from "@/components/ui/toast";
@@ -134,7 +133,6 @@ function LaunchWindowContent() {
 
 	const {
 		recordingHudOffset,
-		isHudDragging,
 		hudBarTransformRef,
 		isHudDraggingRef,
 		handleHudBarPointerDown,
@@ -153,11 +151,6 @@ function LaunchWindowContent() {
 			isWebcamPreviewDraggingRef,
 			webcamPreviewDragStartRef,
 		});
-
-	const hudStateTransition = {
-		duration: 0.24,
-		ease: [0.22, 1, 0.36, 1] as const,
-	};
 
 	const pickerPending = useRef(false);
 	const [isPickerPending, setIsPickerPending] = useState(false);
@@ -233,6 +226,21 @@ function LaunchWindowContent() {
 		void window.electronAPI.showProjectDashboard();
 	};
 	const closePending = useRef(false);
+	const backPending = useRef(false);
+	const returnToSetup = useCallback(async () => {
+		if (backPending.current || recording || finalizing || pickerPending.current) return;
+		backPending.current = true;
+		beginInteractiveHudAction();
+		try {
+			if (await cancelRecordingStart()) setSetupVisible(true);
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Could not return to recording settings.",
+			);
+		} finally {
+			backPending.current = false;
+		}
+	}, [recording, finalizing, beginInteractiveHudAction, cancelRecordingStart]);
 	const closeRecorder = useCallback(async () => {
 		if (closePending.current) return;
 		closePending.current = true;
@@ -321,10 +329,11 @@ function LaunchWindowContent() {
 			microphone={microphoneEnabled}
 			camera={webcamEnabled}
 			systemAudio={systemAudioEnabled}
+			onBack={() => void returnToSetup()}
 			onMicrophone={() => setMicrophoneEnabled(!microphoneEnabled)}
 			onCamera={() => setWebcamEnabled(!webcamEnabled)}
 			onSystemAudio={() => setSystemAudioEnabled(!systemAudioEnabled)}
-			onSettings={() => setSetupVisible(true)}
+			onSettings={() => void returnToSetup()}
 			onStart={toggleRecording}
 			onCancelCountdown={() => void cancelRecordingStart()}
 			onHide={() => void window.electronAPI.hudOverlayHide()}
@@ -353,7 +362,6 @@ function LaunchWindowContent() {
 		platform === "linux" ||
 		hudOverlayMousePassthroughSupported === false ||
 		(platform === "win32" && hudMode === "idle");
-	const shouldAnimateHudLayout = !recording && !showRecordingWebcamPreview && !isHudDragging;
 
 	return (
 		<HudInteractionContext.Provider
@@ -374,11 +382,9 @@ function LaunchWindowContent() {
 								transform: `translate3d(${recordingHudOffset.x}px, ${recordingHudOffset.y}px, 0)`,
 							}}
 						>
-							<motion.div
+							<div
 								ref={hudBarRef}
-								layout={shouldAnimateHudLayout}
-								transition={hudStateTransition}
-								className={`${styles.bar} ${hudMode === "idle" ? styles.setupBar : ""} launch-theme mb-2 pointer-events-auto`}
+								className={`${styles.bar} ${hudMode === "idle" ? styles.setupBar : hudMode === "ready" ? styles.readyBar : ""} launch-theme mb-2 pointer-events-auto`}
 								onMouseEnter={handleHudMouseEnter}
 								onMouseLeave={handleHudMouseLeave}
 							>
@@ -402,41 +408,22 @@ function LaunchWindowContent() {
 								</div>
 
 								<div
-									className={`${styles.barStateViewport} ${hudMode === "idle" ? styles.setupViewport : ""}`}
+									className={`${styles.barStateViewport} ${hudMode === "idle" ? styles.setupViewport : hudMode === "ready" ? styles.readyViewport : ""}`}
 								>
-									<AnimatePresence initial={false} mode="wait">
-										<motion.div
-											key={hudMode}
-											layout={shouldAnimateHudLayout}
-											className={`${styles.barState} ${hudMode === "idle" ? styles.setupState : ""}`}
-											initial={{
-												opacity: 0,
-												y: 10,
-												scale: 0.985,
-											}}
-											animate={{
-												opacity: 1,
-												y: 0,
-												scale: 1,
-											}}
-											exit={{
-												opacity: 0,
-												y: -10,
-												scale: 0.985,
-											}}
-											transition={hudStateTransition}
-										>
-											{finalizing
-												? finalizingControls
-												: recording
-													? recordingControls
-													: setupVisible
-														? idleControls
-														: readyControls}
-										</motion.div>
-									</AnimatePresence>
+									<div
+										key={hudMode}
+										className={`${styles.barState} ${hudMode === "idle" ? styles.setupState : hudMode === "ready" ? styles.readyState : ""}`}
+									>
+										{finalizing
+											? finalizingControls
+											: recording
+												? recordingControls
+												: setupVisible
+													? idleControls
+													: readyControls}
+									</div>
 								</div>
-							</motion.div>
+							</div>
 						</div>
 						{showRecordingWebcamPreview && (
 							<div

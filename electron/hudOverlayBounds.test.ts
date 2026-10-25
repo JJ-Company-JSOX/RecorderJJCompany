@@ -27,6 +27,16 @@ describe("getHudOverlayWindowBounds", () => {
 			height: 160,
 		});
 	});
+	it("reserves height for the ready panel and returns to compact controls for recording", () => {
+		const ready = getHudOverlayWindowBounds(workArea, false, false, true);
+		expect(ready.height).toBe(320);
+		expect(ready.y + ready.height).toBe(workArea.y + workArea.height);
+		expect(getHudOverlayWindowBounds(workArea, false).height).toBe(160);
+	});
+	it("keeps the ready panel within small displays with negative origins", () => {
+		const area = { x: -420, y: -240, width: 420, height: 240 };
+		expect(getHudOverlayWindowBounds(area, false, false, true)).toEqual(area);
+	});
 
 	it("expands the non-passthrough fallback for HUD menus and hover interaction", () => {
 		expect(getHudOverlayWindowBounds(workArea, false, true)).toEqual({

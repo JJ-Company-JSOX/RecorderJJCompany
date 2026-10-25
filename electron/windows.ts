@@ -254,6 +254,7 @@ function getHudOverlayBounds() {
 		workArea,
 		isHudOverlayMousePassthroughSupported(),
 		fallbackExpanded,
+		!hudOverlaySetupVisible && !hudOverlayRecordingActive,
 	);
 }
 
@@ -351,6 +352,7 @@ function setHudOverlayFallbackExpanded(expanded: boolean) {
 			webcamPreviewVisible: hudOverlayWebcamPreviewVisible,
 			setupVisible: hudOverlaySetupVisible,
 		}),
+		!hudOverlaySetupVisible && !hudOverlayRecordingActive,
 	);
 	hudOverlayWindow.setBounds(nextBounds, false);
 	positionUpdateToastWindow();

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 	recording: false,
 	selected: null as SelectedSource | null,
 	exec: vi.fn(),
+	bringForward: vi.fn(),
 	windows: vi.fn(),
 	writeAppSetting: vi.fn(),
 	setHudRecordingPreparationActive: vi.fn(),
@@ -31,7 +32,7 @@ vi.mock("../../windows", () => ({
 vi.mock("../constants", () => ({ ALLOW_RECORDLY_WINDOW_CAPTURE: false }));
 vi.mock("../cursor/bounds", () => ({ stopWindowBoundsCapture: vi.fn() }));
 vi.mock("../recording/ffmpeg", () => ({}));
-vi.mock("../windowsWindowControl", () => ({}));
+vi.mock("../windowsWindowControl", () => ({ bringWindowsWindowForward: mocks.bringForward }));
 vi.mock("../captureSelection", () => ({
 	validateCaptureSource: mocks.validate,
 	getSessionCaptureSource: () => mocks.selected,
@@ -62,6 +63,8 @@ beforeEach(() => {
 	mocks.recording = false;
 	mocks.selected = null;
 	mocks.windows.mockReturnValue([]);
+	mocks.sources.mockResolvedValue([]);
+	mocks.bringForward.mockResolvedValue(undefined);
 	mocks.validate.mockImplementation(async (source) => source);
 	mocks.exec.mockRejectedValue(new Error("wmctrl is not installed"));
 	Object.defineProperty(process, "platform", { value: "linux" });
@@ -184,6 +187,128 @@ it("does not change sources if recording starts during validation", async () => 
 	expect(mocks.selected).toBeNull();
 	picker.win.close();
 	expect(await pending).toEqual({ success: false, canceled: true });
+});
+
+it("confirms a live Windows window without spawning or waiting for a foreground helper", async () => {
+	Object.defineProperty(process, "platform", { value: "win32" });
+	const picker = pickerFixture();
+	mocks.sources.mockResolvedValue([{ id: "window:101:0", name: "Document", display_id: "1" }]);
+	// A foreground helper that never completes must not hold confirmation open.
+	mocks.bringForward.mockReturnValue(new Promise(() => undefined));
+	const source = { id: "window:101:0", name: "Document", display_id: "1" };
+	const result = await Promise.race([
+		picker.select(source),
+		new Promise((resolve) =>
+			setImmediate(() => resolve("foreground helper blocked selection")),
+		),
+	]);
+	expect(result).toMatchObject({ id: source.id, name: source.name, sourceType: "window" });
+	expect(mocks.selected).toMatchObject({ id: source.id, windowTitle: "Document" });
+	expect(mocks.sources).toHaveBeenCalledWith({
+		types: ["window"],
+		thumbnailSize: { width: 0, height: 0 },
+		fetchWindowIcons: false,
+	});
+	expect(mocks.bringForward).not.toHaveBeenCalled();
+	expect(mocks.exec).not.toHaveBeenCalled();
+});
+
+for (const live of [
+	[],
+	[{ id: "window:102:0", name: "Document" }],
+	[{ id: "window:101:0", name: "Renamed window" }],
+]) {
+	it(`rejects a stale Windows window identity: ${JSON.stringify(live)}`, async () => {
+		Object.defineProperty(process, "platform", { value: "win32" });
+		const picker = pickerFixture();
+		const previous = { id: "screen:1:0", name: "Previous screen", display_id: "1" };
+		mocks.selected = previous;
+		mocks.sources.mockResolvedValue(live);
+		await expect(picker.select({ id: "window:101:0", name: "Document" })).rejects.toThrow(
+			"no longer available",
+		);
+		expect(mocks.selected).toBe(previous);
+		expect(mocks.bringForward).not.toHaveBeenCalled();
+	});
+}
+
+it("rejects a Windows display identity mismatch and uses fresh canonical screen metadata", async () => {
+	Object.defineProperty(process, "platform", { value: "win32" });
+	const picker = pickerFixture();
+	mocks.sources.mockResolvedValue([{ id: "screen:1:0", name: "Screen", display_id: "1" }]);
+	await expect(
+		picker.select({ id: "screen:1:0", name: "Screen", display_id: "99" }),
+	).rejects.toThrow("no longer available");
+	expect(mocks.selected).toBeNull();
+	const result = await picker.select({
+		id: "screen:1:0",
+		name: "Old screen name",
+		display_id: "1",
+		area: { x: 1, y: 1, width: 1, height: 1 },
+		appName: "untrusted",
+	});
+	expect(result).toEqual({
+		id: "screen:1:0",
+		name: "Screen 1 (Primary)",
+		display_id: "1",
+		sourceType: "screen",
+	});
+	expect(mocks.sources).toHaveBeenCalledTimes(2);
+});
+
+it("reports a Windows detection error without applying a source or falling back to a screen", async () => {
+	Object.defineProperty(process, "platform", { value: "win32" });
+	const picker = pickerFixture();
+	mocks.sources.mockRejectedValue(new Error("Capture enumeration unavailable"));
+	await expect(picker.select({ id: "window:101:0", name: "Document" })).rejects.toThrow(
+		"Unable to detect recording sources",
+	);
+	expect(mocks.selected).toBeNull();
+	expect(mocks.bringForward).not.toHaveBeenCalled();
+});
+
+it.each([
+	{ id: "area:1", name: "Area" },
+	{ id: 101, name: "Document" },
+	{ name: "Missing identity" },
+])("rejects unsupported Windows source identities before enumeration: %j", async (source) => {
+	Object.defineProperty(process, "platform", { value: "win32" });
+	const picker = pickerFixture();
+	await expect(picker.select(source as unknown as SelectedSource)).rejects.toThrow(
+		"no longer available",
+	);
+	expect(mocks.sources).not.toHaveBeenCalled();
+	expect(mocks.selected).toBeNull();
+});
+
+it("does not apply Windows selection if recording begins during fresh enumeration", async () => {
+	Object.defineProperty(process, "platform", { value: "win32" });
+	const picker = pickerFixture();
+	mocks.sources.mockImplementation(async () => {
+		mocks.recording = true;
+		return [{ id: "window:101:0", name: "Document", display_id: "1" }];
+	});
+	await picker.select({ id: "window:101:0", name: "Document" });
+	expect(mocks.selected).toBeNull();
+	expect(mocks.bringForward).not.toHaveBeenCalled();
+});
+
+it("does not apply Windows selection after its source-list sender closes during enumeration", async () => {
+	Object.defineProperty(process, "platform", { value: "win32" });
+	const picker = pickerFixture();
+	const pending = picker.pickSourceList();
+	let finish!: (sources: object[]) => void;
+	mocks.sources.mockReturnValue(
+		new Promise((resolve) => {
+			finish = resolve;
+		}),
+	);
+	const selection = picker.select({ id: "window:101:0", name: "Document" });
+	picker.win.close();
+	finish([{ id: "window:101:0", name: "Document" }]);
+	await selection;
+	expect(await pending).toEqual({ success: false, canceled: true });
+	expect(mocks.selected).toBeNull();
 });
 
 for (const platform of ["darwin", "win32", "linux"]) {

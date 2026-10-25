@@ -122,7 +122,7 @@ test("clip deletion and undo ripple connected annotations and imported audio tog
 	const removedDuration = (await spanFor(clips.first())).end;
 	await seekInsideClip(page, clips.nth(2), 0.25);
 	await page.getByRole("button", { name: "Add Layer", exact: true }).click();
-	await page.getByRole("menuitem", { name: "Annotation", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Text", exact: true }).click();
 	const annotation = page.locator('[data-variant="annotation"]');
 	await expect(annotation).toHaveCount(1);
 	await page.evaluate(() => {

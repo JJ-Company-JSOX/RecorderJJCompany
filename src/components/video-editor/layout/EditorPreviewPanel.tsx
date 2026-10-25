@@ -340,7 +340,7 @@ export function EditorPreviewPanel(props: Props) {
 								}}
 								className="cursor-pointer text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
 							>
-								{t("timeline.annotation.label")}
+								{t("editor.annotations.text", "Text")}
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								onClick={() => {
@@ -368,7 +368,7 @@ export function EditorPreviewPanel(props: Props) {
 								}}
 								className="cursor-pointer text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
 							>
-								{t("editor.textToSpeech.menu", "Text to speech")}
+								{t("editor.textToSpeech.menu", "Text to Audio")}
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>

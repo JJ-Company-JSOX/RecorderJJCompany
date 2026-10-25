@@ -29,7 +29,7 @@ test("narrow zooms retain the multiplier without a zoom icon", async ({ page }) 
 
 test("annotations can be dragged into the canvas background and survive undo", async ({ page }) => {
 	await page.getByRole("button", { name: "Add Layer", exact: true }).click();
-	await page.getByRole("menuitem", { name: "Annotation", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Text", exact: true }).click();
 	const annotation = page.locator("[data-annotation-id]");
 	await expect(annotation).toBeVisible();
 	await annotation.click();

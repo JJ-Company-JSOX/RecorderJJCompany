@@ -38,7 +38,7 @@ test("annotation deletion works from its inspector without deleting while typing
 	page,
 }) => {
 	await page.getByRole("button", { name: "Add Layer", exact: true }).click();
-	await page.getByRole("menuitem", { name: "Annotation", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Text", exact: true }).click();
 	const annotation = page.locator('[data-variant="annotation"]');
 	await expect(annotation).toHaveCount(1);
 	await annotation.click();
@@ -125,7 +125,7 @@ test("inspector delete buttons remove clips and zooms", async ({ page }) => {
 
 test("tool navigation leaves the annotation inspector", async ({ page }) => {
 	await page.getByRole("button", { name: "Add Layer", exact: true }).click();
-	await page.getByRole("menuitem", { name: "Annotation", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Text", exact: true }).click();
 	await page.locator('[data-variant="annotation"]').click();
 	await expect(
 		page.getByRole("button", { name: "Delete Annotation", exact: true }),
@@ -148,7 +148,7 @@ test("a dragged annotation can be selected across its whole block and deleted wi
 	const clip = page.locator('[data-variant="clip"]');
 	await clip.click({ position: { x: 100, y: 20 } });
 	await page.getByRole("button", { name: "Add Layer", exact: true }).click();
-	await page.getByRole("menuitem", { name: "Annotation", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Text", exact: true }).click();
 	const annotation = page.locator('[data-variant="annotation"]');
 	const box = (await annotation.boundingBox())!;
 	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

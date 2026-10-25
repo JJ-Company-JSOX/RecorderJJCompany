@@ -100,8 +100,8 @@ async function setup(page: Page, options = { installed: true, deferred: false })
 
 async function openSpeech(page: Page) {
 	await page.getByRole("button", { name: "Add Layer", exact: true }).click();
-	await page.getByRole("menuitem", { name: "Text to speech", exact: true }).click();
-	return page.getByRole("dialog", { name: "Text to speech", exact: true });
+	await page.getByRole("menuitem", { name: "Text to Audio", exact: true }).click();
+	return page.getByRole("dialog", { name: "Text to Audio", exact: true });
 }
 
 test("typed paragraphs become movable, trimmable audio clips with undo, saving and reopen", async ({

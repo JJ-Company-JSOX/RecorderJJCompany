@@ -209,8 +209,8 @@
 		"exitFullscreen": "Exit full screen (Esc)"
 	},
 	"textToSpeech": {
-		"menu": "Text to speech",
-		"title": "Text to speech",
+		"menu": "Text to Audio",
+		"title": "Text to Audio",
 		"description": "Type and preview your text, then choose where to add it. Each paragraph becomes an editable audio clip.",
 		"textLabel": "Text",
 		"placeholder": "Type or paste what the voice should say…",

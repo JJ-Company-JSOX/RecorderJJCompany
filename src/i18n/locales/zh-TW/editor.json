@@ -201,8 +201,8 @@
 		"exitFullscreen": "退出全螢幕 (Esc)"
 	},
 	"textToSpeech": {
-		"menu": "文字轉語音",
-		"title": "文字轉語音",
+		"menu": "文字轉音訊",
+		"title": "文字轉音訊",
 		"description": "輸入文字並試聽，然後選擇插入時間。每段文字會產生一個可以移動和裁剪的音訊片段。",
 		"textLabel": "文字",
 		"placeholder": "輸入或貼上要念的內容…",

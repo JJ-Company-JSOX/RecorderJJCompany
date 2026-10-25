@@ -305,7 +305,7 @@ export function TextToSpeechDialog({
 		<Dialog open={open} onOpenChange={changeOpen}>
 			<DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto">
 				<DialogHeader>
-					<DialogTitle>{t("editor.textToSpeech.title", "Text to speech")}</DialogTitle>
+					<DialogTitle>{t("editor.textToSpeech.title", "Text to Audio")}</DialogTitle>
 					<DialogDescription className="text-muted-foreground">
 						{t(
 							"editor.textToSpeech.description",

@@ -5,7 +5,6 @@ import type { VideoPlaybackRef } from "../VideoPlayback";
 interface UseEditorPlaybackControlsParams {
 	videoPlaybackRef: RefObject<VideoPlaybackRef | null>;
 	timelineRef: RefObject<TimelineEditorHandle | null>;
-	playSourceAudioPreview: () => void;
 	timelinePlayheadTime: number;
 	timelineDuration: number;
 }
@@ -13,7 +12,6 @@ interface UseEditorPlaybackControlsParams {
 export function useEditorPlaybackControls({
 	videoPlaybackRef,
 	timelineRef,
-	playSourceAudioPreview,
 	timelinePlayheadTime,
 	timelineDuration,
 }: UseEditorPlaybackControlsParams) {
@@ -23,9 +21,8 @@ export function useEditorPlaybackControls({
 		const playback = getActivePlayback();
 		if (!playback?.video) return;
 
-		playSourceAudioPreview();
 		playback.play().catch((error) => console.error("Video play failed:", error));
-	}, [getActivePlayback, playSourceAudioPreview]);
+	}, [getActivePlayback]);
 
 	const togglePlayPause = useCallback(() => {
 		const playback = getActivePlayback();

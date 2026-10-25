@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { audioEnvelopeAt } from "@/lib/exporter/audioEnvelope";
 import {
 	buildResolvedAudioPlan,
@@ -79,47 +79,11 @@ export function useAudioPreviewSync({
 	const audioElementRevokersRef = useRef<Map<string, () => void>>(new Map());
 	const audioElementResourcesRef = useRef<Map<string, string>>(new Map());
 	const sourceAudioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
-	const sourceAudioMediaNodesRef = useRef<Map<string, MediaElementAudioSourceNode>>(new Map());
-	const sourceAudioGainNodesRef = useRef<Map<string, GainNode>>(new Map());
 	const sourceAudioElementRevokersRef = useRef<Map<string, () => void>>(new Map());
 	const sourceAudioElementResourcesRef = useRef<Map<string, string>>(new Map());
-	const sourceAudioContextRef = useRef<AudioContext | null>(null);
-	const sourceAudioMasterGainRef = useRef<GainNode | null>(null);
-	const sourceAudioResumePromiseRef = useRef<Promise<void> | null>(null);
+	const sourcePlaybackErrorsRef = useRef<Map<string, string>>(new Map());
 	const lastSourceAudioSyncTimeRef = useRef<number | null>(null);
 	const [sourceLoadVersion, setSourceLoadVersion] = useState(0);
-
-	const ensureSourceAudioContext = useCallback(() => {
-		if (!sourceAudioContextRef.current) {
-			const context = new AudioContext({ latencyHint: "interactive" });
-			const masterGain = context.createGain();
-			masterGain.gain.value = 1;
-			masterGain.connect(context.destination);
-			sourceAudioContextRef.current = context;
-			sourceAudioMasterGainRef.current = masterGain;
-		}
-		return sourceAudioContextRef.current;
-	}, []);
-
-	const ensureSourceAudioRunning = useCallback(() => {
-		const context = ensureSourceAudioContext();
-		if (context.state === "running") {
-			return Promise.resolve();
-		}
-		if (!sourceAudioResumePromiseRef.current) {
-			sourceAudioResumePromiseRef.current = context
-				.resume()
-				.catch(() => undefined)
-				.finally(() => {
-					sourceAudioResumePromiseRef.current = null;
-				});
-		}
-		return sourceAudioResumePromiseRef.current;
-	}, [ensureSourceAudioContext]);
-
-	const playSourceAudioPreview = useCallback(() => {
-		void ensureSourceAudioRunning();
-	}, [ensureSourceAudioRunning]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -186,10 +150,7 @@ export function useAudioPreviewSync({
 			if (!currentIds.has(id)) {
 				audio.pause();
 				audio.src = "";
-				sourceAudioMediaNodesRef.current.get(id)?.disconnect();
-				sourceAudioMediaNodesRef.current.delete(id);
-				sourceAudioGainNodesRef.current.get(id)?.disconnect();
-				sourceAudioGainNodesRef.current.delete(id);
+				sourcePlaybackErrorsRef.current.delete(id);
 				sourceAudioElementRevokersRef.current.get(id)?.();
 				sourceAudioElementRevokersRef.current.delete(id);
 				sourceAudioElementResourcesRef.current.delete(id);
@@ -216,6 +177,7 @@ export function useAudioPreviewSync({
 			// during speed changes. Note: this limits maximum preview volume to 1.0 (100%).
 
 			if (sourceAudioElementResourcesRef.current.get(audioPath) !== resourceKey) {
+				sourcePlaybackErrorsRef.current.delete(audioPath);
 				audio.pause();
 				audio.src = "";
 				sourceAudioElementRevokersRef.current.get(audioPath)?.();
@@ -283,12 +245,6 @@ export function useAudioPreviewSync({
 			);
 		}
 
-		if (sourceAudioMasterGainRef.current) {
-			sourceAudioMasterGainRef.current.gain.value = isCurrentClipMuted
-				? 0
-				: Math.max(0, Math.min(1, previewVolume));
-		}
-
 		if (resolvedSourceTracks.length === 0) {
 			lastSourceAudioSyncTimeRef.current = null;
 		}
@@ -318,30 +274,13 @@ export function useAudioPreviewSync({
 				audio.pause();
 				audio.src = "";
 			}
-			for (const node of sourceAudioMediaNodesRef.current.values()) {
-				node.disconnect();
-			}
-			for (const node of sourceAudioGainNodesRef.current.values()) {
-				node.disconnect();
-			}
 			for (const revoke of sourceAudioElementRevokersRef.current.values()) {
 				revoke();
 			}
 			sourceAudioElementsRef.current.clear();
-			sourceAudioMediaNodesRef.current.clear();
-			sourceAudioGainNodesRef.current.clear();
 			sourceAudioElementRevokersRef.current.clear();
 			sourceAudioElementResourcesRef.current.clear();
-			if (sourceAudioMasterGainRef.current) {
-				sourceAudioMasterGainRef.current.disconnect();
-				sourceAudioMasterGainRef.current = null;
-			}
-			const context = sourceAudioContextRef.current;
-			sourceAudioContextRef.current = null;
-			sourceAudioResumePromiseRef.current = null;
-			if (context) {
-				void context.close();
-			}
+			sourcePlaybackErrorsRef.current.clear();
 			lastSourceAudioSyncTimeRef.current = null;
 		};
 	}, []);
@@ -371,8 +310,7 @@ export function useAudioPreviewSync({
 				),
 			);
 
-			const audioOffset =
-				((track.sourceRef.offsetMs ?? 0) + currentTimeMs - startMs) / 1000;
+			const audioOffset = ((track.sourceRef.offsetMs ?? 0) + currentTimeMs - startMs) / 1000;
 			const pastSourceEnd = Number.isFinite(audio.duration) && audioOffset >= audio.duration;
 			if (isPlaying && isInRegion && !pastSourceEnd) {
 				enablePitchPreservingPlayback(audio);
@@ -404,6 +342,8 @@ export function useAudioPreviewSync({
 		let cancelled = false;
 		// A newly resolved source must pass the same playback checks as timeline updates.
 		void sourceLoadVersion;
+		// A deliberate pause/play retries a failed device or decoder. Timeline ticks do not.
+		if (!isPlaying) sourcePlaybackErrorsRef.current.clear();
 
 		const previousTimelineTime = lastSourceAudioSyncTimeRef.current;
 		const timelineJumped =
@@ -411,12 +351,6 @@ export function useAudioPreviewSync({
 		const driftThreshold = isPlaying
 			? SOURCE_AUDIO_PREVIEW_PLAYING_SEEK_DRIFT_SECONDS
 			: SOURCE_AUDIO_PREVIEW_PAUSED_SEEK_DRIFT_SECONDS;
-		if (sourceAudioMasterGainRef.current) {
-			sourceAudioMasterGainRef.current.gain.value = isCurrentClipMuted
-				? 0
-				: Math.max(0, Math.min(1, previewVolume));
-		}
-
 		for (const audio of sourceAudioElementsRef.current.values()) {
 			if (!audio.src) continue;
 			if (!supportsPreviewPlaybackRate(sourcePlaybackRate)) {
@@ -477,9 +411,28 @@ export function useAudioPreviewSync({
 
 			const atEnd = audioDuration !== null && targetTime >= audioDuration;
 			if (isPlaying && !isCurrentClipMuted && !beforeAudioStart && !atEnd) {
-				void ensureSourceAudioRunning().then(() => {
-					if (!cancelled) audio.play().catch(() => undefined);
-				});
+				// Source tracks already use HTMLAudioElement directly for pitch-preserving
+				// playback. An unrelated, suspended AudioContext must not block them.
+				const resourceKey = sourceAudioElementResourcesRef.current.get(sourceAudioPath);
+				if (
+					audio.paused &&
+					sourcePlaybackErrorsRef.current.get(sourceAudioPath) !== resourceKey
+				) {
+					void audio.play().catch((error: unknown) => {
+						if (cancelled || (error instanceof Error && error.name === "AbortError"))
+							return;
+						if (
+							!resourceKey ||
+							sourceAudioElementsRef.current.get(sourceAudioPath) !== audio ||
+							sourceAudioElementResourcesRef.current.get(sourceAudioPath) !==
+								resourceKey ||
+							sourcePlaybackErrorsRef.current.get(sourceAudioPath) === resourceKey
+						)
+							return;
+						sourcePlaybackErrorsRef.current.set(sourceAudioPath, resourceKey);
+						onSourceFallbackLoadError(error);
+					});
+				}
 			} else if (!audio.paused) {
 				audio.pause();
 			}
@@ -500,8 +453,6 @@ export function useAudioPreviewSync({
 		previewVolume,
 		resolvedSourceTracks,
 		sourceAudioFallbackStartDelayMsByPath,
-		ensureSourceAudioRunning,
+		onSourceFallbackLoadError,
 	]);
-
-	return { playSourceAudioPreview };
 }

@@ -128,7 +128,6 @@ export function useTimelineEditingController(input: Input) {
 	const playback = useEditorPlaybackControls({
 		videoPlaybackRef: input.videoPlaybackRef,
 		timelineRef: input.timelineRef,
-		playSourceAudioPreview: audio.playSourceAudioPreview,
 		timelinePlayheadTime: projection.timelinePlayheadTime,
 		timelineDuration: projection.timelineDuration,
 	});

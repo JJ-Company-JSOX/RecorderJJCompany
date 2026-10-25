@@ -127,7 +127,7 @@ export function useVideoEditorAudio({
 	const shouldMutePreviewVideo =
 		sourceTrackRoutingPolicy.muteEmbeddedPreview || Boolean(enhancedEmbedded);
 
-	const { playSourceAudioPreview } = useAudioPreviewSync({
+	useAudioPreviewSync({
 		audioRegions,
 		previewVolume,
 		isPlaying,
@@ -154,7 +154,6 @@ export function useVideoEditorAudio({
 		sourceAudioTrackMeta,
 		activeSourceAudioTrackSettings,
 		selectedClipSourceAudioTrackSettings,
-		playSourceAudioPreview,
 		getSourceAudioTrackSettingsForClip,
 		onSourceAudioTracksMetaChange,
 		onSelectedClipSourceAudioTrackVolumeChange,

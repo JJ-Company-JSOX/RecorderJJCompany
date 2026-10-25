@@ -30,6 +30,7 @@ export const narrationMessages = {
 		looking: "AI is looking at the screen",
 		draft: "Draft narration",
 		busy: "Drafting narration",
+		stale: "The video timing or narration moments changed. Click Draft narration again, review the new lines, then generate audio. Your edits have been kept.",
 		empty: "No unblocked suggestions to narrate yet. Generate or accept a plan first.",
 		editHint: "Edit any line before approving. Nothing is spoken until you approve.",
 		approve: "I've reviewed these lines; approve for narration",
@@ -68,6 +69,7 @@ export const narrationMessages = {
 		looking: "AI 正在看画面",
 		draft: "生成解说稿草稿",
 		busy: "正在生成解说稿",
+		stale: "视频时间或解说位置已改变。请重新点击生成解说稿草稿，审阅新内容后再生成语音；现有编辑已保留。",
 		empty: "暂时没有未被保护的建议可以配解说词,请先生成或采纳一份方案。",
 		editHint: "确认前可以编辑任意一句,没点确认之前不会生成语音。",
 		approve: "我已逐句审阅,确认用于解说",
@@ -113,6 +115,7 @@ export const narrationMessages = {
 		looking: "AI sedang melihat skrin",
 		draft: "Draf naratif",
 		busy: "Mendraf naratif",
+		stale: "Masa video atau detik naratif berubah. Klik Draf naratif semula, semak baris baharu, kemudian jana audio. Suntingan anda dikekalkan.",
 		empty: "Tiada cadangan tidak dilindungi untuk dinaratifkan lagi. Jana atau terima pelan dahulu.",
 		editHint:
 			"Sunting mana-mana baris sebelum meluluskan. Tiada apa disebut sehingga anda meluluskannya.",

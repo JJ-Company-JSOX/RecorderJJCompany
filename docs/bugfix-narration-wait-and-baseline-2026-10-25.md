@@ -1,0 +1,14 @@
+# Narration wait estimates and draft validation (2026-10-25)
+
+The narration draft and audio generation actions now show elapsed time and an estimated remaining range. Estimates use successful comparable runs stored on the current computer, separated by provider/model, language, narration style, workload bucket, or voice/text-size bucket. No model, transcript, source path or narration text is stored in timing history. History is limited to 100 measurements; an estimate uses the most recent five matches with a margin. First runs explicitly say estimating; overruns say taking longer rather than showing a zero countdown. Failed/canceled/stale runs do not train the estimate. No fabricated percentage or guarantee is displayed. This does not accelerate inference.
+
+The user's screenshot reports a stale source/timeline. The exact Windows sequence remains unverified. Code inspection found that narration used the full edit-plan baseline, so harmless clip presentation flags and source-audio volume settings could invalidate a draft. Narration now uses its own baseline containing actual source/time mapping, zooms, legacy speeds, independent visual source, existing speech captions and added audio timing. Equivalent explicit/default source offsets compare equally. General automatic-edit plans retain their strict baseline. Narration generation rechecks current source/timing after each asynchronous model/TTS call; a stale result cannot overwrite newer edits. The error now tells the user to draft narration again, review it and generate audio. Existing edits and original media remain intact.
+
+Validation:
+
+- TypeScript check and production `npm run build:app` passed, including the Electron main CJS smoke check. Existing PostCSS/CSS warnings remain.
+- 42 targeted unit tests passed, including equivalent normalized clips, trim/speed/source/caption invalidation, excluding previous generated narration, timing history bounds and estimate grouping. Another 24 narrator/IPC tests passed in the first targeted run (28 including timing tests).
+- All 5 Chromium Ollama-mode UI scenarios passed. The new deferred-request scenario checks elapsed time, initial estimating, cancellation and late-result rejection, successful-history reuse, overrun text and cleanup. Other scenarios cover provider checking, real timeline apply/undo, saved settings and narration routing. Model IPC is mocked; these are not Windows or actual model benchmarks.
+- The first UI timing run exposed a test waiting for a rounded one-second label before a full second elapsed. The test now waits for the two-second label; sub-second samples intentionally do not train estimates.
+
+Windows capture, actual Ollama/TTS latency and the user's exact stale-warning reproduction still require the Windows installation. No dependencies or model downloads were added.

@@ -53,6 +53,12 @@ async function setup(page: Page, missing = false, deferred = false) {
 				return { success: true, plan: { ...plan, reviewer: "local-ai" } };
 			};
 			window.electronAPI.narrateAutoEditLocally = async (plan, model, language, style) => {
+				if (deferred)
+					await new Promise<void>((resolve) =>
+						window.addEventListener("finish-narration", () => resolve(), {
+							once: true,
+						}),
+					);
 				document.documentElement.dataset.narrationRequest = JSON.stringify({
 					model,
 					language,
@@ -189,4 +195,35 @@ test("Ollama narration uses the selected local model and language without loadin
 	);
 	await expect(page.locator("textarea").first()).toHaveValue("Click the control.");
 	await expect(page.locator("html")).not.toHaveAttribute("data-bundled-started");
+});
+
+test("narration wait shows elapsed time, learns successful runs and discards canceled results", async ({
+	page,
+}) => {
+	await setup(page, false, true);
+	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+	await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	await page
+		.getByRole("button", { name: "Add AI voice-over and subtitles", exact: true })
+		.click();
+	const draft = page.getByRole("button", { name: "Draft narration", exact: true });
+	const wait = page.locator("[data-task-wait]");
+	await draft.click();
+	await expect(wait).toContainText("Estimating");
+	await expect(wait).toContainText("Time elapsed: 0:02");
+	await page.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(wait).toHaveCount(0);
+	await page.evaluate(() => window.dispatchEvent(new Event("finish-narration")));
+	await expect(page.locator("textarea")).toHaveCount(0);
+	await draft.click();
+	await expect(wait).toContainText("Estimating");
+	await expect(wait).toContainText("Time elapsed: 0:02");
+	await page.evaluate(() => window.dispatchEvent(new Event("finish-narration")));
+	await expect(page.locator("textarea").first()).toHaveValue("Click the control.");
+	await expect(wait).toHaveCount(0);
+	await draft.click();
+	await expect(wait).toContainText("Estimated remaining");
+	await expect(wait).toContainText("Taking longer than estimated", { timeout: 10000 });
+	await page.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(wait).toHaveCount(0);
 });

@@ -18,6 +18,7 @@ import { guideMessages } from "./guideMessages";
 import { interfaceMessages } from "./interfaceMessages";
 import { messages, type PlanLanguage } from "./messages";
 import type { NarrationDraft } from "./narration";
+import { narrationBaselineFor } from "./narrationBaseline";
 import { narrationCaptions } from "./narrationCaptions";
 import { narrationMessages } from "./narrationMessages";
 import { narrationMoments, scheduleNarration } from "./narrationMoments";
@@ -36,6 +37,8 @@ import { speedMessages } from "./speedMessages";
 import { buildTextCutPlan, textLines } from "./textCuts";
 import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
+import { TaskWaitStatus, useTaskTiming } from "./TaskWaitStatus";
+import { workloadBucket } from "./taskTiming";
 import { wizardMessages } from "./wizardMessages";
 
 /** Spoken language is independent from the editing interface language. */
@@ -119,6 +122,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		| null
 	>(null);
 	const [error, setError] = useState("");
+	const taskTiming = useTaskTiming();
 	const [silentFallback, setSilentFallback] = useState(false);
 	const [applied, setApplied] = useState(false);
 	const [narrationDraft, setNarrationDraft] = useState<NarrationDraft | null>(null);
@@ -588,6 +592,16 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		if (!voicePlan.suggestions.length) return;
 		const run = ++generation.current;
 		setBusy("narrate");
+		taskTiming.start(
+			JSON.stringify([
+				"draft",
+				provider,
+				ollamaModel?.name ?? "bundled",
+				language,
+				narrationStyle,
+				workloadBucket(voicePlan.suggestions.length),
+			]),
+		);
 		setError("");
 		setProgress({ completed: 0, total: 0 });
 		setNarrationApproved(false);
@@ -626,8 +640,14 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 						});
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
+			if (
+				narrationBaselineFor(currentState.current.state, currentState.current.source) !==
+				narrationBaselineFor(draftState, source)
+			)
+				throw Error(n.stale);
+			taskTiming.finish(true);
 			setNarrationLanguage(draftLanguage);
-			setNarrationBaseline(baselineFor(withoutNarration(draftState), source));
+			setNarrationBaseline(narrationBaselineFor(draftState, source));
 			setNarrationReport(null);
 			setNarrationDraft(result.draft);
 			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
@@ -635,7 +655,10 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
 		} finally {
-			if (run === generation.current) setBusy(null);
+			if (run === generation.current) {
+				taskTiming.finish(false);
+				setBusy(null);
+			}
 		}
 	};
 	const synthesizeNarration = async () => {
@@ -646,11 +669,19 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		try {
 			const { state: latestState } = currentState.current;
 			// Lines were placed on the timeline as it was when drafted.
-			if (baselineFor(withoutNarration(latestState), source) !== narrationBaseline)
-				throw Error(m.stale);
+			if (narrationBaselineFor(latestState, source) !== narrationBaseline)
+				throw Error(n.stale);
 			const cues = narrationDraft.cues
 				.map((cue) => ({ id: cue.id, text: (narrationEdits[cue.id] ?? cue.text).trim() }))
 				.filter((cue) => cue.text);
+			taskTiming.start(
+				JSON.stringify([
+					"speech",
+					narrationLanguage,
+					selectedVoice?.id,
+					workloadBucket(cues.reduce((sum, cue) => sum + cue.text.length, 0)),
+				]),
+			);
 			const result = await window.electronAPI.synthesizeAutoEditNarration(
 				cues,
 				narrationLanguage,
@@ -658,6 +689,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			);
 			if (run !== generation.current) return;
 			if (!result.success || !result.clips) throw new Error(result.error);
+			if (
+				narrationBaselineFor(currentState.current.state, currentState.current.source) !==
+				narrationBaseline
+			)
+				throw Error(n.stale);
+			taskTiming.finish(true);
 			const base = withoutNarration(currentState.current.state);
 			const trackIndex = Math.max(-1, ...base.audioRegions.map((r) => r.trackIndex ?? 0)) + 1;
 			// Each line waits for the previous one and none runs past the end of the video.
@@ -692,7 +729,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				audioRegions: [...base.audioRegions, ...regions],
 				autoCaptions: [...base.autoCaptions, ...captions.cues],
 			});
-			setNarrationBaseline(baselineFor(base, source));
+			setNarrationBaseline(narrationBaselineFor(base, source));
 			setNarrationReport({
 				dropped: dropped.length,
 				skipped: captions.skipped,
@@ -705,7 +742,10 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
 		} finally {
-			if (run === generation.current) setBusy(null);
+			if (run === generation.current) {
+				taskTiming.finish(false);
+				setBusy(null);
+			}
 		}
 	};
 	const stepIndex = voiceOpen
@@ -1492,6 +1532,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 											variant="secondary"
 											onClick={() => {
 												generation.current++;
+												taskTiming.finish(false);
 												void window.electronAPI.cancelAutoEditAnalysis?.();
 												setBusy(null);
 											}}
@@ -1501,6 +1542,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									)}
 								</div>
 							</div>
+						)}
+						{(busy === "narrate" || busy === "synthesize") && (
+							<TaskWaitStatus timing={taskTiming.display} language={language} />
 						)}
 						{narrationDraft &&
 							(narrationDraft.cues.length === 0 ? (

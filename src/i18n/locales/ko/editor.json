@@ -204,7 +204,7 @@
 	"textToSpeech": {
 		"menu": "텍스트 음성 변환",
 		"title": "텍스트 음성 변환",
-		"description": "음성이 읽을 내용을 입력하세요. 재생 헤드 위치부터 타임라인에 추가되며, 문단마다 클립 하나가 만들어집니다.",
+		"description": "텍스트를 입력하고 들어 본 뒤 삽입 위치를 선택하세요. 각 문단은 편집 가능한 오디오 클립이 됩니다.",
 		"textLabel": "텍스트",
 		"placeholder": "음성이 읽을 내용을 입력하거나 붙여넣으세요…",
 		"parts": "클립 {{count}}개",
@@ -222,13 +222,24 @@
 		"generating": "음성을 만드는 중…",
 		"error": "음성을 만들 수 없습니다:",
 		"nothingSpoken": "이 텍스트에서 음성이 읽을 수 있는 내용이 없습니다.",
-		"noRoom": "재생 헤드 위치에 음성을 넣을 공간이 없습니다. 재생 헤드를 옮기거나 오디오 트랙을 비우세요.",
+		"noRoom": "음성은 준비되었지만 여기에 추가할 수 없습니다. 더 이른 삽입 시간을 선택하고 다시 시도하세요. 생성된 음성을 재사용합니다.",
 		"skipped": "읽을 내용이 없는 {{count}}개 부분은 건너뛰었습니다.",
 		"notPlaced": "{{count}}개 부분은 동영상 끝 전에 들어가지 않았습니다.",
 		"trimmed": "동영상이 끝나는 지점에서 음성이 잘렸습니다.",
 		"added": "타임라인에 음성을 추가했습니다",
 		"checking": "Checking offline voices…",
 		"statusFailed": "Could not check offline voices. Try again.",
-		"recheck": "Recheck voices"
+		"recheck": "Recheck voices",
+		"previewText": "입력한 텍스트 듣기",
+		"previewParagraph": "문단 듣기",
+		"pressPlay": "위의 재생 버튼을 눌러 들어 보세요.",
+		"playbackFailed": "생성된 음성을 재생할 수 없습니다. 다시 시도할 수 있으며 파일은 보존됩니다.",
+		"insertTime": "삽입 시간(초)",
+		"useStart": "동영상 시작 사용",
+		"endToStart": "재생 헤드가 끝에 있어 삽입 시간을 시작으로 설정했습니다.",
+		"availableTime": "동영상 끝까지 남은 시간: {{seconds}}초",
+		"invalidTime": "동영상이 끝나기 전의 시간을 선택하세요.",
+		"tooLong": "음성에 {{seconds}}초가 필요합니다. 더 이른 시간이나 짧은 텍스트를 선택하거나 잘라내기를 허용하세요.",
+		"allowTrim": "동영상 끝에서 음성 잘라내기"
 	}
 }

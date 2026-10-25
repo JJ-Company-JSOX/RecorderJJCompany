@@ -102,9 +102,9 @@ export interface PlacedAudioClip {
 }
 
 /**
- * Places clips one after another from startPos, the first wherever it fits and the rest on
- * the same track, so a longer text reads as one voice track. Stops at the first clip that has
- * no room left.
+ * Reserves one track for the entire sequence, including pauses between paragraphs. Looking
+ * only at the first paragraph could choose a track occupied by music later in the sequence.
+ * Stops at the end of the video without extending or changing the screen clips.
  */
 export function placeAudioClips({
 	audioRegions,
@@ -119,10 +119,21 @@ export function placeAudioClips({
 	clips: Array<{ audioPath: string; durationMs: number }>;
 	gapMs: number;
 }): PlacedAudioClip[] {
+	if (!clips.length) return [];
+	const sequenceDuration =
+		clips.reduce((sum, clip) => sum + clip.durationMs, 0) +
+		Math.max(0, clips.length - 1) * gapMs;
+	const sequencePlacement = resolveAudioPlacement({
+		audioRegions,
+		startPos,
+		totalMs,
+		audioDurationMs: sequenceDuration,
+	});
+	if (!sequencePlacement) return [];
 	const regions = [...audioRegions];
 	const placed: PlacedAudioClip[] = [];
 	let start = startPos;
-	let trackIndex: number | undefined;
+	const trackIndex = sequencePlacement.trackIndex;
 	for (const clip of clips) {
 		const placement = resolveAudioPlacement({
 			audioRegions: regions,
@@ -146,7 +157,6 @@ export function placeAudioClips({
 			endMs,
 			trackIndex: placement.trackIndex,
 		});
-		trackIndex = placement.trackIndex;
 		start = endMs + gapMs;
 	}
 	return placed;

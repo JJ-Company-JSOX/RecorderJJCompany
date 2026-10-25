@@ -144,13 +144,18 @@ export function useTimelineAudioActions({
 		[videoDuration, totalMs, onAudioAdded, deps, currentTimeMs, audioRegions],
 	);
 
-	/** Adds audio that already exists (text to speech), one clip after another from the playhead. */
+	/** Adds existing audio at an explicit timeline time, independent of playback during synthesis. */
 	const handleAddAudioClips = useCallback(
-		(clips: Array<{ audioPath: string; durationMs: number }>, gapMs = 0): PlacedAudioClip[] => {
-			if (!videoDuration || totalMs === 0 || !onAudioAdded) return [];
+		(
+			clips: Array<{ audioPath: string; durationMs: number }>,
+			gapMs = 0,
+			startMs = currentTimeMs,
+		): PlacedAudioClip[] => {
+			if (!videoDuration || totalMs === 0 || !onAudioAdded || !Number.isFinite(startMs))
+				return [];
 			const placed = placeAudioClips({
 				audioRegions,
-				startPos: Math.max(0, Math.min(currentTimeMs, totalMs)),
+				startPos: Math.max(0, Math.min(startMs, totalMs)),
 				totalMs,
 				clips,
 				gapMs,

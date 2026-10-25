@@ -75,4 +75,26 @@ describe("timelineAudioPlacement", () => {
 			}),
 		).toEqual([]);
 	});
+
+	it("keeps every paragraph by reserving a track beyond later music and paragraph gaps", () => {
+		const audioRegions = [
+			{ id: "later-music", startMs: 1400, endMs: 2500, trackIndex: 0 },
+			{ id: "in-pause", startMs: 1000, endMs: 1200, trackIndex: 1 },
+		];
+		const placed = placeAudioClips({
+			audioRegions,
+			startPos: 0,
+			totalMs: 6000,
+			clips: [
+				{ audioPath: "a.wav", durationMs: 1000 },
+				{ audioPath: "b.wav", durationMs: 1000 },
+			],
+			gapMs: 250,
+		});
+		expect(placed).toEqual([
+			{ audioPath: "a.wav", startMs: 0, endMs: 1000, trackIndex: 2, trimmed: false },
+			{ audioPath: "b.wav", startMs: 1250, endMs: 2250, trackIndex: 2, trimmed: false },
+		]);
+		expect(audioRegions).toHaveLength(2);
+	});
 });

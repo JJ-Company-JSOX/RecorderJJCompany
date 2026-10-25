@@ -203,7 +203,7 @@
 	"textToSpeech": {
 		"menu": "Sintesi vocale",
 		"title": "Sintesi vocale",
-		"description": "Scrivi ciò che la voce deve dire. Viene aggiunto alla timeline alla testina, una clip per paragrafo.",
+		"description": "Scrivi e ascolta il testo, poi scegli dove aggiungerlo. Ogni paragrafo diventa una clip audio modificabile.",
 		"textLabel": "Testo",
 		"placeholder": "Scrivi o incolla ciò che la voce deve dire…",
 		"parts": "{{count}} clip",
@@ -221,13 +221,24 @@
 		"generating": "Creazione della voce…",
 		"error": "Impossibile creare la voce:",
 		"nothingSpoken": "La voce non è riuscita a dire nulla di questo testo.",
-		"noRoom": "Non c'è spazio per la voce alla testina. Sposta la testina o libera una traccia audio.",
+		"noRoom": "La voce è pronta, ma non è stato possibile aggiungerla qui. Scegli un punto precedente e riprova; la voce verrà riutilizzata.",
 		"skipped": "{{count}} parte/i non contenevano nulla da pronunciare e sono state saltate.",
 		"notPlaced": "{{count}} parte/i non entravano prima della fine del video.",
 		"trimmed": "La voce è stata tagliata alla fine del video.",
 		"added": "Voce aggiunta alla timeline",
 		"checking": "Checking offline voices…",
 		"statusFailed": "Could not check offline voices. Try again.",
-		"recheck": "Recheck voices"
+		"recheck": "Recheck voices",
+		"previewText": "Ascolta testo",
+		"previewParagraph": "Ascolta paragrafo",
+		"pressPlay": "Premi Riproduci qui sopra per ascoltare.",
+		"playbackFailed": "Impossibile riprodurre la voce generata. Puoi riprovare; il file viene conservato.",
+		"insertTime": "Inserisci a (secondi)",
+		"useStart": "Usa inizio video",
+		"endToStart": "La testina è alla fine. Il punto di inserimento è stato impostato all’inizio.",
+		"availableTime": "Disponibile prima della fine: {{seconds}} s",
+		"invalidTime": "Scegli un momento prima della fine del video.",
+		"tooLong": "La voce richiede {{seconds}} s. Scegli un punto precedente, accorcia il testo o consenti il taglio.",
+		"allowTrim": "Taglia voce alla fine del video"
 	}
 }

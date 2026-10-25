@@ -202,7 +202,7 @@
 	"textToSpeech": {
 		"menu": "Text zu Sprache",
 		"title": "Text zu Sprache",
-		"description": "Gib ein, was die Stimme sagen soll. Es wird an der Abspielposition in die Zeitleiste eingefügt, ein Clip pro Absatz.",
+		"description": "Text eingeben und anhören, dann die Einfügeposition wählen. Jeder Absatz wird zu einem bearbeitbaren Audioclip.",
 		"textLabel": "Text",
 		"placeholder": "Text eingeben oder einfügen…",
 		"parts": "{{count}} Clips",
@@ -220,13 +220,24 @@
 		"generating": "Stimme wird erstellt…",
 		"error": "Stimme konnte nicht erstellt werden:",
 		"nothingSpoken": "Die Stimme konnte nichts von diesem Text sprechen.",
-		"noRoom": "An der Abspielposition ist kein Platz für die Stimme. Verschiebe die Abspielposition oder gib eine Audiospur frei.",
+		"noRoom": "Die Stimme ist fertig, konnte hier aber nicht eingefügt werden. Eine frühere Position wählen und erneut versuchen; die Stimme wird wiederverwendet.",
 		"skipped": "{{count}} Teil(e) enthielten nichts Sprechbares und wurden übersprungen.",
 		"notPlaced": "{{count}} Teil(e) passten nicht mehr vor das Videoende.",
 		"trimmed": "Die Stimme wurde am Videoende abgeschnitten.",
 		"added": "Stimme zur Zeitleiste hinzugefügt",
 		"checking": "Checking offline voices…",
 		"statusFailed": "Could not check offline voices. Try again.",
-		"recheck": "Recheck voices"
+		"recheck": "Recheck voices",
+		"previewText": "Text anhören",
+		"previewParagraph": "Absatz anhören",
+		"pressPlay": "Zum Anhören oben auf Wiedergabe drücken.",
+		"playbackFailed": "Die erzeugte Stimme konnte nicht abgespielt werden. Erneut versuchen; die Datei bleibt erhalten.",
+		"insertTime": "Einfügen bei (Sekunden)",
+		"useStart": "Videoanfang verwenden",
+		"endToStart": "Der Abspielkopf ist am Ende. Die Einfügeposition wurde auf den Anfang gesetzt.",
+		"availableTime": "Bis zum Videoende verfügbar: {{seconds}} s",
+		"invalidTime": "Eine Zeit vor dem Videoende wählen.",
+		"tooLong": "Die Stimme benötigt {{seconds}} s. Eine frühere Zeit wählen, den Text kürzen oder Abschneiden erlauben.",
+		"allowTrim": "Stimme am Videoende abschneiden"
 	}
 }

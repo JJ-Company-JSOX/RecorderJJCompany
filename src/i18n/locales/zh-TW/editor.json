@@ -203,7 +203,7 @@
 	"textToSpeech": {
 		"menu": "文字轉語音",
 		"title": "文字轉語音",
-		"description": "輸入要念的內容，會從播放頭的位置加到時間軸上，每一段產生一個音訊片段。",
+		"description": "輸入文字並試聽，然後選擇插入時間。每段文字會產生一個可以移動和裁剪的音訊片段。",
 		"textLabel": "文字",
 		"placeholder": "輸入或貼上要念的內容…",
 		"parts": "共 {{count}} 段",
@@ -221,13 +221,24 @@
 		"generating": "正在產生聲音…",
 		"error": "無法產生聲音：",
 		"nothingSpoken": "這段文字裡沒有聲音能念的內容。",
-		"noRoom": "播放頭位置沒有空間放這段聲音。請移動播放頭，或空出一條音訊軌。",
+		"noRoom": "聲音已產生，但無法新增到這裡。請選擇更早的插入時間重試，會重用已產生的聲音。",
 		"skipped": "有 {{count}} 段沒有能念的內容，已略過。",
 		"notPlaced": "有 {{count}} 段放不下（超過了影片結尾）。",
 		"trimmed": "聲音在影片結尾處被截斷了。",
 		"added": "聲音已加到時間軸",
 		"checking": "正在检查离线声音…",
 		"statusFailed": "无法检查离线声音，请重试。",
-		"recheck": "重新检查声音"
+		"recheck": "重新检查声音",
+		"previewText": "試聽輸入的文字",
+		"previewParagraph": "試聽段落",
+		"pressPlay": "點擊上方播放按鈕試聽。",
+		"playbackFailed": "無法播放已產生的聲音。可以重試試聽，已產生的檔案會保留。",
+		"insertTime": "插入時間（秒）",
+		"useStart": "從影片開頭新增",
+		"endToStart": "播放頭在影片結尾，已將插入時間設為開頭。",
+		"availableTime": "距離影片結尾還有 {{seconds}} 秒",
+		"invalidTime": "請選擇影片結束之前的時間。",
+		"tooLong": "聲音需要 {{seconds}} 秒。請選擇更早的時間、縮短文字，或允許截斷。",
+		"allowTrim": "允許在影片結尾截斷聲音"
 	}
 }

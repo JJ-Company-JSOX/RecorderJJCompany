@@ -203,7 +203,7 @@
 	"textToSpeech": {
 		"menu": "Texto a voz",
 		"title": "Texto a voz",
-		"description": "Escribe lo que debe decir la voz. Se añade a la línea de tiempo en el cabezal, un clip por párrafo.",
+		"description": "Escribe y escucha el texto, luego elige dónde añadirlo. Cada párrafo se convierte en un clip de audio editable.",
 		"textLabel": "Texto",
 		"placeholder": "Escribe o pega lo que debe decir la voz…",
 		"parts": "{{count}} clips",
@@ -221,13 +221,24 @@
 		"generating": "Creando la voz…",
 		"error": "No se pudo crear la voz:",
 		"nothingSpoken": "La voz no pudo decir nada de este texto.",
-		"noRoom": "No hay espacio para la voz en el cabezal. Mueve el cabezal o libera una pista de audio.",
+		"noRoom": "La voz está lista, pero no se pudo añadir aquí. Elige un momento anterior y reintenta; se reutilizará la voz.",
 		"skipped": "{{count}} parte(s) no tenían nada que la voz pudiera decir y se omitieron.",
 		"notPlaced": "{{count}} parte(s) no cabían antes del final del vídeo.",
 		"trimmed": "La voz se cortó donde termina el vídeo.",
 		"added": "Voz añadida a la línea de tiempo",
 		"checking": "Checking offline voices…",
 		"statusFailed": "Could not check offline voices. Try again.",
-		"recheck": "Recheck voices"
+		"recheck": "Recheck voices",
+		"previewText": "Escuchar texto",
+		"previewParagraph": "Escuchar párrafo",
+		"pressPlay": "Pulsa Reproducir arriba para escuchar.",
+		"playbackFailed": "No se pudo reproducir la voz generada. Puedes reintentar; se conserva el archivo.",
+		"insertTime": "Insertar en (segundos)",
+		"useStart": "Usar inicio del vídeo",
+		"endToStart": "El cabezal está al final. Se ha seleccionado el inicio para insertar la voz.",
+		"availableTime": "Disponible antes del final: {{seconds}} s",
+		"invalidTime": "Elige un momento antes del final del vídeo.",
+		"tooLong": "La voz necesita {{seconds}} s. Elige un momento anterior, acorta el texto o permite recortarla.",
+		"allowTrim": "Recortar voz al final del vídeo"
 	}
 }

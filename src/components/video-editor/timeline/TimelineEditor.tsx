@@ -112,10 +112,11 @@ export interface TimelineEditorHandle {
 	splitClip: () => void;
 	addAnnotation: (trackIndex?: number) => void;
 	addAudio: (trackIndex?: number) => Promise<void>;
-	/** Adds existing audio files one after another from the playhead; returns where they went. */
+	/** Adds existing audio files from the given timeline time (or the playhead). */
 	addAudioClips: (
 		clips: Array<{ audioPath: string; durationMs: number }>,
 		gapMs?: number,
+		startMs?: number,
 	) => PlacedAudioClip[];
 	keyframes: { id: string; time: number }[];
 }

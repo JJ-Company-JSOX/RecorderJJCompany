@@ -203,7 +203,7 @@
 	"textToSpeech": {
 		"menu": "Synthèse vocale",
 		"title": "Synthèse vocale",
-		"description": "Saisissez ce que la voix doit dire. Le son est ajouté à la timeline à la tête de lecture, un clip par paragraphe.",
+		"description": "Saisissez et écoutez le texte, puis choisissez où l’ajouter. Chaque paragraphe devient un clip audio modifiable.",
 		"textLabel": "Texte",
 		"placeholder": "Saisissez ou collez ce que la voix doit dire…",
 		"parts": "{{count}} clips",
@@ -221,13 +221,24 @@
 		"generating": "Création de la voix…",
 		"error": "Impossible de créer la voix :",
 		"nothingSpoken": "La voix n’a rien pu dire de ce texte.",
-		"noRoom": "Pas de place pour la voix à la tête de lecture. Déplacez la tête de lecture ou libérez une piste audio.",
+		"noRoom": "La voix est prête, mais n’a pas pu être ajoutée ici. Choisissez un moment antérieur et réessayez ; la voix sera réutilisée.",
 		"skipped": "{{count}} partie(s) ne contenaient rien de prononçable et ont été ignorées.",
 		"notPlaced": "{{count}} partie(s) ne tenaient pas avant la fin de la vidéo.",
 		"trimmed": "La voix a été coupée à la fin de la vidéo.",
 		"added": "Voix ajoutée à la timeline",
 		"checking": "Checking offline voices…",
 		"statusFailed": "Could not check offline voices. Try again.",
-		"recheck": "Recheck voices"
+		"recheck": "Recheck voices",
+		"previewText": "Écouter le texte",
+		"previewParagraph": "Écouter le paragraphe",
+		"pressPlay": "Appuyez sur Lecture ci-dessus pour écouter.",
+		"playbackFailed": "Impossible de lire la voix générée. Vous pouvez réessayer ; le fichier est conservé.",
+		"insertTime": "Insérer à (secondes)",
+		"useStart": "Utiliser le début",
+		"endToStart": "La tête de lecture est à la fin. L’insertion a été placée au début.",
+		"availableTime": "Disponible avant la fin : {{seconds}} s",
+		"invalidTime": "Choisissez un moment avant la fin de la vidéo.",
+		"tooLong": "La voix nécessite {{seconds}} s. Choisissez un moment antérieur, raccourcissez le texte ou autorisez la coupe.",
+		"allowTrim": "Couper la voix à la fin de la vidéo"
 	}
 }

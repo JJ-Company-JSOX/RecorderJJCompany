@@ -203,7 +203,7 @@
 	"textToSpeech": {
 		"menu": "Texto para fala",
 		"title": "Texto para fala",
-		"description": "Digite o que a voz deve dizer. Ele é adicionado à linha do tempo no cursor de reprodução, um clipe por parágrafo.",
+		"description": "Digite e ouça o texto, depois escolha onde adicioná-lo. Cada parágrafo vira um clipe de áudio editável.",
 		"textLabel": "Texto",
 		"placeholder": "Digite ou cole o que a voz deve dizer…",
 		"parts": "{{count}} clipes",
@@ -221,13 +221,24 @@
 		"generating": "Criando a voz…",
 		"error": "Não foi possível criar a voz:",
 		"nothingSpoken": "A voz não conseguiu dizer nada deste texto.",
-		"noRoom": "Não há espaço para a voz no cursor de reprodução. Mova o cursor ou libere uma faixa de áudio.",
+		"noRoom": "A voz está pronta, mas não pôde ser adicionada aqui. Escolha um momento anterior e tente novamente; a voz será reutilizada.",
 		"skipped": "{{count}} parte(s) não tinham nada que a voz pudesse dizer e foram puladas.",
 		"notPlaced": "{{count}} parte(s) não couberam antes do fim do vídeo.",
 		"trimmed": "A voz foi cortada onde o vídeo termina.",
 		"added": "Voz adicionada à linha do tempo",
 		"checking": "Checking offline voices…",
 		"statusFailed": "Could not check offline voices. Try again.",
-		"recheck": "Recheck voices"
+		"recheck": "Recheck voices",
+		"previewText": "Ouvir texto",
+		"previewParagraph": "Ouvir parágrafo",
+		"pressPlay": "Pressione Reproduzir acima para ouvir.",
+		"playbackFailed": "Não foi possível reproduzir a voz gerada. Você pode tentar novamente; o arquivo será preservado.",
+		"insertTime": "Inserir em (segundos)",
+		"useStart": "Usar início do vídeo",
+		"endToStart": "O indicador está no final. A inserção foi definida para o início.",
+		"availableTime": "Disponível até o final: {{seconds}} s",
+		"invalidTime": "Escolha um momento antes do final do vídeo.",
+		"tooLong": "A voz precisa de {{seconds}} s. Escolha um momento anterior, encurte o texto ou permita o corte.",
+		"allowTrim": "Cortar voz no final do vídeo"
 	}
 }

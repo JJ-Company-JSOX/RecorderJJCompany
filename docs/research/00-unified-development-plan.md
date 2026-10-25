@@ -1,5 +1,7 @@
 # RecorderJJCompany 统一开发建议
 
+文字配音跟进：[插入时间、输入试听与合成复用](../bugfix-text-to-speech-placement-2026-10-25.md)，解决结尾添加失败及放置失败后重复生成的问题。
+
 窗口跟进：[Windows 设置页置顶与关闭按钮](../bugfix-recorder-window-controls-2026-10-25.md)，区分普通设置页与录制悬浮条，保留原录制和导出架构。
 
 音频预览跟进：[移除无关音频上下文等待](../bugfix-source-audio-playback-2026-10-25.md)，包含修复前复现、真实媒体元素播放和环境限制。

@@ -135,6 +135,7 @@ export function EditorPreviewPanel(props: Props) {
 	const panelRef = useRef<HTMLDivElement>(null);
 	const [isFullscreen, setIsFullscreen] = useState(false);
 	const [textToSpeechOpen, setTextToSpeechOpen] = useState(false);
+	const [textToSpeechStartMs, setTextToSpeechStartMs] = useState(0);
 	useEffect(() => {
 		const sync = () => setIsFullscreen(document.fullscreenElement === panelRef.current);
 		document.addEventListener("fullscreenchange", sync);
@@ -358,7 +359,13 @@ export function EditorPreviewPanel(props: Props) {
 								{t("timeline.audio.label")}
 							</DropdownMenuItem>
 							<DropdownMenuItem
-								onClick={() => setTextToSpeechOpen(true)}
+								onClick={() => {
+									videoPlaybackRef.current?.pause();
+									setTextToSpeechStartMs(
+										Math.round(projection.timelinePlayheadTime * 1000),
+									);
+									setTextToSpeechOpen(true);
+								}}
 								className="cursor-pointer text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
 							>
 								{t("editor.textToSpeech.menu", "Text to speech")}
@@ -484,7 +491,13 @@ export function EditorPreviewPanel(props: Props) {
 				onOpenChange={setTextToSpeechOpen}
 				hasVideo={projection.timelineDuration > 0}
 				sourceKey={videoPath}
-				addClips={(clips, gapMs) => timelineRef.current?.addAudioClips(clips, gapMs)}
+				initialStartMs={textToSpeechStartMs}
+				durationMs={Math.round(projection.timelineDuration * 1000)}
+				addClips={(clips, gapMs, startMs) => {
+					const placed = timelineRef.current?.addAudioClips(clips, gapMs, startMs);
+					if (placed?.length) playback.handleTimelineSeek(placed[0].startMs / 1000);
+					return placed;
+				}}
 			/>
 		</div>
 	);

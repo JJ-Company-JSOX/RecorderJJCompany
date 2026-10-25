@@ -211,7 +211,7 @@
 	"textToSpeech": {
 		"menu": "文字转语音",
 		"title": "文字转语音",
-		"description": "输入要念的内容，会从播放头的位置加到时间轴上，每一段生成一个音频片段。",
+		"description": "输入文字并试听，然后选择插入时间。每段文字会生成一个可以移动和裁剪的音频片段。",
 		"textLabel": "文字",
 		"placeholder": "输入或粘贴要念的内容…",
 		"parts": "共 {{count}} 段",
@@ -229,13 +229,24 @@
 		"generating": "正在生成声音…",
 		"error": "无法生成声音：",
 		"nothingSpoken": "这段文字里没有声音能念的内容。",
-		"noRoom": "播放头位置没有空间放这段声音。请移动播放头，或空出一条音频轨。",
+		"noRoom": "声音已生成，但无法添加到这里。请选择更早的插入时间重试，会复用已生成的声音。",
 		"skipped": "有 {{count}} 段没有能念的内容，已跳过。",
 		"notPlaced": "有 {{count}} 段放不下（超过了视频结尾）。",
 		"trimmed": "声音在视频结尾处被截断了。",
 		"added": "声音已加到时间轴",
 		"checking": "正在检查离线声音…",
 		"statusFailed": "无法检查离线声音，请重试。",
-		"recheck": "重新检查声音"
+		"recheck": "重新检查声音",
+		"previewText": "试听输入的文字",
+		"previewParagraph": "试听段落",
+		"pressPlay": "点击上方播放按钮试听。",
+		"playbackFailed": "无法播放已生成的声音。可以重试试听，已生成的文件会保留。",
+		"insertTime": "插入时间（秒）",
+		"useStart": "从视频开头添加",
+		"endToStart": "播放头在视频结尾，已将插入时间设为开头。",
+		"availableTime": "距离视频结尾还有 {{seconds}} 秒",
+		"invalidTime": "请选择视频结束之前的时间。",
+		"tooLong": "声音需要 {{seconds}} 秒。请选择更早的时间、缩短文字，或允许截断。",
+		"allowTrim": "允许在视频结尾截断声音"
 	}
 }

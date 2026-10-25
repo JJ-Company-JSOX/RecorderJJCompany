@@ -211,7 +211,7 @@
 	"textToSpeech": {
 		"menu": "Text to speech",
 		"title": "Text to speech",
-		"description": "Type what the voice should say. It is added to the timeline at the playhead, one clip per paragraph.",
+		"description": "Type and preview your text, then choose where to add it. Each paragraph becomes an editable audio clip.",
 		"textLabel": "Text",
 		"placeholder": "Type or paste what the voice should say…",
 		"parts": "{{count}} clips",
@@ -229,13 +229,24 @@
 		"generating": "Making the voice…",
 		"error": "Could not make the voice:",
 		"nothingSpoken": "The voice could not say any of this text.",
-		"noRoom": "There is no room for the voice at the playhead. Move the playhead or free an audio track.",
+		"noRoom": "The voice is ready, but could not be added here. Choose an earlier insertion time and try again; the voice will be reused.",
 		"skipped": "{{count}} part(s) had nothing the voice could say and were skipped.",
 		"notPlaced": "{{count}} part(s) did not fit before the end of the video.",
 		"trimmed": "The voice was cut where the video ends.",
 		"added": "Voice added to the timeline",
 		"checking": "Checking offline voices…",
 		"statusFailed": "Could not check offline voices. Try again.",
-		"recheck": "Recheck voices"
+		"recheck": "Recheck voices",
+		"previewText": "Preview text",
+		"previewParagraph": "Preview paragraph",
+		"pressPlay": "Press Play above to listen.",
+		"playbackFailed": "Could not play the generated voice. You can retry the preview; the generated file is preserved.",
+		"insertTime": "Insert at (seconds)",
+		"useStart": "Use video start",
+		"endToStart": "The playhead is at the end. Insertion has been set to the start.",
+		"availableTime": "Available before video ends: {{seconds}} s",
+		"invalidTime": "Choose a time before the end of the video.",
+		"tooLong": "The voice needs {{seconds}} s. Choose an earlier time, shorten the text, or allow trimming.",
+		"allowTrim": "Trim voice at video end"
 	}
 }

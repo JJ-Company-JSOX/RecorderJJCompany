@@ -8,6 +8,8 @@ const fixture = vi.hoisted(() => ({
 	narrate: vi.fn(),
 	reviewLocal: vi.fn(),
 	narrateLocal: vi.fn(),
+	story: vi.fn(),
+	approve: vi.fn(),
 }));
 vi.mock("electron", () => ({
 	app: { isPackaged: false, getAppPath: () => "/app", once: vi.fn() },
@@ -32,6 +34,7 @@ vi.mock("../autoEdit/narrator", () => ({
 		generate = fixture.narrateLocal;
 	},
 }));
+vi.mock("../autoEdit/story", () => ({ generateLocalStory: fixture.story }));
 vi.mock("../autoEdit/media", () => ({ analyzeLocalMedia: vi.fn() }));
 vi.mock("../autoEdit/vision", () => ({ analyzeVideoFrames: vi.fn() }));
 vi.mock("../autoEdit/reviewer", () => ({
@@ -53,7 +56,7 @@ vi.mock("../ffmpeg/binary", () => ({
 	getFfmpegBinaryPath: () => "/ffmpeg",
 	getFfprobeBinaryPath: () => "/ffprobe",
 }));
-vi.mock("../project/manager", () => ({ resolveApprovedLocalMediaPath: async () => "/ok.mp4" }));
+vi.mock("../project/manager", () => ({ resolveApprovedLocalMediaPath: fixture.approve }));
 vi.mock("../utils", () => ({ normalizeVideoSourcePath: (value: string) => value }));
 import type { OcrEngine } from "../autoEdit/ocrTypes";
 import { registerAutoEditHandlers } from "./autoEdit";
@@ -78,6 +81,8 @@ const narrate = () =>
 beforeEach(() => {
 	vi.clearAllMocks();
 	fixture.handlers.clear();
+	fixture.approve.mockResolvedValue("/ok.mp4");
+	fixture.story.mockResolvedValue({ cues: [] });
 	fixture.start.mockResolvedValue({ close: fixture.close, complete: vi.fn(), look: vi.fn() });
 	fixture.describe.mockResolvedValue(new Map());
 	fixture.narrate.mockResolvedValue({ cues: [] });
@@ -182,5 +187,69 @@ it("aborts Ollama narration when the editor is destroyed and forwards the reques
 	sender.emit("destroyed");
 	finish();
 	expect(await request).toMatchObject({ success: false });
+	expect(sender.listenerCount("destroyed")).toBe(0);
+});
+
+const storyRequest = () => ({
+	brief: {
+		topic: "My product",
+		audience: "Customers",
+		facts: "Works offline",
+		ending: "Try it",
+		notes: "",
+		analyzeVideo: true,
+	},
+	videoPath: "/ok.mp4",
+	scenes: [{ id: "story-1", startMs: 0, endMs: 5000, sourceTimeMs: 2500 }],
+});
+it("validates and approves story media before allowing model work", async () => {
+	registerAutoEditHandlers();
+	const handler = fixture.handlers.get("auto-edit-story-local")!;
+	expect(await handler(event(), { ...storyRequest(), scenes: [] }, "local", "en")).toMatchObject({
+		success: false,
+	});
+	expect(fixture.story).not.toHaveBeenCalled();
+	fixture.approve.mockResolvedValueOnce(null);
+	expect(await handler(event(), storyRequest(), "local", "en")).toMatchObject({
+		success: false,
+		error: "Select an approved local recording first",
+	});
+	expect(fixture.story).not.toHaveBeenCalled();
+	expect(await handler(event(), storyRequest(), "local", "en")).toMatchObject({ success: true });
+	expect(fixture.story).toHaveBeenCalledWith(
+		expect.objectContaining({
+			approvedPath: "/ok.mp4",
+			language: "en",
+			model: "local",
+			signal: expect.any(AbortSignal),
+		}),
+	);
+});
+it("cancels a story and discards late output without retaining a running job", async () => {
+	registerAutoEditHandlers();
+	const sender = Object.assign(new EventEmitter(), {
+		id: 91,
+		isDestroyed: () => false,
+		send: vi.fn(),
+	});
+	let finish!: () => void;
+	let signal!: AbortSignal;
+	fixture.story.mockImplementation((options) => {
+		signal = options.signal;
+		return new Promise((resolve) => {
+			finish = () => resolve({ cues: [] });
+		});
+	});
+	const handler = fixture.handlers.get("auto-edit-story-local")!;
+	const pending = handler({ sender }, storyRequest(), "local", "en");
+	await vi.waitFor(() => expect(fixture.story).toHaveBeenCalled());
+	expect(await handler({ sender }, storyRequest(), "local", "en")).toMatchObject({
+		success: false,
+		error: "Analysis already running",
+	});
+	await fixture.handlers.get("auto-edit-cancel")!({ sender });
+	expect(signal.aborted).toBe(true);
+	finish();
+	expect(await pending).toMatchObject({ success: false });
 	expect(sender.listenerCount("destroyed")).toBe(0);
 });

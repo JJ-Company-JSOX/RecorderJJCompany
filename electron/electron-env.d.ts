@@ -297,6 +297,15 @@ interface Window {
 			plan?: import("../src/components/video-editor/auto-edit/plan").EditPlan;
 			error?: string;
 		}>;
+		draftVideoStory: (
+			request: import("../src/components/video-editor/auto-edit/story").StoryRequest,
+			model: string,
+			language: "zh" | "en" | "ms",
+		) => Promise<{
+			success: boolean;
+			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;
+			error?: string;
+		}>;
 		narrateAutoEditLocally: (
 			plan: import("../src/components/video-editor/auto-edit/plan").EditPlan,
 			model: string,

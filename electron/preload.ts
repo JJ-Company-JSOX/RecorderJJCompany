@@ -221,6 +221,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	cancelAutoEditAnalysis: () => ipcRenderer.invoke("auto-edit-cancel"),
 	reviewAutoEditLocally: (plan: EditPlan, model: string) =>
 		ipcRenderer.invoke("auto-edit-review-local", plan, model),
+	draftVideoStory: (
+		request: import("../src/components/video-editor/auto-edit/story").StoryRequest,
+		model: string,
+		language: "zh" | "en" | "ms",
+	) => ipcRenderer.invoke("auto-edit-story-local", request, model, language),
 	narrateAutoEditLocally: (
 		plan: EditPlan,
 		model: string,

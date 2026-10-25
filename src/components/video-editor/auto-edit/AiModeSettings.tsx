@@ -36,7 +36,7 @@ const copy = {
 		start: "Start Ollama editing",
 		firstCheck: "Check the installed Ollama model before starting.",
 		metadata:
-			"This mode reviews timing/action metadata, not a full video transcript or screen images.",
+			"Edit review uses timing/action metadata. Story planning can use your brief and explicitly enabled sampled frames with a vision model.",
 	},
 	zh: {
 		mode: "智能模式",
@@ -57,7 +57,8 @@ const copy = {
 		language: "仅接受本地模型。模型选择保存在这台电脑上，重新打开编辑器后需要再次检查可用性。",
 		start: "开始 Ollama 智能剪辑",
 		firstCheck: "请先检查已安装的 Ollama 模型。",
-		metadata: "此模式审阅操作与时间信息，不读取完整视频字幕或画面。",
+		metadata:
+			"剪辑审阅只用操作与时间信息；故事策划可使用主题说明，并在开启画面分析且模型支持视觉时读取抽样画面。",
 	},
 	ms: {
 		mode: "Mod AI",
@@ -79,7 +80,8 @@ const copy = {
 			"Hanya model setempat. Pilihan disimpan pada komputer ini; semak semula apabila editor dibuka semula.",
 		start: "Mulakan suntingan Ollama",
 		firstCheck: "Semak model Ollama terpasang dahulu.",
-		metadata: "Mod ini menyemak metadata masa/tindakan, bukan transkrip penuh atau imej skrin.",
+		metadata:
+			"Semakan suntingan menggunakan metadata masa/tindakan. Cerita menggunakan taklimat dan sampel imej apabila analisis visual diaktifkan dengan model visual.",
 	},
 };
 export const aiModeCopy = (language: PlanLanguage) => copy[language];

@@ -1,3 +1,8 @@
+import {
+	isStoryRequest,
+	type StoryRequest,
+} from "../../../src/components/video-editor/auto-edit/story";
+import { generateLocalStory } from "../autoEdit/story";
 import path from "node:path";
 import { app, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { BUNDLED_MODEL_ID } from "../../../src/components/video-editor/auto-edit/bundledTypes";
@@ -330,6 +335,46 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 			};
 		}
 	});
+	ipcMain.handle(
+		"auto-edit-story-local",
+		async (event, request: StoryRequest, model: string, language?: string) => {
+			try {
+				if (!isStoryRequest(request) || !isNarrationLanguage(language))
+					throw Error("Invalid story request");
+				const draft = await runLocalTask(event, async (signal) => {
+					const normalized =
+						request.brief.analyzeVideo && normalizeVideoSourcePath(request.videoPath);
+					const approvedPath = normalized
+						? await resolveApprovedLocalMediaPath(normalized)
+						: undefined;
+					if (request.brief.analyzeVideo && !approvedPath)
+						throw Error("Select an approved local recording first");
+					return generateLocalStory({
+						request,
+						model,
+						language,
+						signal,
+						approvedPath: approvedPath || undefined,
+						ffmpegPath: getFfmpegBinaryPath(),
+						ffprobePath: getFfprobeBinaryPath(),
+						onProgress: (completed, total) => {
+							if (!event.sender.isDestroyed())
+								event.sender.send("auto-edit-vision-progress", {
+									completed,
+									total,
+								});
+						},
+					});
+				});
+				return { success: true, draft };
+			} catch (error) {
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : "Story generation failed",
+				};
+			}
+		},
+	);
 	ipcMain.handle(
 		"auto-edit-narrate-local",
 		async (event, plan: EditPlan, model: string, language?: string, style?: string) => {

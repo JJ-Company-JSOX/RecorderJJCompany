@@ -24,10 +24,12 @@ export function localRequest(
 	route: "/api/chat" | "/api/show" | "/api/tags",
 	payload?: object,
 	signal?: AbortSignal,
+	maxBodyBytes = 500_000,
 ): Promise<unknown> {
 	signal?.throwIfAborted();
 	const body = payload ? JSON.stringify(payload) : "";
-	if (Buffer.byteLength(body) > 500_000) throw new Error("Plan too large for local review");
+	if (Buffer.byteLength(body) > Math.min(3_000_000, maxBodyBytes))
+		throw new Error("Plan too large for local review");
 	return new Promise((resolve, reject) => {
 		const req = http.request(
 			{

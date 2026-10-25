@@ -1,5 +1,5 @@
 import { Toast, toast as heroToast } from "@heroui/react";
-import { isValidElement, type ReactNode } from "react";
+import { isValidElement, type ComponentProps, type ReactNode } from "react";
 
 type Options = {
 	id?: string | number;
@@ -74,6 +74,12 @@ export const toast = Object.assign(notify, {
 		} else heroToast.close(ids.get(id) ?? String(id));
 	},
 });
-export function Toaster({ className }: { className?: string }) {
-	return <Toast.Provider placement="bottom end" className={className} />;
+export function Toaster({
+	className,
+	placement = "bottom end",
+}: {
+	className?: string;
+	placement?: ComponentProps<typeof Toast.Provider>["placement"];
+}) {
+	return <Toast.Provider placement={placement} className={className} />;
 }

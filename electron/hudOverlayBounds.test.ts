@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	getHudOverlayWindowBounds,
+	getHudSetupWindowBounds,
 	resizeHudOverlayFallbackBounds,
 	shouldExpandHudOverlayFallback,
 } from "./hudOverlayBounds";
@@ -70,6 +71,25 @@ describe("getHudOverlayWindowBounds", () => {
 		).toEqual({
 			x: -100,
 			y: 20,
+			width: 640,
+			height: 420,
+		});
+	});
+});
+
+describe("getHudSetupWindowBounds", () => {
+	it("centers the bounded setup on a monitor with a negative desktop origin", () => {
+		expect(getHudSetupWindowBounds({ x: -1920, y: 40, width: 1920, height: 1040 })).toEqual({
+			x: -1504,
+			y: 180,
+			width: 1088,
+			height: 760,
+		});
+	});
+	it("fits small work areas without moving outside the display", () => {
+		expect(getHudSetupWindowBounds({ x: 100, y: -420, width: 640, height: 420 })).toEqual({
+			x: 100,
+			y: -420,
 			width: 640,
 			height: 420,
 		});

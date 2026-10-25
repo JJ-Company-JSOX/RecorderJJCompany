@@ -57,6 +57,7 @@ import {
 	getUpdateToastWindow,
 	hideUpdateToastWindow,
 	isHudOverlayMousePassthroughSupported,
+	isHudOverlaySetupWindow,
 	beginHudCaptureProtection,
 	reassertHudOverlayMousePassthrough as reassertHudOverlayMouseState,
 	setHudOverlayRecordingActive,
@@ -297,7 +298,11 @@ function showHudOverlayFromTray() {
 		hud.restore();
 	}
 
-	if (process.platform === "win32" && isHudOverlayMousePassthroughSupported()) {
+	if (
+		process.platform === "win32" &&
+		isHudOverlayMousePassthroughSupported() &&
+		!isHudOverlaySetupWindow()
+	) {
 		hud.showInactive();
 		hud.moveTop();
 		reassertHudOverlayMouseState();
@@ -394,12 +399,9 @@ function focusOrCreateMainWindow() {
 			return;
 		}
 
-		// On Win32 with mouse passthrough enabled (Win11+), calling
-		// show/moveTop/focus on the transparent HUD overlay permanently corrupts
-		// setIgnoreMouseEvents forwarding, making it click-through.  Only focus
-		// the editor window; the HUD is alwaysOnTop so it doesn't need explicit
-		// focus.  On Win10 (passthrough disabled), the HUD is always interactive
-		// and can be safely shown/restored.
+		// Restoring Windows controls needs the mode-aware path: the full setup
+		// is a normal focusable window, while transparent capture controls need
+		// their mouse forwarding repaired after being shown or raised.
 		if (
 			process.platform === "win32" &&
 			!isEditorWindow(mainWindow) &&

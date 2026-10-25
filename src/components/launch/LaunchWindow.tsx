@@ -232,6 +232,20 @@ function LaunchWindowContent() {
 		localStorage.setItem("recordly.open-dashboard", String(Date.now()));
 		void window.electronAPI.showProjectDashboard();
 	};
+	const closePending = useRef(false);
+	const closeRecorder = useCallback(async () => {
+		if (closePending.current) return;
+		closePending.current = true;
+		beginInteractiveHudAction();
+		try {
+			// Finish cancellation before destroying the renderer that owns startup.
+			if (await cancelRecordingStart()) window.electronAPI.hudOverlayClose();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "Could not close the recorder.");
+		} finally {
+			closePending.current = false;
+		}
+	}, [beginInteractiveHudAction, cancelRecordingStart]);
 
 	const recordingControls = (
 		<RecordingControls
@@ -295,7 +309,7 @@ function LaunchWindowContent() {
 			onOpenFile={openVideoFile}
 			onHome={openHome}
 			onHide={() => void window.electronAPI.hudOverlayHide()}
-			onClose={() => void window.electronAPI.hudOverlayClose()}
+			onClose={() => void closeRecorder()}
 		/>
 	);
 
@@ -314,7 +328,7 @@ function LaunchWindowContent() {
 			onStart={toggleRecording}
 			onCancelCountdown={() => void cancelRecordingStart()}
 			onHide={() => void window.electronAPI.hudOverlayHide()}
-			onClose={() => void window.electronAPI.hudOverlayClose()}
+			onClose={() => void closeRecorder()}
 		/>
 	);
 
@@ -336,7 +350,9 @@ function LaunchWindowContent() {
 				? "idle"
 				: "ready";
 	const useNativeHudBarDrag =
-		platform === "linux" || hudOverlayMousePassthroughSupported === false;
+		platform === "linux" ||
+		hudOverlayMousePassthroughSupported === false ||
+		(platform === "win32" && hudMode === "idle");
 	const shouldAnimateHudLayout = !recording && !showRecordingWebcamPreview && !isHudDragging;
 
 	return (

@@ -9,6 +9,18 @@ const NON_PASSTHROUGH_HUD_WIDTH_DIP = 860;
 const NON_PASSTHROUGH_HUD_COMPACT_HEIGHT_DIP = 160;
 const NON_PASSTHROUGH_HUD_EXPANDED_HEIGHT_DIP = 540;
 
+/** Bound the interactive setup so it cannot intercept the entire desktop. */
+export function getHudSetupWindowBounds(workArea: HudOverlayWorkArea): HudOverlayWorkArea {
+	const width = Math.min(workArea.width, 1088);
+	const height = Math.min(workArea.height, 760);
+	return {
+		width,
+		height,
+		x: Math.round(workArea.x + (workArea.width - width) / 2),
+		y: Math.round(workArea.y + (workArea.height - height) / 2),
+	};
+}
+
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
 }

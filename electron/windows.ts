@@ -12,10 +12,11 @@ import { resolveEditorStartupView, resolveInitialDemoInput } from "./editorStart
 import { isHudInEditorMode } from "./hudEditorMode";
 import {
 	getHudOverlayWindowBounds,
+	getHudSetupWindowBounds,
 	resizeHudOverlayFallbackBounds,
 	shouldExpandHudOverlayFallback,
 } from "./hudOverlayBounds";
-import { getHudOverlayTaskbarOptions } from "./hudOverlayWindowOptions";
+import { getHudOverlayTaskbarOptions, isHudSetupWindow } from "./hudOverlayWindowOptions";
 import { currentProjectPath, currentRecordingSession, currentVideoPath } from "./ipc/state";
 import { getPackagedRendererBaseUrl } from "./rendererServer";
 
@@ -242,6 +243,7 @@ function getHudOverlayDisplay() {
 
 function getHudOverlayBounds() {
 	const { workArea } = getHudOverlayDisplay();
+	if (isHudOverlaySetupWindow()) return getHudSetupWindowBounds(workArea);
 	const fallbackExpanded = shouldExpandHudOverlayFallback({
 		fallbackExpanded: hudOverlayFallbackExpanded,
 		recordingActive: hudOverlayRecordingActive,
@@ -255,14 +257,32 @@ function getHudOverlayBounds() {
 	);
 }
 
+export function isHudOverlaySetupWindow(): boolean {
+	return isHudSetupWindow(process.platform, hudOverlaySetupVisible, hudOverlayRecordingActive);
+}
+
+function applyHudOverlayWindowMode() {
+	const hud = getHudOverlayWindow();
+	if (!hud) return;
+	const overlay = !isHudOverlaySetupWindow();
+	if (hud.isAlwaysOnTop() === overlay) return;
+	hud.setAlwaysOnTop(overlay, overlay ? "screen-saver" : "normal");
+	// Changing native window flags can disrupt Windows mouse forwarding. Restore
+	// it for the overlay; the full setup must remain interactive even after reset.
+	hudOverlayIgnoringMouse = overlay;
+	applyHudOverlayCaptureProtectionToWindow(hud, hudOverlayHiddenFromCapture);
+	reassertHudOverlayMousePassthrough();
+}
+
 function applyHudOverlayBounds() {
 	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed()) {
 		return;
 	}
+	applyHudOverlayWindowMode();
 	hudOverlayWindow.setBounds(getHudOverlayBounds(), false);
 
 	positionUpdateToastWindow();
-	if (!hudOverlayWindow.isVisible()) {
+	if (!hudOverlayWindow.isVisible() || isHudOverlaySetupWindow()) {
 		return;
 	}
 	hudOverlayWindow.moveTop();
@@ -341,7 +361,11 @@ function setHudOverlayFallbackExpanded(expanded: boolean) {
 
 function setHudOverlayMousePassthrough(ignore: boolean) {
 	hudOverlayIgnoringMouse =
-		hudOverlaySourceSelectionActive && !hudOverlayRecordingActive ? true : ignore;
+		hudOverlaySourceSelectionActive && !hudOverlayRecordingActive
+			? true
+			: isHudOverlaySetupWindow()
+				? false
+				: ignore;
 
 	if (hudOverlayMouseReassertTimer) {
 		clearTimeout(hudOverlayMouseReassertTimer);
@@ -365,7 +389,7 @@ function setHudOverlayMousePassthrough(ignore: boolean) {
 		return;
 	}
 
-	if (ignore) {
+	if (hudOverlayIgnoringMouse) {
 		hudOverlayWindow.setIgnoreMouseEvents(true, { forward: true });
 		return;
 	}
@@ -382,6 +406,7 @@ ipcMain.on("hud-overlay-set-source-selection-active", (_event, active: boolean) 
 	if (hudOverlaySourceSelectionActive) {
 		hudOverlayFallbackExpanded = false;
 		applyHudOverlayBounds();
+		setHudOverlayMousePassthrough(true);
 		return;
 	}
 
@@ -472,6 +497,9 @@ ipcMain.on("hud-overlay-set-setup-visible", (event, visible: boolean) => {
 	hudOverlaySetupVisible = visible;
 	hudOverlayFallbackExpanded = false;
 	applyHudOverlayBounds();
+	setHudOverlayMousePassthrough(hudOverlayIgnoringMouse);
+	// Keep the delayed Windows repair after the immediate renderer mouse update.
+	reassertHudOverlayMousePassthrough();
 });
 
 ipcMain.on("hud-overlay-set-webcam-preview-visible", (_event, visible: boolean) => {
@@ -525,6 +553,7 @@ export function createHudOverlayWindow(): BrowserWindow {
 	hudOverlayFallbackExpanded = false;
 	hudOverlayWebcamPreviewVisible = false;
 	hudOverlaySetupVisible = true;
+	hudOverlaySourceSelectionActive = false;
 	const initialBounds = getHudOverlayBounds();
 	let hasShownHudWindow = false;
 
@@ -537,7 +566,7 @@ export function createHudOverlayWindow(): BrowserWindow {
 		transparent: true,
 		backgroundColor: "#00000000",
 		resizable: false,
-		alwaysOnTop: true,
+		alwaysOnTop: !isHudOverlaySetupWindow(),
 		// The HUD is Recordly's persistent top-level window, so it owns the
 		// Windows taskbar entry while auxiliary overlays stay hidden there.
 		...getHudOverlayTaskbarOptions(process.platform),
@@ -553,7 +582,7 @@ export function createHudOverlayWindow(): BrowserWindow {
 	});
 	// Keep the recording controls and webcam above normal and full-screen apps.
 	// Transparent regions remain click-through via setIgnoreMouseEvents().
-	win.setAlwaysOnTop(true, "screen-saver");
+	if (!isHudOverlaySetupWindow()) win.setAlwaysOnTop(true, "screen-saver");
 	if (process.platform === "darwin") {
 		win.setVisibleOnAllWorkspaces(true, {
 			visibleOnFullScreen: true,
@@ -577,14 +606,14 @@ export function createHudOverlayWindow(): BrowserWindow {
 		// Showing or changing native window state can recreate platform window
 		// flags. Reassert capture protection on both sides of the transition.
 		applyHudOverlayCaptureProtectionToWindow(win, hudOverlayHiddenFromCapture);
-		if (process.platform === "win32") {
+		if (process.platform === "win32" && !isHudOverlaySetupWindow()) {
 			// A focusable window is required for a Windows taskbar entry, but the
 			// always-on-top HUD must not steal focus when Recordly starts.
 			win.showInactive();
 		} else {
 			win.show();
 		}
-		win.moveTop();
+		if (!isHudOverlaySetupWindow()) win.moveTop();
 		applyHudOverlayCaptureProtectionToWindow(win, hudOverlayHiddenFromCapture);
 		if (process.platform === "win32" && isHudOverlayMousePassthroughSupported()) {
 			win.setIgnoreMouseEvents(false);
@@ -604,7 +633,7 @@ export function createHudOverlayWindow(): BrowserWindow {
 	});
 
 	if (isHudOverlayMousePassthroughSupported()) {
-		if (hudOverlayRecordingActive) {
+		if (hudOverlayRecordingActive || isHudOverlaySetupWindow()) {
 			hudOverlayIgnoringMouse = false;
 			win.setIgnoreMouseEvents(false);
 		} else {
@@ -701,10 +730,13 @@ export function createHudOverlayWindow(): BrowserWindow {
 		screen.removeListener("display-removed", handleDisplayRemoved);
 		screen.removeListener("display-metrics-changed", handleDisplayMetricsChanged);
 		if (hudOverlayWindow === win) {
+			if (hudOverlayMouseReassertTimer) clearTimeout(hudOverlayMouseReassertTimer);
+			hudOverlayMouseReassertTimer = null;
 			hudOverlayWindow = null;
 			recordingPreparationActive = false;
 			hudCaptureStarting = false;
 			hudOverlayRecordingActive = false;
+			hudOverlaySourceSelectionActive = false;
 		}
 	});
 

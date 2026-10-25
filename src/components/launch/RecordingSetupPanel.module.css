@@ -11,6 +11,7 @@
 .panel button,
 .panel select {
 	font: inherit;
+	-webkit-app-region: no-drag;
 }
 .panel button {
 	cursor: pointer;

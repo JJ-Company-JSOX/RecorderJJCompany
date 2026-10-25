@@ -5,7 +5,10 @@ export default function HudWindow() {
 	return (
 		<>
 			<LaunchWindow />
-			<Toaster className="pointer-events-auto" />
+			<Toaster
+				placement="top"
+				className="pointer-events-auto min-w-0 max-w-[calc(100vw_-_300px)]"
+			/>
 		</>
 	);
 }

@@ -1,5 +1,7 @@
 # RecorderJJCompany 统一开发建议
 
+窗口跟进：[Windows 设置页置顶与关闭按钮](../bugfix-recorder-window-controls-2026-10-25.md)，区分普通设置页与录制悬浮条，保留原录制和导出架构。
+
 音频预览跟进：[移除无关音频上下文等待](../bugfix-source-audio-playback-2026-10-25.md)，包含修复前复现、真实媒体元素播放和环境限制。
 
 最新修复：[录制原声检查与可编辑文字配音](../bugfix-recorded-audio-and-text-to-speech-2026-10-25.md)，包括本机声音检测命令、时间轴音频裁剪 / 拆分与验证限制。

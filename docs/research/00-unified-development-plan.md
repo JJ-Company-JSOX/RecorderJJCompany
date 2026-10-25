@@ -1,5 +1,7 @@
 # RecorderJJCompany 统一开发建议
 
+录制准备与性能：[返回、可读性与减少重复初始化](../bugfix-recorder-ready-panel-2026-10-25.md)。可选客户端 AI：[轻量智能与 Ollama 安装/连接/取消](../feature-local-ai-modes-2026-10-25.md)，收费授权尚未接入。
+
 文字配音跟进：[插入时间、输入试听与合成复用](../bugfix-text-to-speech-placement-2026-10-25.md)，解决结尾添加失败及放置失败后重复生成的问题。
 
 窗口跟进：[Windows 设置页置顶与关闭按钮](../bugfix-recorder-window-controls-2026-10-25.md)，区分普通设置页与录制悬浮条，保留原录制和导出架构。

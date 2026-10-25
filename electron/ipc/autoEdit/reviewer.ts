@@ -11,7 +11,7 @@ export interface LocalModelInfo {
 	capabilities?: string[];
 }
 export interface PlanReviewer {
-	review(plan: EditPlan, model: string): Promise<EditPlan>;
+	review(plan: EditPlan, model: string, signal?: AbortSignal): Promise<EditPlan>;
 }
 
 function validateModelName(model: string) {
@@ -25,6 +25,7 @@ export function localRequest(
 	payload?: object,
 	signal?: AbortSignal,
 ): Promise<unknown> {
+	signal?.throwIfAborted();
 	const body = payload ? JSON.stringify(payload) : "";
 	if (Buffer.byteLength(body) > 500_000) throw new Error("Plan too large for local review");
 	return new Promise((resolve, reject) => {
@@ -64,7 +65,7 @@ export function localRequest(
 		);
 		const timer = setTimeout(
 			() => req.destroy(new Error("Local AI request timed out")),
-			120_000,
+			route === "/api/chat" ? 120_000 : 8_000,
 		);
 		req.on("close", () => clearTimeout(timer));
 		req.on("error", reject);
@@ -109,25 +110,33 @@ export async function inspectLocalModel(
 
 /** Uses only an existing user-operated model. Never downloads weights. */
 export class LocalPlanReviewer implements PlanReviewer {
-	async review(plan: EditPlan, model: string): Promise<EditPlan> {
-		await inspectLocalModel(model);
+	async review(plan: EditPlan, model: string, signal?: AbortSignal): Promise<EditPlan> {
+		await inspectLocalModel(model, signal);
 		const candidates = plan.suggestions
 			.filter((s) => !s.blocked)
 			.map(({ id, kind, startMs, endMs, reason }) => ({ id, kind, startMs, endMs, reason }));
-		const parsed = (await localRequest("/api/chat", {
-			model,
-			stream: false,
-			format: "json",
-			options: { temperature: 0 },
-			messages: [
-				{
-					role: "system",
-					content:
-						'Review rule-based recording edits. Reply with {"edits":[{"id":"...","startMs":0,"endMs":1000}]}. Retain only useful candidates. You may shorten a range inside its original bounds or omit it. Never add candidates. Do not expand ranges. No other changes.',
-				},
-				{ role: "user", content: JSON.stringify(candidates) },
-			],
-		})) as { message: { content: string } };
+		if (candidates.length > 200)
+			throw new Error("Local review supports up to 200 suggestions per run");
+		const parsed = (await localRequest(
+			"/api/chat",
+			{
+				model,
+				stream: false,
+				format: "json",
+				keep_alive: 0,
+				options: { temperature: 0, num_ctx: 4096, num_predict: 2048 },
+				messages: [
+					{
+						role: "system",
+						content:
+							'Review rule-based recording edits. Reply with {"edits":[{"id":"...","startMs":0,"endMs":1000}]}. Retain only useful candidates. You may shorten a range inside its original bounds or omit it. Never add candidates. Do not expand ranges. No other changes.',
+					},
+					{ role: "user", content: JSON.stringify(candidates) },
+				],
+			},
+			signal,
+		)) as { message: { content: string } };
+		signal?.throwIfAborted();
 		const reviewed = mergeLocalReview(
 			{ ...plan, suggestions: plan.suggestions.filter((s) => !s.blocked) },
 			JSON.parse(parsed.message.content).edits,

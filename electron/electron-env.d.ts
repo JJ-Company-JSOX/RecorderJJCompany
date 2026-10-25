@@ -300,6 +300,8 @@ interface Window {
 		narrateAutoEditLocally: (
 			plan: import("../src/components/video-editor/auto-edit/plan").EditPlan,
 			model: string,
+			language?: "zh" | "en" | "ms",
+			style?: "concise" | "tutorial" | "detailed",
 		) => Promise<{
 			success: boolean;
 			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;

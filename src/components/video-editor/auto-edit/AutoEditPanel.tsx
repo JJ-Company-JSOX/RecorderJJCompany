@@ -5,6 +5,14 @@ import { loadAppSetting, saveAppSetting } from "@/lib/appSettings";
 import { projectCaptionCues } from "../captionTimeline";
 import { type AudioRegion, type CursorTelemetryPoint, mapTimelineTimeToSourceTime } from "../types";
 import { applyEditPlan } from "./apply";
+import {
+	AiModeSettings,
+	aiModeCopy,
+	savedAiProvider,
+	saveAiProvider,
+	type AiProvider,
+	type OllamaModel,
+} from "./AiModeSettings";
 import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { guideMessages } from "./guideMessages";
 import { interfaceMessages } from "./interfaceMessages";
@@ -90,7 +98,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const w = wizardMessages[language];
 	const setup = readinessMessages[language];
 	const speed = speedMessages[language];
-	const [editMode, setEditMode] = useState<EditMode>(savedEditMode);
+	const [provider, setProvider] = useState<AiProvider>(savedAiProvider);
+	const [ollamaModel, setOllamaModel] = useState<OllamaModel | null>(null);
+	const aiMode = aiModeCopy(language);
+	const [editMode, setEditMode] = useState<EditMode>(() =>
+		savedAiProvider() === "ollama" ? "fast" : savedEditMode(),
+	);
 	const [progress, setProgress] = useState({ completed: 0, total: 8 });
 	const [plan, setPlan] = useState<EditPlan | null>(null);
 	const [decisions, setDecisions] = useState<Record<string, Decision>>({});
@@ -262,14 +275,20 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		(editMode === "full" && bundledStatus?.reason === "unsupported") ||
 		speechStatus?.reason === "unsupported";
 	const modeReady =
-		editMode === "fast" || (editMode === "speech" ? !statusChecking && !!speechReady : ready);
+		provider === "ollama"
+			? !!ollamaModel && (editMode === "fast" || (!statusChecking && !!speechReady))
+			: editMode === "fast" ||
+				(editMode === "speech" ? !statusChecking && !!speechReady : ready);
+	const canNarrate = provider === "ollama" ? !!ollamaModel : !!bundledStatus?.available;
 	const requiredStatusFailed = editMode === "full" ? statusCheckFailed : !speechStatus;
 	const startLabel =
-		editMode === "fast"
-			? speed.startFast
-			: editMode === "speech"
-				? speed.startSpeech
-				: ui.start;
+		provider === "ollama"
+			? aiMode.start
+			: editMode === "fast"
+				? speed.startFast
+				: editMode === "speech"
+					? speed.startSpeech
+					: ui.start;
 	// The Kokoro Chinese voice also says English words, so on-screen English labels can stay.
 	const mixedLanguage = !!ttsStatus?.mixedLanguage;
 	// Mirrors the main-process check: each bundled voice can only read its own script.
@@ -440,6 +459,13 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		fromSilentVideo = false,
 		main = false,
 	) => {
+		if (provider === "ollama") {
+			if (!ollamaModel) {
+				setError(aiMode.firstCheck);
+				return;
+			}
+			withAi = false;
+		}
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
@@ -453,7 +479,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					: ["media", "transcribe"]
 				: withAi
 					? ["media", "vision"]
-					: ["media"],
+					: provider === "ollama"
+						? ["media", "understand"]
+						: ["media"],
 		);
 		setSummary(null);
 		setUndone(false);
@@ -493,6 +521,17 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					cursor,
 					staticRanges: result.evidence.staticRanges,
 				});
+			if (provider === "ollama" && ollamaModel) {
+				setBusy("review");
+				setSpeechStage("understand");
+				const reviewed = await window.electronAPI.reviewAutoEditLocally(
+					next,
+					ollamaModel.name,
+				);
+				if (run !== generation.current) return;
+				if (!reviewed.success || !reviewed.plan) throw new Error(reviewed.error || m.error);
+				next = reviewed.plan;
+			}
 			if (withAi) {
 				setBusy("vision");
 				setSpeechStage("vision");
@@ -541,6 +580,10 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		}
 	};
 	const narrateBundled = async () => {
+		if (provider === "ollama" && !ollamaModel) {
+			setError(aiMode.firstCheck);
+			return;
+		}
 		const voicePlan = narrationPlan(currentState.current.state);
 		if (!voicePlan.suggestions.length) return;
 		const run = ++generation.current;
@@ -567,16 +610,20 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					...(action ? { action } : {}),
 				};
 			});
-			const result = await window.electronAPI.narrateAutoEditBundled(
-				voicePlan,
-				draftLanguage,
-				{
-					videoPath: source,
-					frames,
-					style: narrationStyle,
-					timelineEndMs: Math.max(1, ...clipRegions.map((c) => c.endMs)),
-				},
-			);
+			const result =
+				provider === "ollama" && ollamaModel
+					? await window.electronAPI.narrateAutoEditLocally(
+							voicePlan,
+							ollamaModel.name,
+							draftLanguage,
+							narrationStyle,
+						)
+					: await window.electronAPI.narrateAutoEditBundled(voicePlan, draftLanguage, {
+							videoPath: source,
+							frames,
+							style: narrationStyle,
+							timelineEndMs: Math.max(1, ...clipRegions.map((c) => c.endMs)),
+						});
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
 			setNarrationLanguage(draftLanguage);
@@ -827,7 +874,11 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 						</div>
 						<Button
 							className="min-h-12 w-full text-base font-semibold"
-							aria-label={editMode === "full" ? m.completeEdit : startLabel}
+							aria-label={
+								provider === "builtin" && editMode === "full"
+									? m.completeEdit
+									: startLabel
+							}
 							disabled={!!busy || !modeReady || noVideo}
 							onClick={() =>
 								void analyze(editMode === "full", editMode !== "fast", false, true)
@@ -840,6 +891,22 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								{ui.actionHelp}
 							</p>
 						)}
+						<AiModeSettings
+							language={language}
+							provider={provider}
+							modelInfo={ollamaModel}
+							disabled={!!busy}
+							onModel={setOllamaModel}
+							onProvider={(value) => {
+								generation.current++;
+								setProvider(value);
+								saveAiProvider(value);
+								setOllamaModel(null);
+								setEditMode("fast");
+								saveAppSetting(EDIT_MODE_SETTING, "fast");
+								setError("");
+							}}
+						/>
 						<label className="flex flex-col gap-2 text-sm">
 							<span>{speed.mode}</span>
 							<select
@@ -857,7 +924,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							>
 								<option value="fast">{speed.fast}</option>
 								<option value="speech">{speed.speech}</option>
-								<option value="full">{speed.full}</option>
+								{provider === "builtin" && (
+									<option value="full">{speed.full}</option>
+								)}
 							</select>
 							{editMode === "full" && (
 								<span className="text-xs text-muted-foreground">
@@ -872,7 +941,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								aria-live="polite"
 								className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
 							>
-								{statusChecking ? (
+								{provider === "ollama" && !ollamaModel ? (
+									<p>{aiMode.firstCheck}</p>
+								) : statusChecking ? (
 									<p>{ui.checking}</p>
 								) : requiredStatusFailed ? (
 									<p>{setup.checkFailed}</p>
@@ -990,7 +1061,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								</span>
 							</label>
 						</div>
-						{bundledStatus?.available && voiceActions > 0 && (
+						{canNarrate && voiceActions > 0 && (
 							<Button
 								variant="secondary"
 								className="w-full"
@@ -1093,6 +1164,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									disabled={
 										!!busy ||
 										!bundledStatus?.available ||
+										provider === "ollama" ||
 										!source ||
 										state.clipRegions.length === 0
 									}
@@ -1199,7 +1271,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							<p className="text-sm">{ui.next}</p>
 						)}
 						<div className="flex flex-wrap gap-2">
-							{!undone && bundledStatus?.available && voiceActions > 0 && (
+							{!undone && canNarrate && voiceActions > 0 && (
 								<Button onClick={() => setVoiceOpen(true)}>{w.voiceNext}</Button>
 							)}
 							{lines.length > 0 && (
@@ -1300,6 +1372,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 						<div
 							className="space-y-2 border-t border-separator pt-4"
 							data-translate-subtitles
+							hidden={provider === "ollama"}
 						>
 							<h4 className="text-sm font-semibold">{w.translateTitle}</h4>
 							<p className="text-xs text-muted-foreground">{w.translateHelp}</p>
@@ -1320,7 +1393,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								</label>
 								<Button
 									variant="secondary"
-									disabled={!!busy || !bundledStatus?.available}
+									disabled={
+										!!busy || !bundledStatus?.available || provider === "ollama"
+									}
 									onClick={() => void translateText()}
 								>
 									{busy === "translate"
@@ -1401,7 +1476,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								)}
 								<div className="flex flex-wrap gap-2">
 									<Button
-										disabled={!bundledStatus?.available || !!busy}
+										disabled={!canNarrate || !!busy}
 										onClick={() => void narrateBundled()}
 									>
 										{busy === "narrate"
@@ -1550,7 +1625,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								{ui.noChanges}
 							</p>
 						)}
-						{bundledStatus?.available && voiceActions > 0 && (
+						{canNarrate && voiceActions > 0 && (
 							<Button className="w-full" onClick={() => setVoiceOpen(true)}>
 								{w.voiceEntry}
 							</Button>

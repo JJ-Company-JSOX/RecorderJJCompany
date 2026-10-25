@@ -8,7 +8,13 @@ import { inspectLocalModel, localRequest } from "./reviewer";
 import { generateTutorialScript, type NarrationStyle } from "./tutorialScript";
 
 export interface NarrationGenerator {
-	generate(plan: EditPlan, model: string): Promise<NarrationDraft>;
+	generate(
+		plan: EditPlan,
+		model: string,
+		signal?: AbortSignal,
+		language?: NarrationLanguage,
+		style?: NarrationStyle,
+	): Promise<NarrationDraft>;
 }
 
 type NarrationCandidate = {
@@ -72,20 +78,37 @@ function parseNarrationCues(candidates: NarrationCandidate[], raw: unknown): Nar
  * user-operated local Ollama model, inspected and consented to first.
  */
 export class LocalNarrationGenerator implements NarrationGenerator {
-	async generate(plan: EditPlan, model: string): Promise<NarrationDraft> {
-		await inspectLocalModel(model);
+	async generate(
+		plan: EditPlan,
+		model: string,
+		signal?: AbortSignal,
+		language: NarrationLanguage = "en",
+		style: NarrationStyle = "tutorial",
+	): Promise<NarrationDraft> {
+		await inspectLocalModel(model, signal);
 		const candidates = buildNarrationCandidates(plan);
 		if (!candidates.length) return { cues: [] };
-		const parsed = (await localRequest("/api/chat", {
-			model,
-			stream: false,
-			format: "json",
-			options: { temperature: 0.3 },
-			messages: [
-				{ role: "system", content: NARRATION_SYSTEM_PROMPT },
-				{ role: "user", content: JSON.stringify(candidates) },
-			],
-		})) as { message: { content: string } };
+		if (candidates.length > 100)
+			throw new Error("Local narration supports up to 100 moments per run");
+		const parsed = (await localRequest(
+			"/api/chat",
+			{
+				model,
+				stream: false,
+				format: "json",
+				keep_alive: 0,
+				options: { temperature: 0.3, num_ctx: 4096, num_predict: 2048 },
+				messages: [
+					{
+						role: "system",
+						content: `${NARRATION_SYSTEM_PROMPT} Write every narration line in ${language === "zh" ? "Chinese" : language === "ms" ? "Malay" : "English"}. Narration style: ${style}.`,
+					},
+					{ role: "user", content: JSON.stringify(candidates) },
+				],
+			},
+			signal,
+		)) as { message: { content: string } };
+		signal?.throwIfAborted();
 		return parseNarrationCues(candidates, JSON.parse(parsed.message.content));
 	}
 }

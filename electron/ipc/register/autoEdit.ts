@@ -1,5 +1,5 @@
 import path from "node:path";
-import { app, ipcMain } from "electron";
+import { app, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { BUNDLED_MODEL_ID } from "../../../src/components/video-editor/auto-edit/bundledTypes";
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
 import type { SpeechTranscript } from "../../../src/components/video-editor/auto-edit/speechTypes";
@@ -62,6 +62,24 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 		}
 	});
 	const running = new Map<number, AbortController>();
+	const runLocalTask = async <T>(
+		event: IpcMainInvokeEvent,
+		task: (signal: AbortSignal) => Promise<T>,
+	) => {
+		if (running.has(event.sender.id)) throw new Error("Analysis already running");
+		const controller = new AbortController();
+		running.set(event.sender.id, controller);
+		const abort = () => controller.abort();
+		event.sender.once("destroyed", abort);
+		try {
+			const result = await task(controller.signal);
+			controller.signal.throwIfAborted();
+			return result;
+		} finally {
+			if (running.get(event.sender.id) === controller) running.delete(event.sender.id);
+			event.sender.removeListener("destroyed", abort);
+		}
+	};
 	registerOfflineTools(running);
 	app.once("before-quit", () => {
 		for (const controller of running.values()) controller.abort();
@@ -290,24 +308,7 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 			event.sender.removeListener("destroyed", abort);
 		}
 	});
-	ipcMain.handle("auto-edit-review-local", async (_event, plan: EditPlan, model: string) => {
-		try {
-			if (
-				!plan ||
-				plan.version !== 1 ||
-				!Array.isArray(plan.suggestions) ||
-				plan.suggestions.length > 5000
-			)
-				throw new Error("Invalid plan");
-			return { success: true, plan: await new LocalPlanReviewer().review(plan, model) };
-		} catch (error) {
-			return {
-				success: false,
-				error: error instanceof Error ? error.message : "Local review failed",
-			};
-		}
-	});
-	ipcMain.handle("auto-edit-narrate-local", async (_event, plan: EditPlan, model: string) => {
+	ipcMain.handle("auto-edit-review-local", async (event, plan: EditPlan, model: string) => {
 		try {
 			if (
 				!plan ||
@@ -318,15 +319,48 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 				throw new Error("Invalid plan");
 			return {
 				success: true,
-				draft: await new LocalNarrationGenerator().generate(plan, model),
+				plan: await runLocalTask(event, (signal) =>
+					new LocalPlanReviewer().review(plan, model, signal),
+				),
 			};
 		} catch (error) {
 			return {
 				success: false,
-				error: error instanceof Error ? error.message : "Local narration draft failed",
+				error: error instanceof Error ? error.message : "Local review failed",
 			};
 		}
 	});
+	ipcMain.handle(
+		"auto-edit-narrate-local",
+		async (event, plan: EditPlan, model: string, language?: string, style?: string) => {
+			try {
+				if (
+					!plan ||
+					plan.version !== 1 ||
+					!Array.isArray(plan.suggestions) ||
+					plan.suggestions.length > 5000
+				)
+					throw new Error("Invalid plan");
+				return {
+					success: true,
+					draft: await runLocalTask(event, (signal) =>
+						new LocalNarrationGenerator().generate(
+							plan,
+							model,
+							signal,
+							isNarrationLanguage(language) ? language : "en",
+							isNarrationStyle(style) ? style : "tutorial",
+						),
+					),
+				};
+			} catch (error) {
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : "Local narration draft failed",
+				};
+			}
+		},
+	);
 	ipcMain.handle(
 		"auto-edit-narrate-bundled",
 		async (

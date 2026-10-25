@@ -1,10 +1,13 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
 const fixture = vi.hoisted(() => ({
 	handlers: new Map<string, (...args: unknown[]) => Promise<Record<string, unknown>>>(),
 	start: vi.fn(),
 	close: vi.fn(),
 	describe: vi.fn(),
 	narrate: vi.fn(),
+	reviewLocal: vi.fn(),
+	narrateLocal: vi.fn(),
 }));
 vi.mock("electron", () => ({
 	app: { isPackaged: false, getAppPath: () => "/app", once: vi.fn() },
@@ -25,13 +28,17 @@ vi.mock("../autoEdit/narrationFrames", () => ({
 vi.mock("../autoEdit/narrator", () => ({
 	generateBundledNarration: fixture.narrate,
 	isNarrationLanguage: (value: unknown) => value === "en" || value === "zh",
-	LocalNarrationGenerator: class {},
+	LocalNarrationGenerator: class {
+		generate = fixture.narrateLocal;
+	},
 }));
 vi.mock("../autoEdit/media", () => ({ analyzeLocalMedia: vi.fn() }));
 vi.mock("../autoEdit/vision", () => ({ analyzeVideoFrames: vi.fn() }));
 vi.mock("../autoEdit/reviewer", () => ({
 	inspectLocalModel: vi.fn(),
-	LocalPlanReviewer: class {},
+	LocalPlanReviewer: class {
+		review = fixture.reviewLocal;
+	},
 }));
 vi.mock("../captions/generate", () => ({
 	NoCaptionAudioError: class extends Error {},
@@ -116,4 +123,64 @@ it("disposes the OCR engine even when the narration fails", async () => {
 	expect((await narrate()).success).toBe(false);
 	expect(ocr.dispose).toHaveBeenCalledOnce();
 	expect(fixture.close).toHaveBeenCalledOnce();
+});
+
+it.each([
+	"auto-edit-review-local",
+	"auto-edit-narrate-local",
+])("cancels %s, prevents competing work and ignores a late result", async (name) => {
+	registerAutoEditHandlers();
+	const sender = Object.assign(new EventEmitter(), { id: 81 });
+	const event = { sender };
+	let finish!: (value: unknown) => void;
+	let signal!: AbortSignal;
+	const operation = name.includes("review") ? fixture.reviewLocal : fixture.narrateLocal;
+	operation.mockImplementation((_plan, _model, abortSignal) => {
+		signal = abortSignal;
+		return new Promise((resolve) => {
+			finish = resolve;
+		});
+	});
+	const first = fixture.handlers.get(name)!(event, plan, "local", "zh");
+	expect(signal.aborted).toBe(false);
+	expect(sender.listenerCount("destroyed")).toBe(1);
+	expect(await fixture.handlers.get(name)!(event, plan, "local")).toMatchObject({
+		success: false,
+		error: "Analysis already running",
+	});
+	await fixture.handlers.get("auto-edit-cancel")!(event);
+	expect(signal.aborted).toBe(true);
+	finish({ cues: [] });
+	expect(await first).toMatchObject({ success: false });
+	expect(sender.listenerCount("destroyed")).toBe(0);
+	operation.mockResolvedValueOnce({ cues: [] });
+	expect(await fixture.handlers.get(name)!(event, plan, "local", "zh")).toMatchObject({
+		success: true,
+	});
+	expect(sender.listenerCount("destroyed")).toBe(0);
+});
+
+it("aborts Ollama narration when the editor is destroyed and forwards the requested language", async () => {
+	registerAutoEditHandlers();
+	const sender = Object.assign(new EventEmitter(), { id: 82 });
+	let finish!: () => void;
+	fixture.narrateLocal.mockImplementation((_plan, _model, signal, language) => {
+		expect(language).toBe("zh");
+		return new Promise((resolve) => {
+			finish = () => {
+				expect(signal.aborted).toBe(true);
+				resolve({ cues: [] });
+			};
+		});
+	});
+	const request = fixture.handlers.get("auto-edit-narrate-local")!(
+		{ sender },
+		plan,
+		"local",
+		"zh",
+	);
+	sender.emit("destroyed");
+	finish();
+	expect(await request).toMatchObject({ success: false });
+	expect(sender.listenerCount("destroyed")).toBe(0);
 });

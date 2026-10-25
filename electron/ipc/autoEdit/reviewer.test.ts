@@ -155,4 +155,23 @@ describe("local-only model adapter (mock service, no inference claim)", () => {
 		mock.expanded = true;
 		await expect(new LocalPlanReviewer().review(plan(), "local")).rejects.toThrow("expanded");
 	});
+	it("bounds context and output, asks Ollama to unload, and passes the cancellation signal", async () => {
+		const controller = new AbortController();
+		await new LocalPlanReviewer().review(plan(), "local", controller.signal);
+		const chat = mock.requests.find((r) => r.path === "/api/chat")!;
+		expect(JSON.parse(chat.body)).toMatchObject({
+			keep_alive: 0,
+			options: { num_ctx: 4096, num_predict: 2048 },
+		});
+		for (const request of mock.requests)
+			expect((request as unknown as { signal: AbortSignal }).signal).toBe(controller.signal);
+	});
+	it("does not contact a model when the request was already cancelled", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		await expect(
+			new LocalPlanReviewer().review(plan(), "local", controller.signal),
+		).rejects.toThrow();
+		expect(mock.requests).toHaveLength(0);
+	});
 });

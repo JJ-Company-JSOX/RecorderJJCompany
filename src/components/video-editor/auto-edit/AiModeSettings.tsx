@@ -1,0 +1,234 @@
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { loadAppSetting, saveAppSetting } from "@/lib/appSettings";
+import type { PlanLanguage } from "./messages";
+
+export type AiProvider = "builtin" | "ollama";
+export type OllamaModel = NonNullable<
+	Awaited<ReturnType<Window["electronAPI"]["inspectAutoEditLocalModel"]>>["info"]
+>;
+const PROVIDER_KEY = "recordly.autoEdit.provider";
+const MODEL_KEY = "recordly.autoEdit.ollamaModel";
+export const savedAiProvider = (): AiProvider =>
+	loadAppSetting(PROVIDER_KEY) === "ollama" ? "ollama" : "builtin";
+export const saveAiProvider = (value: AiProvider) => saveAppSetting(PROVIDER_KEY, value);
+const INSTALL = "winget install --id Ollama.Ollama -e --source winget";
+const PULL = "ollama pull qwen3:4b";
+const copy = {
+	en: {
+		mode: "AI mode",
+		builtin: "Lightweight smart (default)",
+		ollama: "Ollama advanced",
+		help: "Lightweight mode uses fast local editing by default. Ollama reviews edit candidates and drafts narration; it needs more memory and may take longer. Recording controls do not load these models.",
+		model: "Installed Ollama model",
+		check: "Check local model",
+		checking: "Checking local model…",
+		ready: "Local model ready",
+		install: "Install Ollama on Windows",
+		instructions:
+			"Run the first command in PowerShell. After installation, open a new PowerShell and run the second. The example model downloads roughly 2–3 GB; Ollama shows the actual size and progress. Allow several GB of additional RAM; 16 GB total is recommended. Model licenses vary.",
+		copy: "Copy command",
+		copied: "Copied",
+		copyFailed: "Copy failed; select and copy the command above.",
+		missing: "Start Ollama and install the named local model, then check again.",
+		language:
+			"Only local models are accepted. Model choice is remembered on this computer; availability is checked again when you reopen the editor.",
+		start: "Start Ollama editing",
+		firstCheck: "Check the installed Ollama model before starting.",
+		metadata:
+			"This mode reviews timing/action metadata, not a full video transcript or screen images.",
+	},
+	zh: {
+		mode: "智能模式",
+		builtin: "轻量智能（默认）",
+		ollama: "Ollama 高级模式",
+		help: "轻量模式默认使用快速本地剪辑。Ollama 可审阅剪辑建议、生成解说，需要更多内存，也可能更慢。录制控制面板不会加载这些模型。",
+		model: "已安装的 Ollama 模型",
+		check: "检查本地模型",
+		checking: "正在检查本地模型…",
+		ready: "本地模型已就绪",
+		install: "在 Windows 安装 Ollama",
+		instructions:
+			"在 PowerShell 运行第一条命令。安装后重新打开 PowerShell，再运行第二条。示例模型下载约 2–3 GB，实际大小和进度以 Ollama 显示为准。运行时还需要数 GB 内存，建议电脑配有 16 GB 内存。各模型许可证不同。",
+		copy: "复制命令",
+		copied: "已复制",
+		copyFailed: "复制失败，请选中上面的命令手动复制。",
+		missing: "请启动 Ollama，安装所填模型后重新检查。",
+		language: "仅接受本地模型。模型选择保存在这台电脑上，重新打开编辑器后需要再次检查可用性。",
+		start: "开始 Ollama 智能剪辑",
+		firstCheck: "请先检查已安装的 Ollama 模型。",
+		metadata: "此模式审阅操作与时间信息，不读取完整视频字幕或画面。",
+	},
+	ms: {
+		mode: "Mod AI",
+		builtin: "Pintar ringan (lalai)",
+		ollama: "Ollama lanjutan",
+		help: "Mod ringan menggunakan suntingan setempat pantas. Ollama menyemak cadangan dan menghasilkan narasi; ia memerlukan lebih memori dan mungkin lebih perlahan. Kawalan rakaman tidak memuatkan model ini.",
+		model: "Model Ollama terpasang",
+		check: "Semak model setempat",
+		checking: "Menyemak model…",
+		ready: "Model setempat sedia",
+		install: "Pasang Ollama pada Windows",
+		instructions:
+			"Jalankan arahan pertama dalam PowerShell. Selepas pemasangan, buka PowerShell baharu untuk arahan kedua. Model contoh sekitar 2–3 GB; Ollama menunjukkan saiz dan kemajuan sebenar. Sediakan beberapa GB RAM tambahan; 16 GB jumlah disyorkan. Lesen model berbeza.",
+		copy: "Salin arahan",
+		copied: "Disalin",
+		copyFailed: "Gagal menyalin; pilih dan salin arahan di atas.",
+		missing: "Mulakan Ollama dan pasang model bernama, kemudian semak semula.",
+		language:
+			"Hanya model setempat. Pilihan disimpan pada komputer ini; semak semula apabila editor dibuka semula.",
+		start: "Mulakan suntingan Ollama",
+		firstCheck: "Semak model Ollama terpasang dahulu.",
+		metadata: "Mod ini menyemak metadata masa/tindakan, bukan transkrip penuh atau imej skrin.",
+	},
+};
+export const aiModeCopy = (language: PlanLanguage) => copy[language];
+
+export function AiModeSettings({
+	language,
+	provider,
+	disabled,
+	onProvider,
+	onModel,
+	modelInfo,
+}: {
+	language: PlanLanguage;
+	provider: AiProvider;
+	disabled: boolean;
+	onProvider: (value: AiProvider) => void;
+	onModel: (value: OllamaModel | null) => void;
+	modelInfo: OllamaModel | null;
+}) {
+	const m = copy[language];
+	const [model, setModel] = useState(() => {
+		const value = loadAppSetting<unknown>(MODEL_KEY);
+		return typeof value === "string" ? value : "qwen3:4b";
+	});
+	const info = modelInfo;
+	const [checking, setChecking] = useState(false);
+	const [error, setError] = useState("");
+	const [copied, setCopied] = useState("");
+	const request = useRef(0);
+	useEffect(
+		() => () => {
+			request.current++;
+		},
+		[],
+	);
+	const invalidate = () => {
+		request.current++;
+		onModel(null);
+		setChecking(false);
+		setError("");
+	};
+	const check = async () => {
+		const run = ++request.current;
+		setChecking(true);
+		setError("");
+		onModel(null);
+		try {
+			const result = await window.electronAPI.inspectAutoEditLocalModel(model.trim());
+			if (run !== request.current) return;
+			if (!result.success || !result.info) throw new Error(result.error || m.missing);
+			onModel(result.info);
+			saveAppSetting(MODEL_KEY, model.trim());
+		} catch (reason) {
+			if (run === request.current)
+				setError(`${m.missing} ${reason instanceof Error ? reason.message : ""}`);
+		} finally {
+			if (run === request.current) setChecking(false);
+		}
+	};
+	const copyCommand = async (command: string) => {
+		try {
+			await navigator.clipboard.writeText(command);
+			setCopied(command);
+		} catch {
+			setCopied("error");
+		}
+	};
+	return (
+		<div className="space-y-3 rounded-xl border border-separator p-3" data-ai-mode-settings>
+			<label className="flex flex-col gap-2 text-sm">
+				<span>{m.mode}</span>
+				<select
+					aria-label={m.mode}
+					value={provider}
+					disabled={disabled}
+					onChange={(event) => {
+						invalidate();
+						onProvider(event.target.value === "ollama" ? "ollama" : "builtin");
+					}}
+					className="w-full rounded-lg border border-separator bg-background p-2 text-foreground"
+				>
+					<option value="builtin">{m.builtin}</option>
+					<option value="ollama">{m.ollama}</option>
+				</select>
+			</label>
+			{provider === "ollama" && <p className="text-xs text-muted-foreground">{m.help}</p>}
+			{provider === "ollama" && (
+				<>
+					<label className="flex flex-col gap-2 text-sm">
+						{m.model}
+						<input
+							aria-label={m.model}
+							maxLength={120}
+							value={model}
+							disabled={disabled || checking}
+							onChange={(event) => {
+								invalidate();
+								setModel(event.target.value);
+							}}
+							className="rounded-lg border border-separator bg-background p-2 text-foreground"
+						/>
+					</label>
+					<Button
+						variant="secondary"
+						disabled={disabled || checking || !model.trim()}
+						onClick={() => void check()}
+					>
+						{checking ? m.checking : m.check}
+					</Button>
+					{info && (
+						<div role="status" className="text-xs text-emerald-500">
+							{m.ready}: {info.name} · {(info.sizeBytes / 1024 ** 3).toFixed(2)} GiB
+							<details className="text-muted-foreground">
+								<summary>License</summary>
+								<pre className="max-h-32 overflow-auto whitespace-pre-wrap">
+									{info.license}
+								</pre>
+							</details>
+						</div>
+					)}
+					{error && (
+						<p role="alert" className="text-sm text-destructive">
+							{error}
+						</p>
+					)}
+					<p className="text-xs text-muted-foreground">
+						{m.language} {m.metadata}
+					</p>
+					<details className="space-y-2 text-sm">
+						<summary className="cursor-pointer">{m.install}</summary>
+						<p className="py-2 text-xs text-muted-foreground">{m.instructions}</p>
+						{[INSTALL, PULL].map((command) => (
+							<div key={command} className="mb-3 space-y-1">
+								<code className="block select-text overflow-x-auto rounded bg-background p-2 text-xs">
+									{command}
+								</code>
+								<Button
+									size="sm"
+									variant="secondary"
+									onClick={() => void copyCommand(command)}
+								>
+									{copied === command ? m.copied : m.copy}
+								</Button>
+							</div>
+						))}
+						{copied === "error" && <p role="alert">{m.copyFailed}</p>}
+					</details>
+				</>
+			)}
+		</div>
+	);
+}

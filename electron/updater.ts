@@ -11,12 +11,14 @@ const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INITIAL_UPDATE_CHECK_DELAY_MS = 15 * 1000;
 export const UPDATE_REMINDER_DELAY_MS = 3 * 60 * 60 * 1000;
 const DISMISSED_READY_REMINDER_DELAY_MS = 5 * 60 * 1000;
-// NSIS shortcuts launch the executable directly, bypassing our optional test launcher.
-// This marker belongs only to the offline preview package: generic releases keep updates.
-const OFFLINE_AI_PREVIEW =
-	app.isPackaged && fs.existsSync(path.join(process.resourcesPath, "offline-ai-preview.txt"));
+// Complete offline ZIP clients update by replacing the whole distribution, including models.
+// Generic installers retain their existing updater; neither offline edition can use that feed.
+const OFFLINE_AI_EDITION =
+	app.isPackaged &&
+	(fs.existsSync(path.join(process.resourcesPath, "offline-ai-preview.txt")) ||
+		fs.existsSync(path.join(process.resourcesPath, "offline-ollama-required.txt")));
 const AUTO_UPDATES_DISABLED =
-	process.env.RECORDLY_DISABLE_AUTO_UPDATES === "1" || OFFLINE_AI_PREVIEW;
+	process.env.RECORDLY_DISABLE_AUTO_UPDATES === "1" || OFFLINE_AI_EDITION;
 const UPDATE_FEED_URL_OVERRIDE = process.env.RECORDLY_UPDATE_FEED_URL?.trim() ?? "";
 const UPDATER_LOG_PATH =
 	process.env.RECORDLY_UPDATER_LOG_PATH?.trim() || path.join(USER_DATA_PATH, "updater.log");
@@ -713,8 +715,8 @@ export async function checkForAppUpdates(
 				title: "Updates Not Enabled",
 				message: "Auto-updates are only available in packaged releases.",
 				detail: AUTO_UPDATES_DISABLED
-					? OFFLINE_AI_PREVIEW
-						? "This offline AI preview disables automatic updates. Install a newer complete offline AI package to update."
+					? OFFLINE_AI_EDITION
+						? "This offline edition uses complete package updates. Use a newer complete offline package and keep your projects and source media."
 						: "This build disabled auto-updates through RECORDLY_DISABLE_AUTO_UPDATES=1."
 					: "Development builds do not ship the packaged update metadata required by electron-updater.",
 			});

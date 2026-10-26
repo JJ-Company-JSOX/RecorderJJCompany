@@ -1,0 +1,3 @@
+This Windows client edition requires its bundled Ollama runtime and qwen3:1.7b.
+Model and runtime assets are prepared and verified on the build machine.
+The installed application must not download or globally install AI components.

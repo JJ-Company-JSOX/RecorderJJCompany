@@ -331,6 +331,25 @@ function verifyOfflineOcr(unpackedRoot) {
 	assertFile(path.join(unpackedRoot, "dist-electron", "ocr-worker.cjs"), "offline OCR worker");
 }
 
+/** Verify the copied client payload, not just the build machine's source assets. */
+function verifyOfflineOllama(unpackedRoot) {
+	const resources = path.dirname(unpackedRoot);
+	const bundle = path.join(resources, "offline-ollama");
+	const required = existsSync(path.join(resources, "offline-ollama-required.txt"));
+	if (!required && !existsSync(bundle)) return;
+	assertFile(path.join(bundle, "manifest.json"), "bundled Ollama manifest");
+	execFileSync(
+		process.execPath,
+		[
+			path.join(projectRoot, "scripts/prepare-offline-ollama.mjs"),
+			"--verify",
+			"--root",
+			bundle,
+		],
+		{ windowsHide: true, stdio: "inherit", timeout: 300000 },
+	);
+}
+
 const unpackedRoots = findDirectoriesByName(releaseRoot, "app.asar.unpacked");
 
 if (unpackedRoots.length === 0) {
@@ -348,6 +367,7 @@ for (const unpackedRoot of unpackedRoots) {
 	verifyNativeHelpers(unpackedRoot);
 	verifyOfflineNarrationVoice(unpackedRoot);
 	verifyOfflineOcr(unpackedRoot);
+	verifyOfflineOllama(unpackedRoot);
 }
 
 console.log("[packaged-smoke] packaged binary path smoke passed");

@@ -22,6 +22,8 @@ import { generateLocalStory, parseStoryDraft } from "./story";
 const request = (): StoryRequest => ({
 	brief: {
 		...emptyStoryBrief(),
+		// Visual-path tests opt in explicitly; new user stories default to text only.
+		analyzeVideo: true,
 		topic: "Show my editor",
 		facts: "Works offline",
 		notes: "Product home screen",

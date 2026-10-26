@@ -1,0 +1,13 @@
+name: Prepare complete Windows client AI
+description: Download and verify pinned model assets on the build machine, never on customer machines.
+runs:
+  using: composite
+  steps:
+    - name: Prepare offline runtime, recognition, voice, OCR and story model
+      shell: pwsh
+      run: |
+        $tasks = @('prepare:offline-ai', 'prepare:offline-speech', 'prepare:offline-voice', 'prepare:offline-tts', 'prepare:offline-ocr', 'prepare:offline-ollama')
+        foreach ($task in $tasks) {
+          npm.cmd run $task
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }

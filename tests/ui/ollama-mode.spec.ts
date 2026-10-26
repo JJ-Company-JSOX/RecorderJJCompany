@@ -1,12 +1,23 @@
 import { expect, type Page, test } from "@playwright/test";
 import { installDesktopBridge, installDesktopBridgeOverrides } from "./bridge";
 
-async function setup(page: Page, missing = false, deferred = false) {
+async function setup(
+	page: Page,
+	missing = false,
+	deferred = false,
+	savedModel?: string,
+	bundled = false,
+) {
 	await installDesktopBridge(page, "filmstrip.mp4", { signedIn: false });
 	await installDesktopBridgeOverrides(
 		page,
-		({ missing, deferred }) => {
+		({ missing, deferred, savedModel, bundled }) => {
 			localStorage.setItem("recordly.locale", "en");
+			if (savedModel !== undefined)
+				sessionStorage.setItem(
+					"test-setting:recordly.autoEdit.ollamaModel",
+					JSON.stringify(savedModel),
+				);
 			const get = window.electronAPI.getAppSetting;
 			window.electronAPI.getAppSetting = (key) => {
 				const value = sessionStorage.getItem(`test-setting:${key}`);
@@ -27,6 +38,7 @@ async function setup(page: Page, missing = false, deferred = false) {
 								sizeBytes: 2500000000,
 								license: "Apache-2.0",
 								capabilities: ["completion"],
+								runtime: bundled ? "bundled" : "external",
 							},
 						};
 			};
@@ -95,7 +107,7 @@ async function setup(page: Page, missing = false, deferred = false) {
 				document.documentElement.dataset.copiedCommand = text;
 			};
 		},
-		{ missing, deferred },
+		{ missing, deferred, savedModel, bundled },
 	);
 	await page.goto("/?windowType=editor");
 	await expect(page.locator('[data-variant="clip"]')).toHaveAttribute("data-end-ms", "6000", {
@@ -114,6 +126,9 @@ test("lightweight is the default and Ollama setup is explicit, with client insta
 		page.getByRole("button", { name: "Start fast editing", exact: true }),
 	).toBeEnabled();
 	await mode.selectOption("ollama");
+	await expect(
+		page.getByRole("textbox", { name: "Installed Ollama model", exact: true }),
+	).toHaveValue("qwen3:1.7b");
 	const start = page.getByRole("button", { name: "Start Ollama editing", exact: true });
 	await expect(start).toBeDisabled();
 	await page.getByText("Install Ollama on Windows", { exact: true }).click();
@@ -125,6 +140,11 @@ test("lightweight is the default and Ollama setup is explicit, with client insta
 		"data-copied-command",
 		"winget install --id Ollama.Ollama -e --source winget",
 	);
+	await page.getByRole("button", { name: "Copy command", exact: true }).last().click();
+	await expect(page.locator("html")).toHaveAttribute(
+		"data-copied-command",
+		"ollama pull qwen3:1.7b",
+	);
 	await page.getByRole("button", { name: "Check local model", exact: true }).click();
 	await expect(page.getByRole("alert")).toContainText("Ollama unavailable");
 	await expect(start).toBeDisabled();
@@ -132,6 +152,36 @@ test("lightweight is the default and Ollama setup is explicit, with client insta
 	await expect(
 		page.getByRole("button", { name: "Start fast editing", exact: true }),
 	).toBeEnabled();
+});
+
+test("the complete client reports its bundled model without installation commands", async ({
+	page,
+}) => {
+	await setup(page, false, false, undefined, true);
+	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+	await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	await expect(
+		page.getByText(
+			"Included with this app. No separate Ollama installation or model download is needed.",
+		),
+	).toBeVisible();
+	await expect(page.getByText("Install Ollama on Windows", { exact: true })).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: "Start Ollama editing", exact: true }),
+	).toBeEnabled();
+});
+
+test("the lightweight model default preserves an explicitly saved 4B selection", async ({
+	page,
+}) => {
+	await setup(page, false, false, "qwen3:4b");
+	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+	const model = page.getByRole("textbox", { name: "Installed Ollama model", exact: true });
+	await expect(model).toHaveValue("qwen3:4b");
+	await expect(page.locator("html")).not.toHaveAttribute("data-model-checked");
+	await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-model-checked", "qwen3:4b");
+	await expect(page.getByText(/Local model ready: qwen3:4b/)).toBeVisible();
 });
 
 test("checked Ollama reviews the real plan through the existing timeline and restores mode without auto-starting models", async ({
@@ -200,7 +250,7 @@ test("cancelled Ollama review cannot apply its late result", async ({ page }) =>
 	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
 	await page.getByRole("button", { name: "Check local model", exact: true }).click();
 	await page.getByRole("button", { name: "Start Ollama editing", exact: true }).click();
-	await expect(page.locator("html")).toHaveAttribute("data-review-model", "qwen3:4b");
+	await expect(page.locator("html")).toHaveAttribute("data-review-model", "qwen3:1.7b");
 	await page
 		.locator("[data-analysis-progress]")
 		.getByRole("button", { name: "Cancel analysis", exact: true })
@@ -223,7 +273,7 @@ test("Ollama narration uses the selected local model and language without loadin
 	await page.getByRole("button", { name: "Draft narration", exact: true }).click();
 	await expect(page.locator("html")).toHaveAttribute(
 		"data-narration-request",
-		JSON.stringify({ model: "qwen3:4b", language: "en", style: "tutorial" }),
+		JSON.stringify({ model: "qwen3:1.7b", language: "en", style: "tutorial" }),
 	);
 	await expect(page.locator("textarea").first()).toHaveValue("Click the control.");
 	await expect(page.locator("html")).not.toHaveAttribute("data-bundled-started");

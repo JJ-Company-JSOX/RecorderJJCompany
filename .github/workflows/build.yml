@@ -35,19 +35,14 @@ jobs:
       - name: Install app dependencies
         run: npx electron-builder install-app-deps
 
-      - name: Build Windows app
+      - name: Prepare complete Windows client AI
+        uses: ./.github/actions/prepare-windows-client-ai
+
+      - name: Build complete Windows client app and check packaged assets
         shell: pwsh
         run: |
-          npm run build:platform-native-helpers
+          npm run build:win
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npx tsc
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npx vite build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npx electron-builder --win dir nsis --x64 --publish never
-
-      - name: Smoke test packaged Windows paths
-        run: npm run smoke:packaged-binaries
 
       - name: Generate Windows artifact checksums
         run: npm run checksums:release -- SHA256SUMS-windows.txt
@@ -63,6 +58,7 @@ jobs:
           name: windows-x64-release
           path: |
             release/*.exe
+            release/Jsox-Recorder-Windows-*.zip
             release/*.blockmap
             release/latest*.yml
             release/SHA256SUMS*.txt

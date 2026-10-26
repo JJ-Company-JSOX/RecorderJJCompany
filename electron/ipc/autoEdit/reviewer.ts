@@ -1,4 +1,5 @@
 import http from "node:http";
+import { acquireBundledOllama, BUNDLED_OLLAMA_MODEL } from "./bundledOllama";
 import {
 	type EditPlan,
 	mergeLocalReview,
@@ -9,6 +10,7 @@ export interface LocalModelInfo {
 	sizeBytes: number;
 	license: string;
 	capabilities?: string[];
+	runtime?: "bundled" | "external";
 }
 export interface PlanReviewer {
 	review(plan: EditPlan, model: string, signal?: AbortSignal): Promise<EditPlan>;
@@ -20,59 +22,75 @@ function validateModelName(model: string) {
 }
 
 /** Direct loopback HTTP bypasses proxies. Redirects and remote endpoints are never followed. */
-export function localRequest(
+export async function localRequest(
 	route: "/api/chat" | "/api/show" | "/api/tags",
 	payload?: object,
 	signal?: AbortSignal,
 	maxBodyBytes = 500_000,
+	modelName?: string,
 ): Promise<unknown> {
 	signal?.throwIfAborted();
-	const body = payload ? JSON.stringify(payload) : "";
+	const requestedModel = modelName ?? (payload as { model?: string } | undefined)?.model;
+	// The lightweight story model should spend its output budget on the result.
+	const requestPayload =
+		route === "/api/chat" &&
+		requestedModel === BUNDLED_OLLAMA_MODEL &&
+		payload &&
+		!("think" in payload)
+			? { ...payload, think: false }
+			: payload;
+	const body = requestPayload ? JSON.stringify(requestPayload) : "";
 	if (Buffer.byteLength(body) > Math.min(3_000_000, maxBodyBytes))
 		throw new Error("Plan too large for local review");
-	return new Promise((resolve, reject) => {
-		const req = http.request(
-			{
-				signal,
-				hostname: "127.0.0.1",
-				port: 11434,
-				path: route,
-				method: payload ? "POST" : "GET",
-				headers: {
-					"Content-Type": "application/json",
-					"Content-Length": Buffer.byteLength(body),
+	const lease = await acquireBundledOllama(requestedModel, signal);
+	try {
+		return await new Promise((resolve, reject) => {
+			const req = http.request(
+				{
+					signal,
+					hostname: "127.0.0.1",
+					port: lease?.port ?? 11434,
+					path: route,
+					method: payload ? "POST" : "GET",
+					headers: {
+						"Content-Type": "application/json",
+						"Content-Length": Buffer.byteLength(body),
+					},
 				},
-			},
-			(res) => {
-				if (res.statusCode !== 200) {
-					res.resume();
-					reject(new Error("Local model unavailable"));
-					return;
-				}
-				let text = "";
-				res.setEncoding("utf8");
-				res.on("data", (chunk) => {
-					text += chunk;
-					if (text.length > 1_000_000) req.destroy(new Error("Local response too large"));
-				});
-				res.on("error", reject);
-				res.on("end", () => {
-					try {
-						resolve(JSON.parse(text));
-					} catch {
-						reject(new Error("Invalid local response"));
+				(res) => {
+					if (res.statusCode !== 200) {
+						res.resume();
+						reject(new Error("Local model unavailable"));
+						return;
 					}
-				});
-			},
-		);
-		const timer = setTimeout(
-			() => req.destroy(new Error("Local AI request timed out")),
-			route === "/api/chat" ? 120_000 : 8_000,
-		);
-		req.on("close", () => clearTimeout(timer));
-		req.on("error", reject);
-		req.end(body);
-	});
+					let text = "";
+					res.setEncoding("utf8");
+					res.on("data", (chunk) => {
+						text += chunk;
+						if (text.length > 1_000_000)
+							req.destroy(new Error("Local response too large"));
+					});
+					res.on("error", reject);
+					res.on("end", () => {
+						try {
+							resolve(JSON.parse(text));
+						} catch {
+							reject(new Error("Invalid local response"));
+						}
+					});
+				},
+			);
+			const timer = setTimeout(
+				() => req.destroy(new Error("Local AI request timed out")),
+				route === "/api/chat" ? 120_000 : 8_000,
+			);
+			req.on("close", () => clearTimeout(timer));
+			req.on("error", reject);
+			req.end(body);
+		});
+	} finally {
+		lease?.release();
+	}
 }
 
 /** Inspect already installed weights. Reject Ollama cloud models before sending any plan. */
@@ -81,33 +99,41 @@ export async function inspectLocalModel(
 	signal?: AbortSignal,
 ): Promise<LocalModelInfo> {
 	validateModelName(model);
-	const tags = (await localRequest("/api/tags", undefined, signal)) as {
-		models?: { name: string; size: number; remote_model?: string; remote_host?: string }[];
-	};
-	const installed = tags.models?.find((m) => m.name === model || m.name === `${model}:latest`);
-	if (
-		!installed ||
-		!Number.isFinite(installed.size) ||
-		installed.size <= 0 ||
-		installed.remote_model ||
-		installed.remote_host
-	)
-		throw new Error("Installed local weights not found");
-	const info = (await localRequest("/api/show", { model }, signal)) as {
-		license?: string;
-		remote_model?: string;
-		remote_host?: string;
-		model_info?: object;
-		capabilities?: string[];
-	};
-	if (info.remote_model || info.remote_host || !info.model_info || !info.license?.trim())
-		throw new Error("Local model or license could not be verified");
-	return {
-		name: installed.name,
-		sizeBytes: installed.size,
-		license: info.license,
-		capabilities: info.capabilities,
-	};
+	const lease = await acquireBundledOllama(model, signal);
+	try {
+		const tags = (await localRequest("/api/tags", undefined, signal, 500_000, model)) as {
+			models?: { name: string; size: number; remote_model?: string; remote_host?: string }[];
+		};
+		const installed = tags.models?.find(
+			(m) => m.name === model || m.name === `${model}:latest`,
+		);
+		if (
+			!installed ||
+			!Number.isFinite(installed.size) ||
+			installed.size <= 0 ||
+			installed.remote_model ||
+			installed.remote_host
+		)
+			throw new Error("Installed local weights not found");
+		const info = (await localRequest("/api/show", { model }, signal)) as {
+			license?: string;
+			remote_model?: string;
+			remote_host?: string;
+			model_info?: object;
+			capabilities?: string[];
+		};
+		if (info.remote_model || info.remote_host || !info.model_info || !info.license?.trim())
+			throw new Error("Local model or license could not be verified");
+		return {
+			name: installed.name,
+			sizeBytes: installed.size,
+			license: info.license,
+			capabilities: info.capabilities,
+			runtime: lease ? "bundled" : "external",
+		};
+	} finally {
+		lease?.release();
+	}
 }
 
 /** Uses only an existing user-operated model. Never downloads weights. */

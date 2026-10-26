@@ -29,6 +29,7 @@ release/**
 .tmp/
 vendor/offline-ai/
 vendor/offline-tools/
+vendor/offline-ollama/
 .history/
 extension-sources/
 *.tsbuildinfo

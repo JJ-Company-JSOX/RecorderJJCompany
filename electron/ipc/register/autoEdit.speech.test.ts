@@ -12,7 +12,7 @@ const fixture = vi.hoisted(() => ({
 	callbacks: new Map<string, () => void>(),
 }));
 vi.mock("electron", () => ({
-	app: { isPackaged: false, getAppPath: () => "/app", once: vi.fn() },
+	app: { isPackaged: false, getAppPath: () => "/app", getPath: () => "/userdata", once: vi.fn() },
 	ipcMain: {
 		handle: (name: string, handler: (...args: unknown[]) => Promise<Record<string, unknown>>) =>
 			fixture.handlers.set(name, handler),

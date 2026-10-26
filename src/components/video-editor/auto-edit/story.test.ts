@@ -1,5 +1,20 @@
 import { expect, it } from "vitest";
 import { emptyStoryBrief, isStoryRequest, storyScenes } from "./story";
+it("starts fresh stories in text mode without enabling frame or speech processing", () => {
+	expect(emptyStoryBrief()).toMatchObject({
+		analyzeVideo: false,
+		includeTranscript: false,
+		autoTranscribe: false,
+	});
+});
+it("preserves explicit saved frame-analysis choices when a story workspace is restored", async () => {
+	const { emptyStoryWorkspace, normalizeStoryWorkspace } = await import("./storyWorkspace");
+	for (const analyzeVideo of [true, false]) {
+		const saved = emptyStoryWorkspace();
+		saved.brief.analyzeVideo = analyzeVideo;
+		expect(normalizeStoryWorkspace(saved)?.brief.analyzeVideo).toBe(analyzeVideo);
+	}
+});
 it("covers a short video once without duplicate intro and outro", () => {
 	expect(storyScenes([{ id: "a", startMs: 0, endMs: 4100, speed: 1 }])).toEqual([
 		{ id: "story-1", startMs: 0, endMs: 4100, sourceTimeMs: 2050 },
@@ -119,7 +134,12 @@ it("rejects subtitle evidence crossing a gap in the selected story footage", () 
 
 it("uses a conservative smaller aggregate text budget when video frames share model context", () => {
 	const r = {
-		brief: { ...emptyStoryBrief(), topic: "Product", facts: "x".repeat(1993) },
+		brief: {
+			...emptyStoryBrief(),
+			analyzeVideo: true,
+			topic: "Product",
+			facts: "x".repeat(1993),
+		},
 		videoPath: "test.mp4",
 		scenes: [{ id: "story-1", startMs: 0, endMs: 10000, sourceTimeMs: 5000 }],
 	};

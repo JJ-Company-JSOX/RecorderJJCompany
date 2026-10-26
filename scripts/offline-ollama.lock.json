@@ -1,0 +1,26 @@
+{
+	"version": 1,
+	"runtimeVersion": "0.40.11",
+	"runtime": {
+		"file": "ollama-windows-amd64.zip",
+		"url": "https://github.com/ollama/ollama/releases/download/v0.40.11/ollama-windows-amd64.zip",
+		"size": 1586356606,
+		"sha256": "bda4a493ba8a7c24d57263cd843cd68cee84f44aed4299eeed532acad7eda12a",
+		"checksumSource": "https://github.com/ollama/ollama/releases/download/v0.40.11/sha256sum.txt"
+	},
+	"license": {
+		"url": "https://raw.githubusercontent.com/ollama/ollama/v0.40.11/LICENSE",
+		"size": 1058,
+		"sha256": "5934ed2ce0d15154bcdb9c85203210abac0da4314af34081e36df4599f90b226"
+	},
+	"model": {
+		"name": "qwen3:1.7b",
+		"registry": "https://registry.ollama.ai/v2/library/qwen3",
+		"manifestPath": "models/manifests/registry.ollama.ai/library/qwen3/1.7b",
+		"manifestSha256Prefix": "8f68893c685c",
+		"manifestPinProvenance": "Prefix reported by the user's installed Ollama model on 2026-10-26. The registry was inaccessible in the research environment; this is not an independently verified full upstream SHA-256. Preparation verifies every content-addressed blob and records the complete manifest digest in the bundle receipt.",
+		"maximumBytes": 2000000000,
+		"modelSource": "https://ollama.com/library/qwen3:1.7b",
+		"weightLicense": "Apache-2.0 (must also be present in the registry license layer)"
+	}
+}

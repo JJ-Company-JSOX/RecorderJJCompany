@@ -7,7 +7,7 @@ const scripts: Record<string, string> = JSON.parse(
 	readFileSync(path.join(root, "package.json"), "utf8"),
 ).scripts;
 
-type Resource = { from: string; filter?: string[] };
+type Resource = { from: string; to?: string; filter?: string[] };
 type BuilderConfig = { extends?: string; extraResources?: Resource[] };
 
 /** The builder configs are JSON with whole-line comments. */
@@ -44,6 +44,16 @@ const packages = Object.entries(scripts)
 					!!resource.filter?.includes("tts-kokoro/**"),
 			),
 			ocr: resources.some((resource) => resource.from === "vendor/offline-ai/win32-x64/ocr"),
+			ollama: resources.some(
+				(resource) =>
+					resource.from === "vendor/offline-ollama/win32-x64" &&
+					resource.to === "offline-ollama",
+			),
+			ollamaRequired: resources.some(
+				(resource) =>
+					resource.from === "build/offline-ollama-required.txt" &&
+					resource.to === "offline-ollama-required.txt",
+			),
 		};
 	});
 
@@ -51,6 +61,7 @@ describe("Windows packaging gates", () => {
 	it("finds the editions that ship the narration voice and the OCR engine", () => {
 		const shipping = packages.filter((edition) => edition.voice && edition.ocr);
 		expect(shipping.map((edition) => edition.name).sort()).toEqual([
+			"package:win:client",
 			"package:win:offline",
 			"package:win:speech",
 			"package:win:speech-ui",
@@ -65,5 +76,17 @@ describe("Windows packaging gates", () => {
 			if (edition.voice || edition.ocr)
 				expect(edition.after, edition.name).toContain("npm run smoke:packaged-binaries");
 		}
+	});
+	it("ships the default model and runtime in every complete client edition and verifies before packaging", () => {
+		for (const edition of packages.filter((entry) => entry.voice && entry.ocr)) {
+			expect(edition.ollama, edition.name).toBe(true);
+			expect(edition.ollamaRequired, edition.name).toBe(true);
+			expect(edition.before, edition.name).toContain("npm run verify:offline-ollama");
+			expect(edition.after, edition.name).toContain("npm run smoke:packaged-binaries");
+		}
+	});
+	it("routes the normal Windows build through the complete client edition", () => {
+		expect(scripts["build:win"]).toContain("npm run build:win:client");
+		expect(scripts["build:win:client"]).toContain("npm run package:win:client");
 	});
 });

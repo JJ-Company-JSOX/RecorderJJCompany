@@ -229,11 +229,24 @@ test("a brief-only story becomes editable titles, text subtitles and real audio 
 }) => {
 	await setup(page);
 	const draft = page.getByRole("button", { name: "Draft video story", exact: true });
+	const frameAnalysis = page.getByLabel("Analyze sampled video frames", { exact: true });
+	// New stories using the default text model do not demand an extra vision model.
+	await expect(frameAnalysis).not.toBeChecked();
+	await expect(draft).toBeEnabled();
+	await expect(page.locator("[data-story-brief]")).not.toContainText(
+		"The selected model only understands text",
+	);
+	await expect(page.locator("[data-story-brief] code")).toHaveCount(0);
+	// Deliberate frame analysis still requires an actual vision model, without a download nudge.
+	await frameAnalysis.check();
 	await expect(draft).toBeDisabled();
 	await expect(page.locator("[data-story-brief]")).toContainText(
-		"qwen3:4b only understands text",
+		"The selected model only understands text",
 	);
-	await page.getByLabel("Analyze sampled video frames", { exact: true }).uncheck();
+	await expect(page.locator("[data-story-brief]")).not.toContainText("ollama pull");
+	await page.getByRole("button", { name: "Turn off frame analysis", exact: true }).click();
+	await expect(frameAnalysis).not.toBeChecked();
+	await expect(draft).toBeEnabled();
 	await draft.click();
 	await expect(
 		page.getByText(
@@ -302,6 +315,7 @@ test("vision model sends explicit frame-analysis intent, cancellation rejects la
 }) => {
 	await setup(page, true, true);
 	await brief(page);
+	await page.getByLabel("Analyze sampled video frames", { exact: true }).check();
 	await page.getByRole("button", { name: "Draft video story", exact: true }).click();
 	await expect(page.locator("[data-task-wait]")).toBeVisible();
 	const sent = JSON.parse((await page.locator("html").getAttribute("data-story-request"))!);

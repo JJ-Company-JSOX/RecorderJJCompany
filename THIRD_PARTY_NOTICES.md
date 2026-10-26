@@ -23,6 +23,16 @@ still apply. See [tools scope and limitations](docs/offline-tools.zh-CN.md).
 
 ## Offline AI edition
 
+Complete Windows client bundles additionally include the Ollama v0.40.11 portable
+runtime (Ollama's own code MIT) and Qwen3 1.7B text model weights (Apache-2.0).
+The complete official runtime archive is preserved, including library-specific
+notices; its dependencies are not all reclassified as MIT. The build preparer
+copies the model's actual registry license text, the pinned Ollama LICENSE and
+provenance notice into `resources/offline-ollama`. Exact runtime archive hashes,
+model acquisition limitations and per-file verification are described in
+`scripts/offline-ollama.lock.json`, `MODEL_LICENSES.md` and
+`docs/feature-default-qwen-client-bundle-2026-10-26.md`.
+
 The offline edition additionally distributes Qwen3-VL model weights (Apache-2.0),
 OpenAI Whisper small multilingual weights (MIT), llama.cpp (MIT), whisper.cpp
 (MIT), Kokoro-82M v1.0 narration voice weights (Apache-2.0) with its lexicons (generated

@@ -443,16 +443,14 @@ jobs:
       - name: Install app dependencies
         run: npx electron-builder install-app-deps
 
-      - name: Build Windows x64
+      - name: Prepare complete Windows client AI
+        uses: ./.github/actions/prepare-windows-client-ai
+
+      - name: Build complete Windows x64 client and check packaged assets
         shell: pwsh
         run: |
-          npm run build:platform-native-helpers
-          npx tsc
-          npx vite build
-          npx electron-builder --win dir nsis --x64 --publish never
-
-      - name: Smoke test packaged Windows x64 paths
-        run: npm run smoke:packaged-binaries
+          npm run build:win
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Generate Windows x64 artifact checksums
         run: npm run checksums:release -- SHA256SUMS-windows-x64.txt
@@ -468,6 +466,7 @@ jobs:
           name: windows-x64-release
           path: |
             release/*.exe
+            release/Jsox-Recorder-Windows-*.zip
             release/*.blockmap
             release/latest*.yml
             release/SHA256SUMS*.txt
@@ -620,10 +619,18 @@ jobs:
             exit 1
           fi
 
-          required_metadata=(
-            release-assets/windows-x64/latest.yml
-            release-assets/linux-x64/latest-linux.yml
-          )
+          windows_zips=(release-assets/windows-x64/Jsox-Recorder-Windows-*.zip)
+          windows_installers=(release-assets/windows-x64/*.exe)
+          if [ ${#windows_zips[@]} -eq 0 ] && [ ${#windows_installers[@]} -eq 0 ]; then
+            echo "A complete Windows client ZIP or legacy installer is required."
+            exit 1
+          fi
+
+          required_metadata=(release-assets/linux-x64/latest-linux.yml)
+          # ZIP clients carry their models and use complete manual updates, not the NSIS feed.
+          if [ ${#windows_installers[@]} -gt 0 ]; then
+            required_metadata+=(release-assets/windows-x64/latest.yml)
+          fi
 
           if [ "$RELEASE_SCOPE" = "all" ]; then
             required_metadata+=(release-assets/macos-merged/latest-mac.yml)
@@ -637,12 +644,14 @@ jobs:
           done
 
           if [ "$IS_PRERELEASE" = "true" ]; then
-            cp release-assets/windows-x64/latest.yml release-assets/windows-x64/beta.yml
             cp release-assets/linux-x64/latest-linux.yml release-assets/linux-x64/beta-linux.yml
             update_metadata=(
-              release-assets/windows-x64/beta.yml
               release-assets/linux-x64/beta-linux.yml
             )
+            if [ ${#windows_installers[@]} -gt 0 ]; then
+              cp release-assets/windows-x64/latest.yml release-assets/windows-x64/beta.yml
+              update_metadata+=(release-assets/windows-x64/beta.yml)
+            fi
 
             if [ "$RELEASE_SCOPE" = "all" ]; then
               cp release-assets/macos-merged/latest-mac.yml release-assets/macos-merged/beta-mac.yml
@@ -650,9 +659,11 @@ jobs:
             fi
           else
             update_metadata=(
-              release-assets/windows-x64/latest.yml
               release-assets/linux-x64/latest-linux.yml
             )
+            if [ ${#windows_installers[@]} -gt 0 ]; then
+              update_metadata+=(release-assets/windows-x64/latest.yml)
+            fi
 
             if [ "$RELEASE_SCOPE" = "all" ]; then
               update_metadata+=(release-assets/macos-merged/latest-mac.yml)
@@ -660,6 +671,7 @@ jobs:
           fi
 
           assets=(
+            "${windows_zips[@]}"
             release-assets/windows-x64/*.exe
             release-assets/windows-x64/*.blockmap
             release-assets/linux-x64/*.AppImage

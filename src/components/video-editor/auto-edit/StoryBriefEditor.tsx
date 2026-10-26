@@ -39,7 +39,8 @@ export const storyCopy = {
 		help: "Tell AI what this video is for. It plans a story across up to eight footage sections, with narration and on-screen titles. Review every claim before using it.",
 		privacy:
 			"Frame analysis uses a local vision model and up to eight small frames, not continuous video or recorded speech. Text-only models use your brief, scene notes and explicitly enabled subtitle context. Raw recorded audio is not sent to Ollama. Original audio is kept; mute or lower it on the timeline if you want to replace it.",
-		vision: "Video analysis needs a vision model. qwen3:4b only understands text. You can install qwen2.5vl:3b, then select and check it in AI mode, or turn off frame analysis.",
+		vision: "The selected model only understands text. Choose and check a vision model in AI mode, or turn off frame analysis. CPU frame analysis can be slow.",
+		turnOffFrames: "Turn off frame analysis",
 		frames: "Preparing video samples",
 		draft: "Draft video story",
 		title: "On-screen title",
@@ -83,7 +84,8 @@ export const storyCopy = {
 		help: "告诉 AI 视频的目的，它会按最多八段素材策划剧情、解说和画面标题。使用前请核对所有产品描述。",
 		privacy:
 			"画面分析仅用本地视觉模型读取最多八张小图，不是连续观看整段视频，也不识别原声。文字模型采用你的主题、素材说明和主动开启的字幕参考，不会把原始音频发送给 Ollama。原声保留；需要替换时，请在时间轴静音或降低原声音量。",
-		vision: "看画面需要视觉模型。qwen3:4b 只能处理文字。可安装 qwen2.5vl:3b，再到智能模式里选择并检查；也可关闭画面分析。",
+		vision: "当前模型只理解文字。请到智能模式选择并检查视觉模型，或关闭画面分析。CPU 分析画面可能较慢。",
+		turnOffFrames: "关闭画面分析",
 		frames: "正在准备画面样本",
 		draft: "生成视频故事稿",
 		title: "画面标题",
@@ -132,7 +134,8 @@ export const storyCopy = {
 		help: "Terangkan tujuan video. AI merancang cerita, naratif dan tajuk untuk sehingga lapan bahagian. Semak semua dakwaan.",
 		privacy:
 			"Model visual setempat melihat sehingga lapan imej kecil, bukan video berterusan atau suara rakaman. Model teks menggunakan taklimat, nota dan konteks sari kata yang diaktifkan; audio asal tidak dihantar kepada Ollama.",
-		vision: "Analisis imej memerlukan model visual. qwen3:4b hanya untuk teks. Pasang qwen2.5vl:3b dan semak dalam mod AI, atau matikan analisis imej.",
+		vision: "Model dipilih hanya memahami teks. Pilih dan semak model visual dalam mod AI, atau matikan analisis imej. Analisis imej dengan CPU mungkin perlahan.",
+		turnOffFrames: "Matikan analisis imej",
 		frames: "Menyediakan sampel video",
 		draft: "Draf cerita video",
 		title: "Tajuk pada skrin",
@@ -291,10 +294,17 @@ export function StoryBriefEditor({
 			</p>
 			<p className="text-xs text-muted-foreground">{c.privacy}</p>
 			{value.analyzeVideo && !visionAvailable && (
-				<p className="rounded-lg border border-amber-500/40 p-2 text-sm">
-					{c.vision}
-					<code className="block select-all pt-2">ollama pull qwen2.5vl:3b</code>
-				</p>
+				<div className="space-y-2 rounded-lg border border-amber-500/40 p-2 text-sm">
+					<p>{c.vision}</p>
+					<button
+						type="button"
+						disabled={disabled}
+						onClick={() => onChange({ ...value, analyzeVideo: false })}
+						className="rounded-lg border px-3 py-2 text-sm"
+					>
+						{c.turnOffFrames}
+					</button>
+				</div>
 			)}
 		</div>
 	);

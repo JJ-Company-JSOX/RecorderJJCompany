@@ -1,0 +1,86 @@
+// Complete Windows client payload. ZIP64 keeps every model in one download.
+{
+  "extends": "./electron-builder.json5",
+  "productName": "Jsox Recorder",
+  "npmRebuild": false,
+  "buildDependenciesFromSource": false,
+  "asarUnpack": [
+    "node_modules/ffmpeg-static/**",
+    "node_modules/ffprobe-static/**",
+    "node_modules/uiohook-napi/**",
+    "node_modules/sherpa-onnx-node/**",
+    "node_modules/sherpa-onnx-win-x64/**",
+    "electron/native/bin/**",
+    "dist-electron/ocr-worker.cjs"
+  ],
+  "win": {
+    "artifactName": "Jsox-Recorder-Windows-${version}-${arch}.${ext}",
+    "target": [
+      "zip"
+    ]
+  },
+  "nsis": {
+    "shortcutName": "Jsox Recorder"
+  },
+  "extraResources": [
+    {
+      "from": "build/offline-ollama-required.txt",
+      "to": "offline-ollama-required.txt"
+    },
+    {
+      "from": "vendor/offline-ollama/win32-x64",
+      "to": "offline-ollama"
+    },
+    {
+      "from": "LICENSE.md",
+      "to": "LICENSE-AGPL-3.0.txt"
+    },
+    {
+      "from": "vendor/offline-ai/win32-x64",
+      "to": "offline-ai",
+      "filter": [
+        "manifest.json",
+        "*.gguf",
+        "*.txt",
+        "runtime-static/**",
+        "speech/**",
+        "tts-kokoro/**"
+      ]
+    },
+    {
+      "from": "vendor/offline-tools/win32-x64",
+      "to": "offline-tools",
+      "filter": [
+        "silero/**",
+        "rnnoise/**",
+        "sherpa/manifest.json",
+        "sherpa/runtime/**"
+      ]
+    },
+    {
+      "from": "vendor/offline-ai/win32-x64/ocr",
+      "to": "offline-ai/ocr",
+      "filter": [
+        "manifest.json",
+        "*.onnx",
+        "*.txt",
+        "*.md",
+        "runtime/*.mjs",
+        "runtime/*.wasm",
+        "runtime/*.txt"
+      ]
+    },
+    {
+      "from": "THIRD_PARTY_NOTICES.md",
+      "to": "compliance/THIRD_PARTY_NOTICES.md"
+    },
+    {
+      "from": "MODEL_LICENSES.md",
+      "to": "compliance/MODEL_LICENSES.md"
+    },
+    {
+      "from": "LICENSE_COMPLIANCE.md",
+      "to": "compliance/LICENSE_COMPLIANCE.md"
+    }
+  ]
+}

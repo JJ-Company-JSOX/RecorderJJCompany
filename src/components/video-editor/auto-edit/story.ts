@@ -42,7 +42,8 @@ export const emptyStoryBrief = (): StoryBrief => ({
 	facts: "",
 	ending: "",
 	notes: "",
-	analyzeVideo: true,
+	// Default to the lightweight text path; sampled-frame analysis is an explicit opt-in.
+	analyzeVideo: false,
 	includeTranscript: false,
 	autoTranscribe: false,
 });

@@ -13,7 +13,8 @@ export const savedAiProvider = (): AiProvider =>
 	loadAppSetting(PROVIDER_KEY) === "ollama" ? "ollama" : "builtin";
 export const saveAiProvider = (value: AiProvider) => saveAppSetting(PROVIDER_KEY, value);
 const INSTALL = "winget install --id Ollama.Ollama -e --source winget";
-const PULL = "ollama pull qwen3:4b";
+export const DEFAULT_OLLAMA_MODEL = "qwen3:1.7b";
+const PULL = `ollama pull ${DEFAULT_OLLAMA_MODEL}`;
 const copy = {
 	en: {
 		mode: "AI mode",
@@ -24,9 +25,11 @@ const copy = {
 		check: "Check local model",
 		checking: "Checking local model…",
 		ready: "Local model ready",
+		bundled:
+			"Included with this app. No separate Ollama installation or model download is needed.",
 		install: "Install Ollama on Windows",
 		instructions:
-			"Run the first command in PowerShell. After installation, open a new PowerShell and run the second. The example model downloads roughly 2–3 GB; Ollama shows the actual size and progress. Allow several GB of additional RAM; 16 GB total is recommended. Model licenses vary.",
+			"Run the first command in CMD or PowerShell. After installation, open a new terminal and run the second. The default qwen3:1.7b model downloads roughly 1.4 GB; Ollama shows the actual size and progress. Allow several GB of additional RAM; 16 GB total is recommended. Model licenses vary.",
 		copy: "Copy command",
 		copied: "Copied",
 		copyFailed: "Copy failed; select and copy the command above.",
@@ -47,9 +50,10 @@ const copy = {
 		check: "检查本地模型",
 		checking: "正在检查本地模型…",
 		ready: "本地模型已就绪",
+		bundled: "模型和运行程序已随 App 提供，无需另装 Ollama 或下载模型。",
 		install: "在 Windows 安装 Ollama",
 		instructions:
-			"在 PowerShell 运行第一条命令。安装后重新打开 PowerShell，再运行第二条。示例模型下载约 2–3 GB，实际大小和进度以 Ollama 显示为准。运行时还需要数 GB 内存，建议电脑配有 16 GB 内存。各模型许可证不同。",
+			"在 CMD 或 PowerShell 运行第一条命令。安装后重新打开终端，再运行第二条。默认 qwen3:1.7b 模型下载约 1.4 GB，实际大小和进度以 Ollama 显示为准。运行时还需要数 GB 内存，建议电脑配有 16 GB 内存。各模型许可证不同。",
 		copy: "复制命令",
 		copied: "已复制",
 		copyFailed: "复制失败，请选中上面的命令手动复制。",
@@ -69,9 +73,11 @@ const copy = {
 		check: "Semak model setempat",
 		checking: "Menyemak model…",
 		ready: "Model setempat sedia",
+		bundled:
+			"Disertakan dalam aplikasi. Tidak perlu memasang Ollama atau memuat turun model lagi.",
 		install: "Pasang Ollama pada Windows",
 		instructions:
-			"Jalankan arahan pertama dalam PowerShell. Selepas pemasangan, buka PowerShell baharu untuk arahan kedua. Model contoh sekitar 2–3 GB; Ollama menunjukkan saiz dan kemajuan sebenar. Sediakan beberapa GB RAM tambahan; 16 GB jumlah disyorkan. Lesen model berbeza.",
+			"Jalankan arahan pertama dalam CMD atau PowerShell. Selepas pemasangan, buka terminal baharu untuk arahan kedua. Model lalai qwen3:1.7b sekitar 1.4 GB; Ollama menunjukkan saiz dan kemajuan sebenar. Sediakan beberapa GB RAM tambahan; 16 GB jumlah disyorkan. Lesen model berbeza.",
 		copy: "Salin arahan",
 		copied: "Disalin",
 		copyFailed: "Gagal menyalin; pilih dan salin arahan di atas.",
@@ -104,7 +110,7 @@ export function AiModeSettings({
 	const m = copy[language];
 	const [model, setModel] = useState(() => {
 		const value = loadAppSetting<unknown>(MODEL_KEY);
-		return typeof value === "string" ? value : "qwen3:4b";
+		return typeof value === "string" ? value : DEFAULT_OLLAMA_MODEL;
 	});
 	const info = modelInfo;
 	const [checking, setChecking] = useState(false);
@@ -194,6 +200,7 @@ export function AiModeSettings({
 					{info && (
 						<div role="status" className="text-xs text-emerald-500">
 							{m.ready}: {info.name} · {(info.sizeBytes / 1024 ** 3).toFixed(2)} GiB
+							{info.runtime === "bundled" && <p>{m.bundled}</p>}
 							<details className="text-muted-foreground">
 								<summary>License</summary>
 								<pre className="max-h-32 overflow-auto whitespace-pre-wrap">
@@ -210,25 +217,27 @@ export function AiModeSettings({
 					<p className="text-xs text-muted-foreground">
 						{m.language} {m.metadata}
 					</p>
-					<details className="space-y-2 text-sm">
-						<summary className="cursor-pointer">{m.install}</summary>
-						<p className="py-2 text-xs text-muted-foreground">{m.instructions}</p>
-						{[INSTALL, PULL].map((command) => (
-							<div key={command} className="mb-3 space-y-1">
-								<code className="block select-text overflow-x-auto rounded bg-background p-2 text-xs">
-									{command}
-								</code>
-								<Button
-									size="sm"
-									variant="secondary"
-									onClick={() => void copyCommand(command)}
-								>
-									{copied === command ? m.copied : m.copy}
-								</Button>
-							</div>
-						))}
-						{copied === "error" && <p role="alert">{m.copyFailed}</p>}
-					</details>
+					{info?.runtime !== "bundled" && (
+						<details className="space-y-2 text-sm">
+							<summary className="cursor-pointer">{m.install}</summary>
+							<p className="py-2 text-xs text-muted-foreground">{m.instructions}</p>
+							{[INSTALL, PULL].map((command) => (
+								<div key={command} className="mb-3 space-y-1">
+									<code className="block select-text overflow-x-auto rounded bg-background p-2 text-xs">
+										{command}
+									</code>
+									<Button
+										size="sm"
+										variant="secondary"
+										onClick={() => void copyCommand(command)}
+									>
+										{copied === command ? m.copied : m.copy}
+									</Button>
+								</div>
+							))}
+							{copied === "error" && <p role="alert">{m.copyFailed}</p>}
+						</details>
+					)}
 				</>
 			)}
 		</div>

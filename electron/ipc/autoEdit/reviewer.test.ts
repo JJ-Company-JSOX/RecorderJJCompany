@@ -9,6 +9,19 @@ const mock = vi.hoisted(() => ({
 	missingLicense: false,
 	expanded: false,
 	redirect: false,
+	installedName: "local:latest",
+	bundledPort: null as number | null,
+	leases: [] as (string | undefined)[],
+	releases: 0,
+}));
+vi.mock("./bundledOllama", () => ({
+	BUNDLED_OLLAMA_MODEL: "qwen3:1.7b",
+	acquireBundledOllama: async (model: string | undefined) => {
+		mock.leases.push(model);
+		return mock.bundledPort && model === "qwen3:1.7b"
+			? { port: mock.bundledPort, release: () => mock.releases++ }
+			: null;
+	},
 }));
 vi.mock("node:http", () => ({
 	default: {
@@ -44,7 +57,7 @@ vi.mock("node:http", () => ({
 							? {
 									models: [
 										{
-											name: "local:latest",
+											name: mock.installedName,
 											size: 1_000_000,
 											...(mock.remote
 												? { remote_host: "https://cloud.invalid" }
@@ -83,6 +96,10 @@ beforeEach(() => {
 	mock.missingLicense = false;
 	mock.expanded = false;
 	mock.redirect = false;
+	mock.installedName = "local:latest";
+	mock.bundledPort = null;
+	mock.leases = [];
+	mock.releases = 0;
 });
 const plan = (): EditPlan => ({
 	version: 1,
@@ -109,8 +126,37 @@ describe("local-only model adapter (mock service, no inference claim)", () => {
 			name: "local:latest",
 			sizeBytes: 1_000_000,
 			license: "MIT",
+			runtime: "external",
 		});
 		expect(mock.requests.map((r) => r.path)).toEqual(["/api/tags", "/api/show"]);
+	});
+	it("routes both inspection requests and narration/review chat to the actual private runtime", async () => {
+		mock.bundledPort = 34123;
+		mock.installedName = "qwen3:1.7b";
+		expect(await inspectLocalModel("qwen3:1.7b")).toMatchObject({ runtime: "bundled" });
+		mock.requests.length = 0;
+		await new LocalPlanReviewer().review(plan(), "qwen3:1.7b");
+		expect(mock.requests.map((request) => request.path)).toEqual([
+			"/api/tags",
+			"/api/show",
+			"/api/chat",
+		]);
+		for (const request of mock.requests) {
+			expect(request.hostname).toBe("127.0.0.1");
+			expect(request.port).toBe(34123);
+		}
+		expect(
+			JSON.parse(mock.requests.find((request) => request.path === "/api/chat")!.body),
+		).toMatchObject({ think: false });
+		expect(mock.leases.every((model) => model === "qwen3:1.7b")).toBe(true);
+		expect(mock.releases).toBe(mock.leases.length);
+	});
+	it("releases private-runtime leases when model metadata validation fails", async () => {
+		mock.bundledPort = 34123;
+		mock.installedName = "qwen3:1.7b";
+		mock.missingLicense = true;
+		await expect(inspectLocalModel("qwen3:1.7b")).rejects.toThrow(/license/);
+		expect(mock.releases).toBe(mock.leases.length);
 	});
 	it("sends only rule IDs/types/times/reasons to a fixed loopback address", async () => {
 		const original = plan(),

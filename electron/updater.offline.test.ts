@@ -3,7 +3,9 @@ import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({
 	packaged: true,
 	marker: false,
+	clientMarker: false,
 	checkForUpdates: vi.fn(),
+	showMessageBox: vi.fn(async () => ({ response: 0 })),
 	existsSync: vi.fn(),
 }));
 vi.mock("node:fs", () => ({
@@ -17,7 +19,7 @@ vi.mock("electron", () => ({
 		getVersion: () => "1.4.0",
 	},
 	BrowserWindow: class {},
-	dialog: {},
+	dialog: { showMessageBox: fixture.showMessageBox },
 }));
 vi.mock("electron-updater", () => ({
 	autoUpdater: { checkForUpdates: fixture.checkForUpdates },
@@ -35,10 +37,16 @@ beforeEach(() => {
 	});
 	fixture.packaged = true;
 	fixture.marker = false;
+	fixture.clientMarker = false;
 	fixture.existsSync.mockImplementation((file: string) =>
-		file.endsWith("offline-ai-preview.txt") ? fixture.marker : false,
+		file.endsWith("offline-ai-preview.txt")
+			? fixture.marker
+			: file.endsWith("offline-ollama-required.txt")
+				? fixture.clientMarker
+				: false,
 	);
 	fixture.checkForUpdates.mockClear();
+	fixture.showMessageBox.mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
 afterAll(() => {
@@ -54,7 +62,10 @@ it("disables updates on direct offline preview launches without launcher environ
 		() => null,
 		() => true,
 	);
-	await updater.checkForAppUpdates(() => null);
+	await updater.checkForAppUpdates(() => null, { manual: true });
+	expect(fixture.showMessageBox).toHaveBeenCalledWith(
+		expect.objectContaining({ detail: expect.stringContaining("complete package updates") }),
+	);
 	expect(fixture.checkForUpdates).not.toHaveBeenCalled();
 });
 
@@ -64,6 +75,14 @@ it("retains the normal update feature in generic packages and development builds
 	fixture.packaged = false;
 	fixture.marker = true;
 	expect((await import("./updater")).isAutoUpdateFeatureEnabled()).toBe(true);
+});
+
+it("keeps a complete ZIP client away from the generic NSIS update feed", async () => {
+	fixture.clientMarker = true;
+	const updater = await import("./updater");
+	expect(updater.isAutoUpdateFeatureEnabled()).toBe(false);
+	await updater.checkForAppUpdates(() => null);
+	expect(fixture.checkForUpdates).not.toHaveBeenCalled();
 });
 
 it("retains the explicit environment opt-out for every edition", async () => {

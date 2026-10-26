@@ -4,7 +4,11 @@ async function setup(
 	page: Page,
 	vision = false,
 	deferred = false,
-	options: { originalCaptions?: boolean; repeat?: boolean } = {},
+	options: {
+		originalCaptions?: boolean;
+		repeat?: boolean;
+		speech?: "ok" | "deferred" | "no-audio" | "missing-model";
+	} = {},
 ) {
 	await installDesktopBridge(page, "filmstrip.mp4", { signedIn: false });
 	await installDesktopBridgeOverrides(
@@ -42,6 +46,57 @@ async function setup(
 							text: "Show your product clearly.",
 						})),
 					},
+				};
+			};
+			window.electronAPI.getBundledSpeechStatus = async () => ({
+				available: options.speech !== "missing-model",
+			});
+			window.electronAPI.getWhisperSmallModelStatus = async () => ({
+				success: true,
+				exists: false,
+				path: null,
+			});
+			let speechProgress:
+				| ((state: {
+						phase: "preparing" | "transcribing" | "complete" | "cancelled" | "error";
+				  }) => void)
+				| undefined;
+			window.electronAPI.onAutoCaptionProgress = (callback) => {
+				speechProgress = callback;
+				return () => {
+					speechProgress = undefined;
+				};
+			};
+			window.electronAPI.cancelAutoCaptionGeneration = async () => {
+				document.documentElement.dataset.speechCanceled = "true";
+				return { success: true, cancelled: true };
+			};
+			window.electronAPI.generateAutoCaptions = async (input) => {
+				document.documentElement.dataset.speechRequest = JSON.stringify(input);
+				document.documentElement.dataset.speechCalls = String(
+					Number(document.documentElement.dataset.speechCalls ?? 0) + 1,
+				);
+				speechProgress?.({ phase: "transcribing" });
+				if (options.speech === "deferred")
+					await new Promise<void>((resolve) =>
+						window.addEventListener("finish-speech", () => resolve(), { once: true }),
+					);
+				if (options.speech === "no-audio")
+					return { success: false, errorCode: "no-audio", message: "No audio" };
+				speechProgress?.({ phase: "complete" });
+				return {
+					success: true,
+					cues: [
+						{
+							id: "recognized-1",
+							startMs: 1000,
+							endMs: 2000,
+							text: "This editor works offline.",
+							words: [
+								{ text: "This editor works offline.", startMs: 1000, endMs: 2000 },
+							],
+						},
+					],
 				};
 			};
 			window.electronAPI.narrateAutoEditLocally = async () => {
@@ -181,7 +236,10 @@ test("a brief-only story becomes editable titles, text subtitles and real audio 
 	await page.getByLabel("Analyze sampled video frames", { exact: true }).uncheck();
 	await draft.click();
 	await expect(
-		page.getByText("Enter a topic and product facts or scene notes first.", { exact: true }),
+		page.getByText(
+			"Enter a creative request or topic first. Product facts and scene notes can be added below.",
+			{ exact: true },
+		),
 	).toBeVisible();
 	await brief(page);
 	await draft.click();
@@ -460,3 +518,142 @@ test("central preview shows only the story line bound to each repeated footage o
 	await expect(caption).toContainText("Final product scene.");
 	await expect(caption).not.toContainText("Second product scene.");
 });
+
+test("CPU flow recognizes original speech, drafts a topic-only story, saves evidence and opens the existing export menu", async ({
+	page,
+}) => {
+	await setup(page, false, false, { speech: "ok" });
+	await page.getByRole("button", { name: "Use lightweight CPU settings", exact: true }).click();
+	await expect(
+		page.getByLabel("Analyze sampled video frames", { exact: true }),
+	).not.toBeChecked();
+	await page
+		.getByLabel("Topic / product", { exact: true })
+		.fill("Introduce my product for first-time customers.");
+	await page.getByLabel("Narration target (seconds, optional)", { exact: true }).fill("30");
+	await page
+		.getByRole("combobox", { name: "Original speech language", exact: true })
+		.selectOption("en");
+	await page
+		.getByRole("button", { name: "Analyze original audio and draft story", exact: true })
+		.click();
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
+	const sent = JSON.parse((await page.locator("html").getAttribute("data-story-request"))!);
+	expect(sent.request.brief).toMatchObject({
+		autoTranscribe: true,
+		includeTranscript: true,
+		analyzeVideo: false,
+		targetSpeechSeconds: 30,
+	});
+	expect(sent.request.transcript).toEqual([
+		{ startMs: 1000, endMs: 2000, text: "This editor works offline." },
+	]);
+	await expect(page.locator("html")).toHaveAttribute("data-speech-calls", "1");
+	await page
+		.getByRole("button", { name: "Analyze original audio and draft story", exact: true })
+		.click();
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
+	await expect(page.locator("html")).toHaveAttribute("data-speech-calls", "1");
+	await page
+		.getByRole("checkbox", {
+			name: "I've reviewed these lines; approve for narration",
+			exact: true,
+		})
+		.check();
+	await page.getByRole("button", { name: "Generate narration audio", exact: true }).click();
+	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
+	await page.evaluate(() => window.dispatchEvent(new Event("save-story")));
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() =>
+					JSON.parse(sessionStorage.getItem("story-project") ?? "{}").editor
+						?.storyWorkspace?.sourceSpeech?.cues?.length,
+			),
+		)
+		.toBe(1);
+	const saved = await page.evaluate(
+		() => JSON.parse(sessionStorage.getItem("story-project")!).editor,
+	);
+	expect(saved.autoCaptions.every((c: { id: string }) => c.id.startsWith("narration-"))).toBe(
+		true,
+	);
+	await page.getByRole("button", { name: "Export this video", exact: true }).click();
+	await expect(page.locator('[aria-label="Publish"]').first()).toBeVisible();
+});
+
+test("turning off speech context skips recognition after choosing CPU settings", async ({
+	page,
+}) => {
+	await setup(page, false, false, { speech: "ok" });
+	await page.getByRole("button", { name: "Use lightweight CPU settings", exact: true }).click();
+	await page
+		.getByLabel("Use existing speech subtitles as story context", { exact: true })
+		.uncheck();
+	await page.getByLabel("Topic / product", { exact: true }).fill("Introduce my product.");
+	await page.getByRole("button", { name: "Draft video story", exact: true }).click();
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
+	const sent = JSON.parse((await page.locator("html").getAttribute("data-story-request"))!);
+	expect(sent.request.brief).toMatchObject({ autoTranscribe: false, includeTranscript: false });
+	expect(sent.request.transcript).toBeUndefined();
+	await expect(page.locator("html")).not.toHaveAttribute("data-speech-calls");
+});
+
+test("canceling original-audio recognition cannot start story inference or apply a late transcript", async ({
+	page,
+}) => {
+	await setup(page, false, false, { speech: "deferred" });
+	await page.getByRole("button", { name: "Use lightweight CPU settings", exact: true }).click();
+	await brief(page);
+	await page
+		.getByRole("button", { name: "Analyze original audio and draft story", exact: true })
+		.click();
+	await expect(page.locator("html")).toHaveAttribute("data-speech-calls", "1");
+	await expect(page.getByText("Recognizing original speech", { exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-speech-canceled", "true");
+	await page.evaluate(() => window.dispatchEvent(new Event("finish-speech")));
+	await expect(page.locator("html")).not.toHaveAttribute("data-story-request");
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveCount(0);
+	await page.evaluate(() => window.dispatchEvent(new Event("save-story")));
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() =>
+					JSON.parse(sessionStorage.getItem("story-project") ?? "{}").editor
+						?.storyWorkspace?.sourceSpeech,
+			),
+		)
+		.toBeNull();
+});
+
+for (const speech of ["no-audio", "missing-model"] as const)
+	test(`${speech} offers a usable brief-only path without overwriting source subtitles`, async ({
+		page,
+	}) => {
+		await setup(page, false, false, { speech });
+		await page
+			.getByRole("button", { name: "Use lightweight CPU settings", exact: true })
+			.click();
+		await brief(page);
+		await page
+			.getByRole("button", { name: "Analyze original audio and draft story", exact: true })
+			.click();
+		await expect(page.getByRole("alert")).toContainText(
+			speech === "no-audio" ? "No original audio" : "speech model is missing",
+		);
+		await expect(page.locator("html")).not.toHaveAttribute("data-story-request");
+		await page
+			.getByRole("button", { name: "Continue with brief / frames only", exact: true })
+			.click();
+		await page.getByRole("button", { name: "Draft video story", exact: true }).click();
+		await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+			"Show your product clearly.",
+		);
+	});

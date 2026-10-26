@@ -144,3 +144,79 @@ it("uses a conservative smaller aggregate text budget when video frames share mo
 		}),
 	).toBe(false);
 });
+
+it("validates narration target as optional whole seconds five to six hundred", () => {
+	const request = {
+		brief: { ...emptyStoryBrief(), topic: "Product" },
+		videoPath: "test.mp4",
+		scenes: [{ id: "story-1", startMs: 0, endMs: 10000, sourceTimeMs: 5000 }],
+	};
+	for (const value of [undefined, 5, 30, 600])
+		expect(
+			isStoryRequest({ ...request, brief: { ...request.brief, targetSpeechSeconds: value } }),
+		).toBe(true);
+	for (const value of [null, "30", 0, 4, 601, 30.5, NaN, Infinity, -5])
+		expect(
+			isStoryRequest({ ...request, brief: { ...request.brief, targetSpeechSeconds: value } }),
+		).toBe(false);
+});
+it("scales per-scene speech caps to the requested total without changing footage or adding shots", async () => {
+	const { storySpeechBudget } = await import("./story");
+	const scenes = [
+		{ id: "story-1", startMs: 0, endMs: 20000, sourceTimeMs: 10000 },
+		{ id: "story-2", startMs: 25000, endMs: 65000, sourceTimeMs: 45000 },
+	];
+	const original = JSON.stringify(scenes);
+	const budget = storySpeechBudget({ targetSpeechSeconds: 30 }, scenes, "en");
+	expect(budget).toMatchObject({ requestedSeconds: 30, footageSeconds: 60, budgetSeconds: 30 });
+	expect(budget.slots.map((s) => s.speechSeconds)).toEqual([10, 20]);
+	expect(budget.slots.map((s) => s.maxChars)).toEqual([110, 220]);
+	expect(budget.slots.reduce((sum, s) => sum + s.maxChars, 0)).toBeLessThanOrEqual(30 * 11);
+	expect(budget.slots.map((s) => [s.startMs, s.endMs])).toEqual([
+		[0, 20000],
+		[25000, 65000],
+	]);
+	expect(JSON.stringify(scenes)).toBe(original);
+});
+it("uses real scene coverage for short footage and follows footage when target is omitted", async () => {
+	const { storySpeechBudget } = await import("./story");
+	const scenes = [{ id: "story-1", startMs: 1000, endMs: 7000, sourceTimeMs: 4000 }];
+	expect(storySpeechBudget({ targetSpeechSeconds: 30 }, scenes, "zh")).toMatchObject({
+		requestedSeconds: 30,
+		footageSeconds: 6,
+		budgetSeconds: 6,
+		slots: [{ startMs: 1000, endMs: 7000, speechSeconds: 6, maxChars: 21 }],
+	});
+	expect(storySpeechBudget({}, scenes, "en")).toMatchObject({
+		requestedSeconds: null,
+		budgetSeconds: 6,
+		slots: [{ speechSeconds: 6, maxChars: 66 }],
+	});
+});
+it("does not inflate a tiny requested speech budget with artificial per-scene minimums", async () => {
+	const { storySpeechBudget } = await import("./story");
+	const scenes = Array.from({ length: 8 }, (_, i) => ({
+		id: `story-${i + 1}`,
+		startMs: i * 10000,
+		endMs: (i + 1) * 10000,
+		sourceTimeMs: i * 10000 + 5000,
+	}));
+	const budget = storySpeechBudget({ targetSpeechSeconds: 5 }, scenes, "zh");
+	expect(budget.slots.reduce((sum, s) => sum + s.maxChars, 0)).toBeLessThanOrEqual(
+		Math.floor(5 * 3.5),
+	);
+	for (const slot of budget.slots) expect(slot.maxChars).toBe(2);
+});
+
+it("validates explicit auto-transcription intent without enabling it for legacy story briefs", () => {
+	const r = {
+		brief: { ...emptyStoryBrief(), topic: "Product" },
+		videoPath: "test.mp4",
+		scenes: [{ id: "story-1", startMs: 0, endMs: 10000, sourceTimeMs: 5000 }],
+	};
+	expect(emptyStoryBrief().autoTranscribe).toBe(false);
+	for (const value of [undefined, false, true])
+		expect(isStoryRequest({ ...r, brief: { ...r.brief, autoTranscribe: value } })).toBe(true);
+	for (const value of [null, "true", 1])
+		expect(isStoryRequest({ ...r, brief: { ...r.brief, autoTranscribe: value } })).toBe(false);
+});

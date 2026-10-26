@@ -1,3 +1,4 @@
+import { discardStoryIntent, stageStoryIntent } from "../video-editor/auto-edit/storyIntent";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowClockwiseIcon, DotsThreeVerticalIcon } from "@/components/ui/icons";
 import { toast } from "@/components/ui/toast";
@@ -62,6 +63,19 @@ function LaunchWindowContent() {
 		preparePermissions,
 	} = useScreenRecorder();
 
+	const [storyPrompt, setStoryPrompt] = useState("");
+	const recordingIntent = useRef<string | null>(null);
+	const previouslyRecording = useRef(false);
+	useEffect(() => {
+		if (recording && !previouslyRecording.current)
+			recordingIntent.current = stageStoryIntent(storyPrompt);
+		previouslyRecording.current = recording;
+	}, [recording, storyPrompt]);
+	const cancelRecordingWithIntent = useCallback(() => {
+		discardStoryIntent(recordingIntent.current);
+		recordingIntent.current = null;
+		cancelRecording();
+	}, [cancelRecording]);
 	const { elapsed, formatTime } = useRecordingTimer(recording, paused);
 	const hudContentRef = useRef<HTMLDivElement>(null);
 	const hudBarRef = useRef<HTMLDivElement>(null);
@@ -264,13 +278,15 @@ function LaunchWindowContent() {
 			onPauseResume={paused ? resumeRecording : pauseRecording}
 			onStopRecording={toggleRecording}
 			onHideHud={() => window.electronAPI?.hudOverlayHide?.()}
-			onCancelRecording={cancelRecording}
+			onCancelRecording={cancelRecordingWithIntent}
 			formatTime={formatTime}
 		/>
 	);
 
 	const idleControls = (
 		<RecordingSetupPanel
+			storyPrompt={storyPrompt}
+			onStoryPromptChange={setStoryPrompt}
 			platform={platform}
 			selectedSource={selectedSource}
 			hasSelectedSource={hasSelectedSource}
@@ -314,7 +330,11 @@ function LaunchWindowContent() {
 			onPickOnScreen={() => void handlePickOnScreen()}
 			onRecord={toggleRecording}
 			onCancelCountdown={() => void cancelRecordingStart()}
-			onOpenFile={openVideoFile}
+			onOpenFile={() =>
+				openVideoFile((path) => {
+					stageStoryIntent(storyPrompt, path);
+				})
+			}
 			onHome={openHome}
 			onHide={() => void window.electronAPI.hudOverlayHide()}
 			onClose={() => void closeRecorder()}

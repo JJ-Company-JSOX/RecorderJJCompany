@@ -1,7 +1,11 @@
 import path from "node:path";
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import { generateBundledSpeechTranscript, getBundledSpeechStatus } from "../captions/bundledSpeech";
-import { generateAutoCaptionsFromVideo, resolveCaptionAudioCandidates } from "../captions/generate";
+import {
+	NoCaptionAudioError,
+	generateAutoCaptionsFromVideo,
+	resolveCaptionAudioCandidates,
+} from "../captions/generate";
 import {
 	cancelWhisperModelDownload,
 	deleteWhisperSmallModel,
@@ -27,6 +31,15 @@ type OpenVideoFilePickerOptions = {
 };
 
 export function registerCaptionHandlers() {
+	const running = new Map<number, AbortController>();
+	app.once("before-quit", () => {
+		for (const controller of running.values()) controller.abort();
+	});
+	ipcMain.handle("cancel-auto-caption-generation", (event) => {
+		const controller = running.get(event.sender.id);
+		controller?.abort();
+		return { success: true, cancelled: !!controller };
+	});
 	ipcMain.handle(
 		"open-video-file-picker",
 		async (event, options?: OpenVideoFilePickerOptions) => {
@@ -243,23 +256,70 @@ export function registerCaptionHandlers() {
 	ipcMain.handle(
 		"generate-auto-captions",
 		async (
-			_,
+			event,
 			options: {
 				videoPath: string;
-				whisperExecutablePath: string;
+				whisperExecutablePath?: string;
 				whisperModelPath: string;
 				language?: string;
 			},
 		) => {
+			if (running.has(event.sender.id))
+				return {
+					success: false,
+					errorCode: "busy",
+					error: "Caption generation is already running",
+					message: "Caption generation is already running",
+				};
+			const controller = new AbortController();
+			running.set(event.sender.id, controller);
+			const abort = () => controller.abort();
+			event.sender.once("destroyed", abort);
+			const progress = (
+				phase: "preparing" | "transcribing" | "complete" | "cancelled" | "error",
+				cueCount?: number,
+			) => {
+				if (!event.sender.isDestroyed())
+					event.sender.send("auto-caption-generation-progress", {
+						phase,
+						...(cueCount !== undefined ? { cueCount } : {}),
+					});
+			};
+			let errorCode: "failed" | "invalid-input" | "not-approved" = "failed";
 			try {
+				if (
+					!options ||
+					typeof options.videoPath !== "string" ||
+					!options.videoPath.trim() ||
+					options.videoPath.length > 4096 ||
+					typeof options.whisperModelPath !== "string" ||
+					options.whisperModelPath.length > 4096 ||
+					(options.whisperExecutablePath !== undefined &&
+						(typeof options.whisperExecutablePath !== "string" ||
+							options.whisperExecutablePath.length > 4096)) ||
+					(options.language !== undefined &&
+						(typeof options.language !== "string" || options.language.length > 32))
+				) {
+					errorCode = "invalid-input";
+					throw Error("Invalid caption request");
+				}
+				progress("preparing");
 				const bundled = await getBundledSpeechStatus();
+				controller.signal.throwIfAborted();
 				const normalized = normalizeVideoSourcePath(options.videoPath);
 				const approved = normalized && (await resolveApprovedLocalMediaPath(normalized));
-				if (!approved) throw Error("Select an approved local recording first");
+				if (!approved) {
+					errorCode = "not-approved";
+					throw Error("Select an approved local recording first");
+				}
 				const candidates = await resolveCaptionAudioCandidates(approved);
 				for (const candidate of candidates)
-					if (!(await resolveApprovedLocalMediaPath(candidate.path)))
+					if (!(await resolveApprovedLocalMediaPath(candidate.path))) {
+						errorCode = "not-approved";
 						throw Error("Linked audio is not approved for transcription");
+					}
+				controller.signal.throwIfAborted();
+				progress("transcribing");
 				const result =
 					bundled.available &&
 					(!options.whisperModelPath || options.whisperModelPath === bundled.modelPath)
@@ -267,12 +327,24 @@ export function registerCaptionHandlers() {
 								videoPath: approved,
 								language: options.language,
 								candidates,
+								signal: controller.signal,
 							})
 						: await generateAutoCaptionsFromVideo({
 								...options,
 								videoPath: approved,
 								candidates,
+								signal: controller.signal,
 							});
+				controller.signal.throwIfAborted();
+				progress("complete", result.cues.length);
+				if (!result.cues.length)
+					return {
+						success: false,
+						cues: [],
+						errorCode: "no-speech",
+						error: "No speech was recognized in the recording",
+						message: "No speech was recognized in the recording",
+					};
 				return {
 					success: true,
 					cues: result.cues,
@@ -282,13 +354,29 @@ export function registerCaptionHandlers() {
 							: `Generated ${result.cues.length} caption cues from the ${result.audioSourceLabel}.`,
 				};
 			} catch (error) {
-				console.error("Failed to generate auto captions:", error);
+				const cancelled =
+					controller.signal.aborted ||
+					(error instanceof Error && error.name === "AbortError");
+				const code = cancelled
+					? "cancelled"
+					: error instanceof NoCaptionAudioError
+						? "no-audio"
+						: errorCode;
+				progress(cancelled ? "cancelled" : "error");
+				if (!cancelled) console.error("Failed to generate auto captions:", error);
 				return {
 					success: false,
+					errorCode: code,
 					error: String(error),
-					message:
-						error instanceof Error ? error.message : "Failed to generate auto captions",
+					message: cancelled
+						? "Caption generation cancelled"
+						: error instanceof Error
+							? error.message
+							: "Failed to generate auto captions",
 				};
+			} finally {
+				if (running.get(event.sender.id) === controller) running.delete(event.sender.id);
+				event.sender.removeListener("destroyed", abort);
 			}
 		},
 	);

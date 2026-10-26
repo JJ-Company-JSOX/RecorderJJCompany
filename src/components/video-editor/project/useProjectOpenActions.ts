@@ -29,7 +29,7 @@ type UseProjectOpenActionsInput = {
 	openUnsavedChangesDialog: (actionLabel: string) => Promise<"save" | "discard" | "cancel">;
 	saveProject: ReturnType<typeof useProjectSaveActions>["saveProject"];
 	refreshProjectLibrary: () => Promise<void>;
-	resetSourceScopedEditorState: () => void;
+	resetSourceScopedEditorState: (sourcePath?: string) => void;
 	applySessionPresentation: (session: null) => void;
 	handleSaveProject: () => Promise<unknown>;
 	handleSaveProjectAs: () => Promise<unknown>;
@@ -135,7 +135,7 @@ export function useProjectOpenActions({
 			project.setVideoPath(sourceVideoUrl);
 			project.setCurrentProjectPath(null);
 			project.setLastSavedSnapshot(null);
-			resetSourceScopedEditorState();
+			resetSourceScopedEditorState(sourcePath);
 			// Importing the currently open file still resets the timeline. Reload its
 			// metadata too, since React keeps the same video element and source URL.
 			if (project.videoPath === sourceVideoUrl) videoPlaybackRef.current?.video?.load();

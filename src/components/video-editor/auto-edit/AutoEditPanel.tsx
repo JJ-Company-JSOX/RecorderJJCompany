@@ -1,5 +1,11 @@
+import {
+	transcribeStoryAudio,
+	mergeStorySpeechEvidence,
+	type StoryAudioReason,
+} from "./storyAudio";
 import { buildStoryTranscript, storyBriefCharacterCount, storyTextBudget } from "./storyTranscript";
 import type { Dispatch, SetStateAction } from "react";
+import { normalizeStorySourceSpeech } from "./storyWorkspace";
 import type { StoryWorkspace } from "./storyWorkspace";
 import { useStoryWorkspace } from "./useStoryWorkspace";
 import { NarrationAudioCache } from "./narrationAudioCache";
@@ -48,7 +54,13 @@ import { addVisualSuggestions } from "./vision";
 import { visionMessages } from "./visionMessages";
 import { TaskWaitStatus, useTaskTiming } from "./TaskWaitStatus";
 import { workloadBucket } from "./taskTiming";
-import { storyScenes, validStoryTiming, placeStoryAudio } from "./story";
+import {
+	storyScenes,
+	validStoryTiming,
+	placeStoryAudio,
+	storySpeechBudget,
+	isStorySpeechTarget,
+} from "./story";
 import { StoryBriefEditor, storyCopy } from "./StoryBriefEditor";
 import { wizardMessages } from "./wizardMessages";
 
@@ -94,10 +106,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	storyWorkspace,
 	onStoryWorkspaceChange,
 	onOpenCaptions,
+	onOpenStoryExport,
 }: {
 	storyWorkspace?: StoryWorkspace | null;
 	onStoryWorkspaceChange?: Dispatch<SetStateAction<StoryWorkspace | null>>;
 	onOpenCaptions?: () => void;
+	onOpenStoryExport?: () => void;
 	open: boolean;
 	state: EditState;
 	source: string;
@@ -145,24 +159,48 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const workspaceField = useStoryWorkspace(storyWorkspace, onStoryWorkspaceChange);
 	const [storyMode, setStoryMode] = workspaceField("storyMode");
 	const [storyBrief, setStoryBrief] = workspaceField("brief");
+	const [sourceSpeech, setSourceSpeech] = workspaceField("sourceSpeech");
+	const speechAbort = useRef<AbortController | null>(null);
+	const [storyAudioStage, setStoryAudioStage] = useState("");
+	const [storyAudioIssue, setStoryAudioIssue] = useState<StoryAudioReason | null>(null);
+	const lastStorySource = useRef(source);
+	useEffect(() => {
+		if (lastStorySource.current !== source) {
+			speechAbort.current?.abort();
+			generation.current++;
+			setBusy(null);
+			taskTiming.finish(false);
+			setStoryAudioStage("");
+			lastStorySource.current = source;
+		}
+	}, [source]);
 	const [draftBrief, setDraftBrief] = workspaceField("briefSnapshot");
 	const [titleEdits, setTitleEdits] = workspaceField("titles");
 	const [textAdded, setTextAdded] = useState(false);
 	const storyUi = storyCopy[language];
 	const storyDraft = draftBrief !== null;
 	const currentStoryScenes = useMemo(() => storyScenes(state.clipRegions), [state.clipRegions]);
+	const speechBudget = storySpeechBudget(storyBrief, currentStoryScenes, language);
 	const briefCharacters = storyBriefCharacterCount(storyBrief);
 	const textBudget = storyTextBudget(storyBrief);
 	const storyTranscript = useMemo(
 		() =>
 			buildStoryTranscript(
-				storyBrief.includeTranscript ? state.autoCaptions : [],
+				storyBrief.includeTranscript
+					? mergeStorySpeechEvidence(
+							state.autoCaptions,
+							sourceSpeech?.source === source ? sourceSpeech.cues : [],
+							state.clipRegions,
+						)
+					: [],
 				state.clipRegions,
 				currentStoryScenes,
 				Math.max(0, textBudget - briefCharacters),
 			),
 		[
 			storyBrief.includeTranscript,
+			sourceSpeech,
+			source,
 			state.autoCaptions,
 			state.clipRegions,
 			currentStoryScenes,
@@ -304,6 +342,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	useEffect(
 		() => () => {
 			generation.current++;
+			speechAbort.current?.abort();
 			void window.electronAPI.cancelAutoEditAnalysis?.();
 			closePlayer(previewPlayer.current);
 		},
@@ -652,17 +691,21 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		state.audioRegions.some((region) => region.id.startsWith("narration-")) &&
 		!!narrationDraft &&
 		audioSnapshot !== narrationAudioSnapshot();
-	const narrateBundled = async () => {
+	const narrateBundled = async (refreshSpeech = false) => {
 		if (provider === "ollama" && !ollamaModel) {
 			setError(aiMode.firstCheck);
+			return;
+		}
+		if (storyMode && provider === "ollama" && !storyBrief.topic.trim()) {
+			setError(storyUi.required);
 			return;
 		}
 		if (
 			storyMode &&
 			provider === "ollama" &&
-			(!storyBrief.topic.trim() || !(storyBrief.facts.trim() || storyBrief.notes.trim()))
+			!isStorySpeechTarget(storyBrief.targetSpeechSeconds)
 		) {
-			setError(storyUi.required);
+			setError(storyUi.invalidTarget);
 			return;
 		}
 		if (storyMode && provider === "ollama" && briefCharacters > textBudget) {
@@ -673,6 +716,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			storyMode &&
 			provider === "ollama" &&
 			storyBrief.includeTranscript &&
+			!storyBrief.autoTranscribe &&
 			!storyTranscript.cues.length
 		) {
 			setError(storyUi.noTranscript);
@@ -693,9 +737,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				narrationStyle,
 				workloadBucket(useStory ? draftScenes.length : voicePlan.suggestions.length),
 				useStory && storyBrief.analyzeVideo,
+				useStory && storyBrief.autoTranscribe,
 			]),
 		);
 		setError("");
+		setStoryAudioIssue(null);
+		setStoryAudioStage("");
 		setProgress({ completed: 0, total: 0 });
 		setNarrationApproved(false);
 		setNarrationAudioReady(false);
@@ -703,6 +750,56 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			const draftLanguage = language;
 			const draftState = currentState.current.state;
 			const { clipRegions } = draftState;
+			let evidence = storyTranscript;
+			if (useStory && storyBrief.autoTranscribe) {
+				let rawSpeech =
+					sourceSpeech?.source === source &&
+					sourceSpeech.language === recognitionLanguage &&
+					!refreshSpeech
+						? sourceSpeech.cues
+						: null;
+				if (!rawSpeech) {
+					const controller = new AbortController();
+					speechAbort.current = controller;
+					const audio = await transcribeStoryAudio({
+						api: window.electronAPI,
+						videoPath: source,
+						language: recognitionLanguage,
+						consent: true,
+						signal: controller.signal,
+						isCurrent: () =>
+							run === generation.current &&
+							narrationBaselineFor(
+								currentState.current.state,
+								currentState.current.source,
+							) === narrationBaselineFor(draftState, source),
+						onStage: (stage) => {
+							if (run === generation.current) setStoryAudioStage(stage);
+						},
+					});
+					if (run !== generation.current) return;
+					if (!audio.success) {
+						setStoryAudioIssue(audio.reason);
+						throw Error(storyUi.audioErrors[audio.reason] ?? audio.message);
+					}
+					rawSpeech = audio.recognizedCues;
+					const savedSpeech = normalizeStorySourceSpeech({
+						source,
+						language: recognitionLanguage,
+						cues: rawSpeech,
+					});
+					if (!savedSpeech) throw Error(storyUi.audioErrors["invalid-result"]);
+					setSourceSpeech(savedSpeech);
+				}
+				evidence = buildStoryTranscript(
+					mergeStorySpeechEvidence(draftState.autoCaptions, rawSpeech, clipRegions),
+					clipRegions,
+					draftScenes,
+					Math.max(0, textBudget - briefCharacters),
+				);
+				if (!evidence.cues.length)
+					throw Error(storyUi.tooMuchText.replace("{max}", String(textBudget)));
+			}
 			// A click is compared before/after its exact time (an AI zoom starts 350 ms before it);
 			// other moments are read just after they begin.
 			const frames = voicePlan.suggestions.map((s) => {
@@ -726,7 +823,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								videoPath: source,
 								style: narrationStyle,
 								...(storyBrief.includeTranscript
-									? { transcript: storyTranscript.cues }
+									? { transcript: evidence.cues }
 									: {}),
 							},
 							ollamaModel.name,
@@ -771,6 +868,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		} finally {
 			if (run === generation.current) {
 				taskTiming.finish(false);
+				speechAbort.current = null;
+				setStoryAudioStage("");
 				setBusy(null);
 			}
 		}
@@ -1805,7 +1904,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 												? `${provider === "ollama" && storyMode ? storyUi.frames : n.looking} ${progress.completed}/${progress.total}`
 												: n.busy
 											: provider === "ollama" && storyMode
-												? storyUi.draft
+												? storyBrief.autoTranscribe
+													? storyUi.analyzeAndDraft
+													: storyUi.draft
 												: n.draft}
 									</Button>
 									{(busy === "narrate" ||
@@ -1815,6 +1916,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 											variant="secondary"
 											onClick={() => {
 												generation.current++;
+												speechAbort.current?.abort();
 												taskTiming.finish(false);
 												void window.electronAPI.cancelAutoEditAnalysis?.();
 												setBusy(null);
@@ -1825,6 +1927,103 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									)}
 								</div>
 							</div>
+						)}
+						{storyMode && (
+							<>
+								{storyBrief.autoTranscribe && (
+									<label className="flex flex-col gap-1 text-sm">
+										{storyUi.originalLanguage}
+										<select
+											aria-label={storyUi.originalLanguage}
+											value={recognitionLanguage}
+											disabled={!!busy}
+											onChange={(e) => {
+												const value = e.target.value as RecognitionLanguage;
+												setRecognitionLanguage(value);
+												saveAppSetting(RECOGNITION_LANGUAGE_SETTING, value);
+											}}
+											className="rounded-lg border bg-background p-2"
+										>
+											<option value="auto">Auto</option>
+											<option value="zh">中文</option>
+											<option value="en">English</option>
+											<option value="ms">Bahasa Melayu</option>
+										</select>
+									</label>
+								)}
+								<p className="text-xs text-muted-foreground">
+									{storyUi.speechBudget
+										.replace(
+											"{wanted}",
+											speechBudget.requestedSeconds === null
+												? storyUi.followVideo
+												: String(speechBudget.requestedSeconds),
+										)
+										.replace(
+											"{available}",
+											speechBudget.footageSeconds.toFixed(1),
+										)
+										.replace("{budget}", speechBudget.budgetSeconds.toFixed(1))}
+								</p>
+								{storyAudioStage && (
+									<p role="status" className="text-sm">
+										{storyUi.audioStages[
+											storyAudioStage as keyof typeof storyUi.audioStages
+										] ?? storyAudioStage}
+									</p>
+								)}
+								{sourceSpeech?.source === source && (
+									<details className="rounded-lg border p-3 text-sm">
+										<summary>
+											{storyUi.originalText} ({sourceSpeech.cues.length})
+										</summary>
+										<div className="max-h-48 overflow-auto pt-2">
+											{sourceSpeech.cues.slice(0, 200).map((c) => (
+												<p key={c.id}>
+													{(c.startMs / 1000).toFixed(1)} s · {c.text}
+												</p>
+											))}
+										</div>
+									</details>
+								)}
+								{storyBrief.autoTranscribe && sourceSpeech?.source === source && (
+									<Button
+										variant="secondary"
+										disabled={!!busy}
+										onClick={() => void narrateBundled(true)}
+									>
+										{storyUi.refreshSpeech}
+									</Button>
+								)}
+								{storyAudioIssue && (
+									<div className="flex flex-wrap gap-2">
+										{onOpenCaptions && (
+											<Button
+												variant="secondary"
+												disabled={!!busy}
+												onClick={onOpenCaptions}
+											>
+												{storyUi.openCaptions}
+											</Button>
+										)}
+										<Button
+											variant="secondary"
+											disabled={!!busy}
+											onClick={() => {
+												setStoryBrief((v) => ({
+													...v,
+													autoTranscribe: false,
+													includeTranscript: false,
+												}));
+												setStoryAudioIssue(null);
+												setError("");
+											}}
+										>
+											{storyUi.continueWithoutSpeech}
+										</Button>
+									</div>
+								)}
+							</>
 						)}
 						{(busy === "narrate" || busy === "synthesize") && (
 							<TaskWaitStatus timing={taskTiming.display} language={language} />
@@ -2002,6 +2201,21 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 													: "English"}
 										</p>
 									)}
+									{storyDraft &&
+										onOpenStoryExport &&
+										(narrationAudioReady ||
+											textAdded ||
+											state.audioRegions.some((r) =>
+												r.id.startsWith("narration-"),
+											)) && (
+											<Button
+												variant="secondary"
+												disabled={!!busy}
+												onClick={onOpenStoryExport}
+											>
+												{storyUi.exportVideo}
+											</Button>
+										)}
 									{voiceOutdated && (
 										<p
 											role="status"

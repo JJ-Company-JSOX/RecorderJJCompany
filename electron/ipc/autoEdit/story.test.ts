@@ -141,3 +141,62 @@ it("keeps existing brief-only requests free of subtitle evidence", async () => {
 	const content = JSON.parse(fixture.request.mock.calls[0][1].messages[1].content);
 	expect(content.editedSubtitleEvidence).toBeUndefined();
 });
+
+it("sends desired narration seconds and conservative per-slot budgets without changing video times", async () => {
+	const r = request();
+	r.brief.targetSpeechSeconds = 30;
+	r.brief.analyzeVideo = false;
+	r.scenes = [
+		{ id: "story-1", startMs: 0, endMs: 20000, sourceTimeMs: 10000 },
+		{ id: "story-2", startMs: 25000, endMs: 65000, sourceTimeMs: 45000 },
+	];
+	fixture.request.mockResolvedValueOnce({
+		message: { content: JSON.stringify({ cues: [cue, { ...cue, id: "story-2" }] }) },
+	});
+	const draft = await run(r);
+	const payload = JSON.parse(fixture.request.mock.calls[0][1].messages[1].content);
+	expect(payload.narrationTiming).toEqual({
+		requestedSeconds: 30,
+		footageSeconds: 60,
+		budgetSeconds: 30,
+	});
+	expect(payload.slots.map((s: { maxChars: number }) => s.maxChars)).toEqual([110, 220]);
+	expect(draft.cues.map((c) => [c.startMs, c.endMs])).toEqual([
+		[0, 20000],
+		[25000, 65000],
+	]);
+	expect(fixture.request.mock.calls[0][1].messages[0].content).toContain(
+		"NOT an instruction to shorten",
+	);
+});
+it("caps desired speech to a shorter real source instead of inventing a thirty-second output", async () => {
+	const r = request();
+	r.brief.targetSpeechSeconds = 30;
+	r.scenes[0].endMs = 6000;
+	const draft = await run(r);
+	const payload = JSON.parse(fixture.request.mock.calls[0][1].messages[1].content);
+	expect(payload.narrationTiming).toEqual({
+		requestedSeconds: 30,
+		footageSeconds: 6,
+		budgetSeconds: 6,
+	});
+	expect(payload.slots[0]).toMatchObject({
+		startMs: 0,
+		endMs: 6000,
+		speechSeconds: 6,
+		maxChars: 66,
+	});
+	expect(draft.cues[0].endMs).toBe(6000);
+});
+it("allows a silent narration slot only where the actual speech character budget is zero", () => {
+	const r = request();
+	r.scenes[0].endMs = 1;
+	expect(parseStoryDraft(r, { cues: [{ ...cue, text: "" }] }).cues[0]).toMatchObject({
+		text: "",
+		startMs: 0,
+		endMs: 1,
+	});
+	expect(() => parseStoryDraft(request(), { cues: [{ ...cue, text: "" }] })).toThrow(
+		"Invalid story cue",
+	);
+});

@@ -489,6 +489,7 @@ export function EditorShell(props: Props) {
 							storyWorkspace={timeline.storyWorkspace}
 							onStoryWorkspaceChange={timeline.setStoryWorkspace}
 							onOpenCaptions={openStoryCaptions}
+							onOpenStoryExport={dialogActions.handleOpenExportDropdown}
 							onSeek={playback.handleTimelineSeek}
 							onApply={applyAutoEdit}
 						/>,

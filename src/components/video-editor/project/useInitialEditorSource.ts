@@ -21,7 +21,7 @@ type Input = {
 	videoSourcePath: string | null;
 	pendingFreshRecordingAutoZoomPathRef: MutableRefObject<string | null>;
 	applyLoadedProject: (candidate: unknown, path?: string | null) => Promise<boolean>;
-	resetSourceScopedEditorState: () => void;
+	resetSourceScopedEditorState: (sourcePath?: string) => void;
 	applySessionPresentation: (session: SessionPresentation | null | undefined) => void;
 };
 
@@ -174,7 +174,7 @@ export function useInitialEditorSource({
 					project.setVideoPath(sourceUrl);
 					project.setCurrentProjectPath(null);
 					project.setLastSavedSnapshot(null);
-					resetSourceScopedEditorState();
+					resetSourceScopedEditorState(sourcePath);
 					pendingFreshRecordingAutoZoomPathRef.current =
 						appearance.autoApplyFreshRecordingAutoZooms ? sourceUrl : null;
 					applySessionPresentation(sessionResult.session);
@@ -199,7 +199,7 @@ export function useInitialEditorSource({
 				project.setVideoPath(await resolveVideoUrl(sourcePath));
 				project.setCurrentProjectPath(null);
 				project.setLastSavedSnapshot(null);
-				resetSourceScopedEditorState();
+				resetSourceScopedEditorState(sourcePath);
 				pendingFreshRecordingAutoZoomPathRef.current = null;
 				applySessionPresentation(null);
 				appearance.setWebcam((previous) => ({

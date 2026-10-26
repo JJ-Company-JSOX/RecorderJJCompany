@@ -165,3 +165,109 @@ describe("persisted story workspace", () => {
 		expect(editor.autoCaptions[1].clipId).toBeUndefined();
 	});
 });
+
+it("persists a valid desired narration duration, leaves old projects following footage and ignores invalid targets", () => {
+	for (const value of [5, 30, 600]) {
+		const saved = workspace();
+		saved.brief = { ...saved.brief, targetSpeechSeconds: value };
+		expect(
+			normalizeProjectEditor(
+				JSON.parse(JSON.stringify(createProjectData("a.mp4", { storyWorkspace: saved })))
+					.editor,
+			).storyWorkspace?.brief.targetSpeechSeconds,
+		).toBe(value);
+	}
+	for (const value of [undefined, null, 4, 601, 30.5, "30"]) {
+		expect(
+			normalizeStoryWorkspace({
+				...workspace(),
+				brief: { ...workspace().brief, targetSpeechSeconds: value },
+			})?.brief.targetSpeechSeconds,
+		).toBeUndefined();
+	}
+});
+
+const sourceSpeech = () => ({
+	source: "C:\\recording.mp4",
+	language: "en" as const,
+	cues: [
+		{
+			id: "speech-1",
+			clipId: "clip-1",
+			startMs: 1000,
+			endMs: 3000,
+			text: "Hello world",
+			words: [
+				{ text: "Hello", startMs: 1000, endMs: 1700 },
+				{ text: "world", startMs: 1800, endMs: 3000, leadingSpace: true },
+			],
+		},
+	],
+});
+it("persists recognized source speech independently from final subtitle tracks with language and word timing", () => {
+	const saved = {
+		...workspace(),
+		brief: { ...workspace().brief, autoTranscribe: true },
+		sourceSpeech: sourceSpeech(),
+	};
+	const project = normalizeProjectEditor(
+		JSON.parse(
+			JSON.stringify(createProjectData("C:\\recording.mp4", { storyWorkspace: saved })),
+		).editor,
+	);
+	expect(project.storyWorkspace?.brief.autoTranscribe).toBe(true);
+	expect(project.storyWorkspace?.sourceSpeech).toEqual(saved.sourceSpeech);
+	expect(project.autoCaptions).toEqual([]);
+	expect(
+		normalizeStoryWorkspace({
+			...workspace(),
+			brief: { ...workspace().brief, autoTranscribe: "true" },
+		})?.brief.autoTranscribe,
+	).toBe(false);
+	expect(
+		normalizeStoryWorkspace({ ...workspace(), sourceSpeech: null })?.sourceSpeech,
+	).toBeNull();
+});
+it("rejects oversized or invalid source speech caches entirely instead of presenting truncated evidence", async () => {
+	const { normalizeStorySourceSpeech } = await import("./storyWorkspace");
+	const cache = sourceSpeech();
+	for (const patch of [
+		{ source: "" },
+		{ source: "a".repeat(4097) },
+		{ language: "fr" },
+		{ cues: Array(5001).fill(cache.cues[0]) },
+		{ cues: [{ ...cache.cues[0], text: "x".repeat(200001) }] },
+		{ cues: [{ ...cache.cues[0], endMs: 86400001 }] },
+		{ cues: [{ ...cache.cues[0], clipId: null }] },
+		{ cues: [{ ...cache.cues[0], words: [{ text: "bad", startMs: 999, endMs: 1200 }] }] },
+		{ cues: [{ ...cache.cues[0], words: [{ text: "bad", startMs: 1800, endMs: 3001 }] }] },
+	])
+		expect(normalizeStorySourceSpeech({ ...cache, ...patch })).toBeNull();
+	expect(
+		normalizeStorySourceSpeech({
+			...cache,
+			cues: [
+				{
+					...cache.cues[0],
+					text: "x".repeat(100001),
+					words: [{ text: "x".repeat(100000), startMs: 1000, endMs: 3000 }],
+				},
+			],
+		}),
+	).toBeNull();
+	expect(
+		normalizeStorySourceSpeech({
+			...cache,
+			cues: [{ ...cache.cues[0], text: "x".repeat(200000), words: undefined }],
+		}),
+	).not.toBeNull();
+});
+it("copies recognized speech so later review edits do not mutate the saved source cache", async () => {
+	const { normalizeStorySourceSpeech } = await import("./storyWorkspace");
+	const cache = sourceSpeech();
+	const loaded = normalizeStorySourceSpeech(cache)!;
+	loaded.cues[0].text = "Edited";
+	loaded.cues[0].words![0].text = "Edited";
+	expect(cache.cues[0].text).toBe("Hello world");
+	expect(cache.cues[0].words[0].text).toBe("Hello");
+});

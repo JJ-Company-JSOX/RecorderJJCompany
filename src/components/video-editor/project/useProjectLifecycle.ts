@@ -1,3 +1,4 @@
+import { consumeStoryIntent } from "../auto-edit/storyIntent";
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: editor domain setters and refs are stable. */
 import { normalizeStoryWorkspace } from "../auto-edit/storyWorkspace";
 import {
@@ -326,7 +327,7 @@ export function useProjectLifecycle(input: Input) {
 		},
 		[appearance.webcam.timeOffsetMs, project.currentProjectPath],
 	);
-	const resetSourceScopedEditorState = useCallback(() => {
+	const resetSourceScopedEditorState = useCallback((sourcePath?: string) => {
 		const current = inputRef.current;
 		const { timeline, refs } = current;
 		timeline.setZoomRegions([]);
@@ -344,7 +345,7 @@ export function useProjectLifecycle(input: Input) {
 		timeline.setDefaultSourceAudioTrackSettings({});
 		timeline.setHasClipSourceAudio(false);
 		timeline.setAutoCaptions([]);
-		timeline.setStoryWorkspace(null);
+		timeline.setStoryWorkspace(sourcePath ? consumeStoryIntent(sourcePath) : null);
 		timeline.setAutoCaptionSettings((previous) => ({ ...previous, enabled: false }));
 		timeline.setSelectedZoomId(null);
 		timeline.setSelectedClipId(null);

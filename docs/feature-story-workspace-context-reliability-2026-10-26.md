@@ -1,5 +1,7 @@
 # 故事工程、字幕参考与配音可靠性 — 2026-10-26
 
+后续交付见 [原声理解与本地故事配音](feature-connected-story-workflow-2026-10-26.md)：已增加用户主动开启的原声识别、CPU 设置和实际 Linux MP4 导出验证。下文保留当时的范围与验证记录；其中“尚未生成实际 MP4”和“后续自动转录”不代表当前最新状态。Windows 实机与真实模型验证仍待完成。
+
 沿用 RecorderJJCompany 的 Electron / React / TypeScript / PixiJS、原生捕获及既有导出管线。接续 `834aee9f` 的故事策划功能，本轮没有新增运行时、依赖、模型下载、账号或付费服务。
 
 ## 完成内容

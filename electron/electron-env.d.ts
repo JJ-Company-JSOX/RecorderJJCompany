@@ -907,6 +907,13 @@ interface Window {
 				error?: string;
 			}) => void,
 		) => () => void;
+		cancelAutoCaptionGeneration: () => Promise<{ success: boolean; cancelled: boolean }>;
+		onAutoCaptionProgress: (
+			callback: (progress: {
+				phase: "preparing" | "transcribing" | "complete" | "cancelled" | "error";
+				cueCount?: number;
+			}) => void,
+		) => () => void;
 		generateAutoCaptions: (options: {
 			videoPath: string;
 			whisperExecutablePath?: string;
@@ -917,6 +924,14 @@ interface Window {
 			cues?: AutoCaptionCue[];
 			message?: string;
 			error?: string;
+			errorCode?:
+				| "cancelled"
+				| "busy"
+				| "no-audio"
+				| "no-speech"
+				| "invalid-input"
+				| "not-approved"
+				| "failed";
 		}>;
 		setCurrentVideoPath: (
 			path: string,

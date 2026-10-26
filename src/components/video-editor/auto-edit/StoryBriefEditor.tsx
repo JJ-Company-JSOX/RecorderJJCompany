@@ -1,3 +1,4 @@
+import { storyWorkflowCopy } from "./storyWorkflowCopy";
 import { storyTextBudget, storyBriefCharacterCount } from "./storyTranscript";
 import type { buildStoryTranscript } from "./storyTranscript";
 import type { PlanLanguage } from "./messages";
@@ -41,7 +42,6 @@ export const storyCopy = {
 		vision: "Video analysis needs a vision model. qwen3:4b only understands text. You can install qwen2.5vl:3b, then select and check it in AI mode, or turn off frame analysis.",
 		frames: "Preparing video samples",
 		draft: "Draft video story",
-		required: "Enter a topic and product facts or scene notes first.",
 		title: "On-screen title",
 		titles: "Add scene titles to timeline",
 		subtitles: "Add narration as text subtitles",
@@ -53,6 +53,7 @@ export const storyCopy = {
 		tooLong:
 			"The voice is longer than its scene. Shorten this line or extend its scene before generating again:",
 		timing: "Story times must stay inside a video clip and cannot overlap. Adjust them or draft again.",
+		...storyWorkflowCopy.en,
 	},
 	zh: {
 		mode: "解说任务",
@@ -85,7 +86,6 @@ export const storyCopy = {
 		vision: "看画面需要视觉模型。qwen3:4b 只能处理文字。可安装 qwen2.5vl:3b，再到智能模式里选择并检查；也可关闭画面分析。",
 		frames: "正在准备画面样本",
 		draft: "生成视频故事稿",
-		required: "请先填写主题，以及产品事实或素材说明。",
 		title: "画面标题",
 		titles: "将分段标题加入时间轴",
 		subtitles: "将解说稿加入文字字幕",
@@ -95,6 +95,7 @@ export const storyCopy = {
 		end: "结束（秒）",
 		tooLong: "配音超过了对应画面的时长，请缩短这一句或延长该段时间，再生成：",
 		timing: "故事时间必须位于视频片段内，且不能重叠。请调整或重新生成。",
+		...storyWorkflowCopy.zh,
 	},
 	ms: {
 		mode: "Tugas naratif",
@@ -134,7 +135,6 @@ export const storyCopy = {
 		vision: "Analisis imej memerlukan model visual. qwen3:4b hanya untuk teks. Pasang qwen2.5vl:3b dan semak dalam mod AI, atau matikan analisis imej.",
 		frames: "Menyediakan sampel video",
 		draft: "Draf cerita video",
-		required: "Isi topik serta fakta produk atau nota adegan dahulu.",
 		title: "Tajuk pada skrin",
 		titles: "Tambah tajuk adegan pada garis masa",
 		subtitles: "Tambah naratif sebagai sari kata",
@@ -145,6 +145,7 @@ export const storyCopy = {
 		tooLong:
 			"Suara melebihi masa adegan. Pendekkan baris atau panjangkan adegan dan jana semula:",
 		timing: "Masa cerita mesti berada dalam klip tanpa bertindih. Laraskan atau draf semula.",
+		...storyWorkflowCopy.ms,
 	},
 };
 export function StoryBriefEditor({
@@ -168,6 +169,24 @@ export function StoryBriefEditor({
 	return (
 		<div className="space-y-3 rounded-xl border border-blue-400/30 p-3" data-story-brief>
 			<p className="text-sm">{c.help}</p>
+			<div className="space-y-2 rounded-lg border border-blue-400/20 p-2">
+				<button
+					type="button"
+					disabled={disabled}
+					onClick={() =>
+						onChange({
+							...value,
+							analyzeVideo: false,
+							autoTranscribe: true,
+							includeTranscript: true,
+						})
+					}
+					className="rounded-lg border px-3 py-2 text-sm"
+				>
+					{c.cpuPreset}
+				</button>
+				<p className="text-xs text-muted-foreground">{c.cpuInfo}</p>
+			</div>
 			<p className="text-xs text-muted-foreground">{c.saved}</p>
 			{(["topic", "audience", "facts", "ending", "notes"] as const).map((key) => (
 				<label key={key} className="flex flex-col gap-1 text-sm">
@@ -183,6 +202,42 @@ export function StoryBriefEditor({
 					/>
 				</label>
 			))}
+			<label className="flex flex-col gap-1 text-sm">
+				{c.target}
+				<input
+					type="number"
+					aria-label={c.target}
+					min={5}
+					max={600}
+					step={1}
+					disabled={disabled}
+					value={value.targetSpeechSeconds ?? ""}
+					placeholder={c.followVideo}
+					onChange={(e) => {
+						const next = { ...value };
+						if (e.target.value === "") delete next.targetSpeechSeconds;
+						else next.targetSpeechSeconds = Number(e.target.value);
+						onChange(next);
+					}}
+					className="rounded-lg border bg-background p-2"
+				/>
+			</label>
+			<label className="flex items-center gap-2 text-sm">
+				<input
+					type="checkbox"
+					disabled={disabled}
+					checked={value.autoTranscribe === true}
+					onChange={(e) =>
+						onChange({
+							...value,
+							autoTranscribe: e.target.checked,
+							includeTranscript: e.target.checked ? true : value.includeTranscript,
+						})
+					}
+				/>
+				{c.autoTranscribe}
+			</label>
+			<p className="text-xs text-muted-foreground">{c.autoInfo}</p>
 			<label className="flex items-center gap-2 text-sm">
 				<input
 					type="checkbox"
@@ -197,7 +252,13 @@ export function StoryBriefEditor({
 					type="checkbox"
 					disabled={disabled}
 					checked={value.includeTranscript === true}
-					onChange={(e) => onChange({ ...value, includeTranscript: e.target.checked })}
+					onChange={(e) =>
+						onChange({
+							...value,
+							includeTranscript: e.target.checked,
+							autoTranscribe: e.target.checked ? value.autoTranscribe : false,
+						})
+					}
 				/>
 				{c.transcript}
 			</label>

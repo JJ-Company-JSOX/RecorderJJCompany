@@ -18,7 +18,7 @@ export function useLaunchWindowActions() {
 		});
 	}, []);
 
-	const openVideoFile = useCallback(async () => {
+	const openVideoFile = useCallback(async (onMediaReady?: (path: string) => void) => {
 		const result = await window.electronAPI.openVideoFilePicker({ includeProjects: true });
 		if (result.canceled) return;
 		if (result.success && result.kind === "project") {
@@ -26,7 +26,9 @@ export function useLaunchWindowActions() {
 			return;
 		}
 		if (result.success && result.path) {
-			await window.electronAPI.setCurrentVideoPath(result.path);
+			const selected = await window.electronAPI.setCurrentVideoPath(result.path);
+			if (!selected.success) throw new Error("Could not open the selected video");
+			onMediaReady?.(result.path);
 			await window.electronAPI.switchToEditor();
 		}
 	}, []);

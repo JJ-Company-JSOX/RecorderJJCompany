@@ -400,3 +400,48 @@ test("Back cancels countdown before returning to setup without starting capture"
 	).toBeVisible();
 	await expect(page.locator("html")).not.toHaveAttribute("data-capture-active", "true");
 });
+
+test("creative request is staged only after successful media import", async ({ page }) => {
+	await setup(page);
+	await page.evaluate(() => {
+		const get = window.electronAPI.getAppSetting;
+		window.electronAPI.getAppSetting = (key) => {
+			const v = sessionStorage.getItem(`intent:${key}`);
+			return v ? JSON.parse(v) : get(key);
+		};
+		window.electronAPI.setAppSetting = (key, value) => {
+			sessionStorage.setItem(`intent:${key}`, JSON.stringify(value));
+			return true;
+		};
+		window.electronAPI.openVideoFilePicker = async () => ({
+			success: true,
+			path: "/clips/product.mp4",
+		});
+		window.electronAPI.setCurrentVideoPath = async () => ({ success: true });
+		window.electronAPI.switchToEditor = async () => {
+			document.documentElement.dataset.intentEditorOpened = "true";
+		};
+	});
+	await page
+		.getByLabel("What are you creating? (optional)", { exact: true })
+		.fill("Introduce my product in a 30-second sales story.");
+	await expect
+		.poll(() =>
+			page.evaluate(() => sessionStorage.getItem("intent:recordly.story.nextIntent.v1")),
+		)
+		.toBeNull();
+	await page
+		.getByRole("button", { name: "Import video Edit an existing recording", exact: true })
+		.click();
+	await expect(page.locator("html")).toHaveAttribute("data-intent-editor-opened", "true");
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				JSON.parse(sessionStorage.getItem("intent:recordly.story.nextIntent.v1") ?? "null"),
+			),
+		)
+		.toMatchObject({
+			prompt: "Introduce my product in a 30-second sales story.",
+			sourcePath: "/clips/product.mp4",
+		});
+});

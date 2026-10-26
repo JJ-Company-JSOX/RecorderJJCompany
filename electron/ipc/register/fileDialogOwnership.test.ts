@@ -7,7 +7,12 @@ const fixture = vi.hoisted(() => ({
 }));
 
 vi.mock("electron", () => ({
-	app: { getPath: () => fixture.root, getAppPath: () => process.cwd(), isPackaged: false },
+	app: {
+		once: vi.fn(),
+		getPath: () => fixture.root,
+		getAppPath: () => process.cwd(),
+		isPackaged: false,
+	},
 	BrowserWindow: { fromWebContents: vi.fn(), getAllWindows: vi.fn(() => []) },
 	dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
 	ipcMain: {

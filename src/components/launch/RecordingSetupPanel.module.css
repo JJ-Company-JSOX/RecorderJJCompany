@@ -453,3 +453,36 @@
 		max-width: 220px;
 	}
 }
+
+.storyPrompt {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0 0 16px;
+	font-size: 12px;
+	font-weight: 500;
+}
+.storyPrompt textarea {
+	font: inherit;
+	font-weight: 400;
+	resize: vertical;
+	min-height: 58px;
+	max-height: 120px;
+	width: 100%;
+	box-sizing: border-box;
+	border: 1px solid #363b43;
+	border-radius: 8px;
+	background: #1a1d22;
+	color: #f0f1f5;
+	padding: 9px 11px;
+	-webkit-app-region: no-drag;
+}
+.storyPrompt textarea:focus-visible {
+	outline: 2px solid #63dcce;
+	outline-offset: 2px;
+}
+.storyPrompt small {
+	color: #9aa5b2;
+	font-weight: 400;
+	line-height: 1.4;
+}

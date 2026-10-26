@@ -18,6 +18,11 @@ const copy = {
 	en: {
 		title: "Choose what to record",
 		subtitle: "Your screen. Your story.",
+		storyPrompt: "What are you creating? (optional)",
+		storyPlaceholder:
+			"For example: Introduce my product to first-time customers and draft a short sales story.",
+		storyHint:
+			"Carried into the editor after recording or importing a video. AI starts only when you ask it to.",
 		screen: "Full screen",
 		window: "Window",
 		area: "Select an area",
@@ -63,6 +68,9 @@ const copy = {
 	zh: {
 		title: "选择你的录制方式",
 		subtitle: "记录操作，让表达更清楚。",
+		storyPrompt: "创作要求（选填）",
+		storyPlaceholder: "例如：向第一次接触的顾客介绍我的产品，帮我策划简短的销售故事。",
+		storyHint: "录制或导入视频后带入编辑器；只有你主动开始时才调用 AI。",
 		screen: "全屏录制",
 		window: "窗口录制",
 		area: "选取区域",
@@ -107,6 +115,8 @@ const copy = {
 
 type Device = { deviceId: string; label: string };
 type Props = {
+	storyPrompt?: string;
+	onStoryPromptChange?: (value: string) => void;
 	platform: string | null;
 	selectedSource: string;
 	hasSelectedSource: boolean;
@@ -304,6 +314,23 @@ export function RecordingSetupPanel(props: Props) {
 							</button>
 						)}
 					</div>
+					{props.onStoryPromptChange && (
+						<label className={styles.storyPrompt}>
+							<span>{m.storyPrompt}</span>
+							<textarea
+								aria-label={m.storyPrompt}
+								maxLength={2000}
+								rows={2}
+								value={props.storyPrompt ?? ""}
+								disabled={locked || props.countdownActive}
+								placeholder={m.storyPlaceholder}
+								onChange={(event) =>
+									props.onStoryPromptChange?.(event.target.value)
+								}
+							/>
+							<small>{m.storyHint}</small>
+						</label>
+					)}
 					{!mode ? (
 						<div className={styles.modeGrid}>
 							{card("screen", m.screen, m.screenHint, () => void list("screen"))}

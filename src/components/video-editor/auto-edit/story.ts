@@ -17,6 +17,10 @@ export interface StoryBrief {
 	analyzeVideo: boolean;
 	/** Explicit consent to include existing edited original-speech subtitles in local planning. */
 	includeTranscript?: boolean;
+	/** User-enabled local ASR before story planning; distinct from final subtitle insertion. */
+	autoTranscribe?: boolean;
+	/** Desired narration length only. Never changes footage or final exported video duration. */
+	targetSpeechSeconds?: number;
 }
 export interface StoryScene {
 	id: string;
@@ -40,7 +44,48 @@ export const emptyStoryBrief = (): StoryBrief => ({
 	notes: "",
 	analyzeVideo: true,
 	includeTranscript: false,
+	autoTranscribe: false,
 });
+export function isStorySpeechTarget(value: unknown): value is number | undefined {
+	return (
+		value === undefined ||
+		(typeof value === "number" && Number.isInteger(value) && value >= 5 && value <= 600)
+	);
+}
+/** Approximate spoken-text pacing, not a promise about synthesized audio or output length. */
+export function storySpeechBudget(
+	brief: Pick<StoryBrief, "targetSpeechSeconds">,
+	scenes: StoryScene[],
+	language: string,
+) {
+	const footageSeconds = scenes.reduce(
+		(sum, s) => sum + Math.max(0, s.endMs - s.startMs) / 1000,
+		0,
+	);
+	const requestedSeconds = isStorySpeechTarget(brief.targetSpeechSeconds)
+		? (brief.targetSpeechSeconds ?? null)
+		: null;
+	const budgetSeconds = Math.min(requestedSeconds ?? footageSeconds, footageSeconds);
+	const scale = footageSeconds > 0 ? budgetSeconds / footageSeconds : 0;
+	return {
+		requestedSeconds,
+		footageSeconds,
+		budgetSeconds,
+		slots: scenes.map((s) => {
+			const speechSeconds = (Math.max(0, s.endMs - s.startMs) / 1000) * scale;
+			return {
+				id: s.id,
+				startMs: s.startMs,
+				endMs: s.endMs,
+				speechSeconds,
+				maxChars: Math.max(
+					0,
+					Math.min(450, Math.floor(speechSeconds * (language === "zh" ? 3.5 : 11))),
+				),
+			};
+		}),
+	};
+}
 export function isStoryRequest(value: unknown): value is StoryRequest {
 	if (!value || typeof value !== "object") return false;
 	const v = value as StoryRequest,
@@ -50,6 +95,8 @@ export function isStoryRequest(value: unknown): value is StoryRequest {
 		(v.style !== undefined && !["concise", "tutorial", "detailed"].includes(v.style)) ||
 		typeof b.analyzeVideo !== "boolean" ||
 		(b.includeTranscript !== undefined && typeof b.includeTranscript !== "boolean") ||
+		(b.autoTranscribe !== undefined && typeof b.autoTranscribe !== "boolean") ||
+		!isStorySpeechTarget(b.targetSpeechSeconds) ||
 		![b.topic, b.audience, b.facts, b.ending, b.notes].every(
 			(t) => typeof t === "string" && t.length <= 2000,
 		) ||

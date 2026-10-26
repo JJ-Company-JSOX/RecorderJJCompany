@@ -151,6 +151,19 @@ describe("local-only model adapter (mock service, no inference claim)", () => {
 		expect(mock.leases.every((model) => model === "qwen3:1.7b")).toBe(true);
 		expect(mock.releases).toBe(mock.leases.length);
 	});
+	it("turns off Qwen3 thinking for an installed 4B too, and leaves other models unchanged", async () => {
+		mock.installedName = "qwen3:4b";
+		await new LocalPlanReviewer().review(plan(), "qwen3:4b");
+		expect(
+			JSON.parse(mock.requests.find((request) => request.path === "/api/chat")!.body),
+		).toMatchObject({ think: false });
+		mock.requests.length = 0;
+		mock.installedName = "local:latest";
+		await new LocalPlanReviewer().review(plan(), "local");
+		expect(
+			JSON.parse(mock.requests.find((request) => request.path === "/api/chat")!.body),
+		).not.toHaveProperty("think");
+	});
 	it("releases private-runtime leases when model metadata validation fails", async () => {
 		mock.bundledPort = 34123;
 		mock.installedName = "qwen3:1.7b";

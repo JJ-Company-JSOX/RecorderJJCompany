@@ -85,6 +85,19 @@ describe("Windows packaging gates", () => {
 			expect(edition.after, edition.name).toContain("npm run smoke:packaged-binaries");
 		}
 	});
+	it("packs every edition with the multi-GB Ollama payload as ZIP only, as electron-builder resolves it", async () => {
+		// electron-builder's own loader, so parent-config array merging is applied exactly as in a build.
+		const { getConfig } = await import("app-builder-lib/out/util/config/config");
+		const { Lazy } = await import("lazy-val");
+		const packageJson = new Lazy(async () =>
+			JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")),
+		);
+		for (const edition of packages.filter((entry) => entry.ollama)) {
+			const config = scripts[edition.name].match(/electron-builder --config (\S+)/)![1];
+			const resolved = await getConfig(root, config, null, packageJson);
+			expect(resolved.win?.target, edition.name).toBe("zip");
+		}
+	});
 	it("routes the normal Windows build through the complete client edition", () => {
 		expect(scripts["build:win"]).toContain("npm run build:win:client");
 		expect(scripts["build:win:client"]).toContain("npm run package:win:client");

@@ -25,10 +25,17 @@ still apply. See [tools scope and limitations](docs/offline-tools.zh-CN.md).
 
 Complete Windows client bundles additionally include the Ollama v0.40.11 portable
 runtime (Ollama's own code MIT) and Qwen3 1.7B text model weights (Apache-2.0).
-The complete official runtime archive is preserved, including library-specific
-notices; its dependencies are not all reclassified as MIT. The build preparer
-copies the model's actual registry license text, the pinned Ollama LICENSE and
-provenance notice into `resources/offline-ollama`. Exact runtime archive hashes,
+The pinned official runtime archive is verified in full, then its GPU backends
+(`lib/ollama/cuda_v12`, `cuda_v13`, `vulkan`: NVIDIA CUDA libraries under the
+NVIDIA CUDA EULA and Microsoft VC++ runtime copies, for which the archive carries
+no license text) are left out; the client runs on the CPU. The remaining runtime
+files are unmodified, and their dependencies are not all reclassified as MIT:
+llama.cpp and its vendored code (MIT), cpp-httplib (MIT) and Go (BSD-3-Clause)
+keep the notices shipped in `runtime/lib/ollama`; LLVM libc++, libunwind and
+libomp (Apache-2.0 WITH LLVM-exception) and mingw-w64 winpthreads (MIT-style)
+get pinned license texts in `licenses/`. The build preparer also copies the
+model's actual registry license text, the pinned Ollama LICENSE and a provenance
+notice into `resources/offline-ollama`. Exact runtime archive hashes,
 model acquisition limitations and per-file verification are described in
 `scripts/offline-ollama.lock.json`, `MODEL_LICENSES.md` and
 `docs/feature-default-qwen-client-bundle-2026-10-26.md`.

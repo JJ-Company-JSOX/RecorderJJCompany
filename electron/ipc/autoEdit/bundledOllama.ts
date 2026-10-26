@@ -18,9 +18,11 @@ export type BundledOllamaConfig = {
 	/** The complete offline edition must never silently depend on a separate installation. */
 	required: boolean;
 };
-type Session = { port: number; child: ChildProcess; dead: boolean };
+/** `ready` turns true only after the server answered; earlier callers wait for startup. */
+type Session = { port: number; child: ChildProcess; dead: boolean; ready: boolean };
 type Dependencies = {
 	launch: typeof spawn;
+	verify: (root: string, signal: AbortSignal) => Promise<unknown>;
 	port: () => Promise<number>;
 	probe: (port: number, signal: AbortSignal) => Promise<boolean>;
 	startupTimeoutMs: number;
@@ -99,12 +101,13 @@ function ready(port: number, signal: AbortSignal): Promise<boolean> {
 		req.end();
 	});
 }
+/** Keep in step with BUNDLE_PATH in scripts/prepare-offline-ollama.mjs. The official runtime ships libc++.dll. */
 function validRelative(file: string) {
 	return (
 		file.length < 512 &&
 		!file.includes("\\") &&
 		!file.split("/").some((part) => !part || part === "." || part === "..") &&
-		/^(?:runtime\/[a-zA-Z0-9_./-]+|models\/blobs\/sha256-[a-f0-9]{64}|models\/manifests\/registry\.ollama\.ai\/library\/qwen3\/1\.7b|(?:licenses\/)?[a-zA-Z0-9_.-]+\.(?:txt|md))$/.test(
+		/^(?:runtime\/[a-zA-Z0-9_.+/-]+|models\/blobs\/sha256-[a-f0-9]{64}|models\/manifests\/registry\.ollama\.ai\/library\/qwen3\/1\.7b|(?:licenses\/)?[a-zA-Z0-9_.-]+\.(?:txt|md))$/.test(
 			file,
 		)
 	);
@@ -208,6 +211,34 @@ async function verifyBundle(root: string, signal?: AbortSignal): Promise<Manifes
 	return manifest;
 }
 
+/**
+ * Cheap metadata of every installed file. Any added, removed or rewritten file changes it,
+ * so a full hash runs again; an untouched bundle is hashed once per app run, not per start.
+ */
+async function bundleFingerprint(root: string, signal: AbortSignal): Promise<string | null> {
+	const entries: string[] = [];
+	const visit = async (directory: string, prefix = ""): Promise<void> => {
+		for (const entry of await readdir(directory, { withFileTypes: true })) {
+			signal.throwIfAborted();
+			if (entries.length > 8192) throw Error(REINSTALL);
+			const name = `${prefix}${entry.name}`;
+			const info = await lstat(path.join(directory, entry.name));
+			entries.push(
+				`${name}|${info.isFile() ? "f" : info.isDirectory() ? "d" : "x"}|${info.size}|${Math.trunc(info.mtimeMs)}|${Math.trunc(info.ctimeMs)}`,
+			);
+			if (info.isDirectory() && !info.isSymbolicLink())
+				await visit(path.join(directory, entry.name), `${name}/`);
+		}
+	};
+	try {
+		await visit(root);
+	} catch {
+		signal.throwIfAborted();
+		return null;
+	}
+	return entries.sort().join("\n");
+}
+
 export async function verifyBundledOllama(root: string, signal?: AbortSignal): Promise<Manifest> {
 	try {
 		return await verifyBundle(root, signal);
@@ -226,16 +257,19 @@ export class BundledOllamaManager {
 	private idle: ReturnType<typeof setTimeout> | null = null;
 	private users = 0;
 	private disposed = false;
+	private verified: string | null = null;
 	constructor(
 		private readonly config: BundledOllamaConfig,
 		dependencies: Partial<Dependencies> = {},
 	) {
 		this.deps = {
 			launch: spawn,
+			verify: verifyBundledOllama,
 			port: freePort,
 			probe: ready,
 			startupTimeoutMs: 20_000,
-			idleTimeoutMs: 60_000,
+			// Model memory is freed after every request (keep_alive 0); an idle server is small.
+			idleTimeoutMs: 300_000,
 			platform: process.platform,
 			...dependencies,
 		};
@@ -283,7 +317,7 @@ export class BundledOllamaManager {
 		}
 	}
 	private ensureStarted(): Promise<Session> {
-		if (this.session && !this.session.dead) return Promise.resolve(this.session);
+		if (this.session?.ready && !this.session.dead) return Promise.resolve(this.session);
 		if (this.starting) return this.starting;
 		const controller = new AbortController();
 		this.startup = controller;
@@ -297,9 +331,14 @@ export class BundledOllamaManager {
 	private async start(signal: AbortSignal): Promise<Session> {
 		let timeout: ReturnType<typeof setTimeout> | undefined;
 		try {
-			// Hash once per private-server lifetime, not on every metadata/chat request.
+			// Hash the bundle on the first start of this app run and again only after its files change.
 			// Slow-disk verification is cancelable and is separate from server startup timeout.
-			await verifyBundledOllama(this.config.root, signal);
+			const fingerprint = await bundleFingerprint(this.config.root, signal);
+			if (!fingerprint || fingerprint !== this.verified) {
+				this.verified = null;
+				await this.deps.verify(this.config.root, signal);
+				this.verified = fingerprint;
+			}
 			signal.throwIfAborted();
 			timeout = setTimeout(
 				() => this.startup?.abort(Error("Bundled Ollama startup timed out")),
@@ -333,7 +372,7 @@ export class BundledOllamaManager {
 					stdio: ["ignore", "ignore", "pipe"],
 				},
 			);
-			const session = { port, child, dead: false };
+			const session: Session = { port, child, dead: false, ready: false };
 			this.session = session;
 			child.stderr?.on("data", () => undefined);
 			child.once("error", () => {
@@ -350,6 +389,7 @@ export class BundledOllamaManager {
 					if (await this.deps.probe(port, signal)) {
 						signal.throwIfAborted();
 						if (session.dead) throw Error("Bundled Ollama stopped");
+						session.ready = true;
 						return session;
 					}
 				} catch {

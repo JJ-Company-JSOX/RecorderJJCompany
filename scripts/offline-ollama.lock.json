@@ -6,13 +6,31 @@
 		"url": "https://github.com/ollama/ollama/releases/download/v0.40.11/ollama-windows-amd64.zip",
 		"size": 1586356606,
 		"sha256": "bda4a493ba8a7c24d57263cd843cd68cee84f44aed4299eeed532acad7eda12a",
-		"checksumSource": "https://github.com/ollama/ollama/releases/download/v0.40.11/sha256sum.txt"
+		"checksumSource": "https://github.com/ollama/ollama/releases/download/v0.40.11/sha256sum.txt",
+		"excludedPaths": ["lib/ollama/cuda_v12", "lib/ollama/cuda_v13", "lib/ollama/vulkan"],
+		"excludedReason": "The client runs on the CPU. These GPU backends are 2.15 GB of the 2.23 GB archive (NVIDIA cuBLAS/cudart/nvrtc/nvJitLink under the CUDA EULA, ggml-vulkan with Microsoft VC++ runtime copies), and the archive ships no license text for them. The full archive is still verified against its pinned SHA-256 before they are removed."
 	},
 	"license": {
 		"url": "https://raw.githubusercontent.com/ollama/ollama/v0.40.11/LICENSE",
 		"size": 1058,
 		"sha256": "5934ed2ce0d15154bcdb9c85203210abac0da4314af34081e36df4599f90b226"
 	},
+	"runtimeLicenses": [
+		{
+			"file": "licenses/LLVM-LICENSE.txt",
+			"covers": "runtime/lib/ollama/libc++.dll, libunwind.dll, libomp.dll (LLVM, Apache-2.0 WITH LLVM-exception)",
+			"url": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-19.1.7/LICENSE.TXT",
+			"size": 15141,
+			"sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee"
+		},
+		{
+			"file": "licenses/WINPTHREADS-COPYING.txt",
+			"covers": "runtime/lib/ollama/libwinpthread-1.dll (mingw-w64 winpthreads, MIT-style)",
+			"url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/v12.0.0/mingw-w64-libraries/winpthreads/COPYING",
+			"size": 2883,
+			"sha256": "63263614cdd29f2f93cba85e992f041b31f9fc7b4033692f31269489a8a1b177"
+		}
+	],
 	"model": {
 		"name": "qwen3:1.7b",
 		"registry": "https://registry.ollama.ai/v2/library/qwen3",

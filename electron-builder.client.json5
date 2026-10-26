@@ -15,9 +15,9 @@
   ],
   "win": {
     "artifactName": "Jsox-Recorder-Windows-${version}-${arch}.${ext}",
-    "target": [
-      "zip"
-    ]
+    // A string, not an array: electron-builder appends arrays from the parent config,
+    // which would add its NSIS target. NSIS cannot hold this multi-GB payload.
+    "target": "zip"
   },
   "nsis": {
     "shortcutName": "Jsox Recorder"

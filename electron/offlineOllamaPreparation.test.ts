@@ -10,11 +10,12 @@ import {
 	safeRelative,
 	verifyOllamaBundle,
 } from "../scripts/prepare-offline-ollama.mjs";
+import officialRuntime from "./ipc/autoEdit/fixtures/ollama-v0.40.11-windows-amd64-files.json";
 
 const roots: string[] = [];
 const sha = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const manifestPath = "models/manifests/registry.ollama.ai/library/qwen3/1.7b";
-async function fixture() {
+async function fixture(runtimeFiles: string[] = []) {
 	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "recordly-ollama-build-"));
 	roots.push(directory);
 	const root = path.join(directory, "bundle");
@@ -49,6 +50,11 @@ async function fixture() {
 		"OLLAMA-LICENSE.txt": "MIT synthetic runtime license",
 		"MODEL-LICENSE.txt": license,
 		"NOTICE.txt": "Synthetic preparation fixture",
+		...Object.fromEntries(
+			runtimeFiles
+				.filter((file) => file !== "ollama.exe")
+				.map((file) => [`runtime/${file}`, `Synthetic copy of ${file}`]),
+		),
 	};
 	for (const [file, value] of Object.entries(contents)) {
 		await fs.mkdir(path.dirname(path.join(root, file)), { recursive: true });
@@ -101,6 +107,19 @@ describe("offline Ollama build preparation", () => {
 	it("verifies the full copied client tree including registry content descriptors", async () => {
 		const f = await fixture();
 		expect((await verifyOllamaBundle(f.root, f.lock)).modelName).toBe("qwen3:1.7b");
+	});
+	it("accepts every file name of the pinned official Windows runtime, including libc++.dll", async () => {
+		const f = await fixture(officialRuntime.files);
+		expect(Object.keys(f.contents)).toContain("runtime/lib/ollama/libc++.dll");
+		await expect(verifyOllamaBundle(f.root, f.lock)).resolves.toBeDefined();
+	});
+	it("rejects a listed file whose name the installed app would refuse", async () => {
+		const f = await fixture();
+		const file = "runtime/lib/ollama/name with space.dll";
+		await fs.writeFile(path.join(f.root, file), "renamed library");
+		f.manifest.files.push({ file, size: 15, sha256: sha("renamed library") });
+		await fs.writeFile(path.join(f.root, "manifest.json"), JSON.stringify(f.manifest));
+		await expect(verifyOllamaBundle(f.root, f.lock)).rejects.toThrow("Invalid bundled");
 	});
 	it("rejects a missing model layer even when a generated receipt was edited to omit it", async () => {
 		const f = await fixture();
@@ -201,6 +220,74 @@ describe("offline Ollama build preparation", () => {
 			result.files.some((entry: { file: string }) => entry.file.endsWith(".download")),
 		).toBe(false);
 		await expect(verifyOllamaBundle(destination, f.lock)).resolves.toBeDefined();
+	});
+	it("leaves out the pinned GPU backends after verifying the archive and adds the runtime library notices", async () => {
+		const f = await fixture();
+		const runtime = path.join(f.directory, "official-runtime");
+		await fs.cp(path.join(f.root, "runtime"), runtime, { recursive: true });
+		for (const file of [
+			"lib/ollama/cuda_v12/cublasLt64_12.dll",
+			"lib/ollama/cuda_v13/cudart64_13.dll",
+			"lib/ollama/vulkan/ggml-vulkan.dll",
+			"lib/ollama/libc++.dll",
+		]) {
+			await fs.mkdir(path.dirname(path.join(runtime, file)), { recursive: true });
+			await fs.writeFile(path.join(runtime, file), `Synthetic ${file}`);
+		}
+		const archive = path.join(f.directory, "runtime-with-gpu.zip");
+		execFileSync("tar", ["-cf", archive, "-C", runtime, "ollama.exe", "lib"]);
+		const archiveData = await fs.readFile(archive);
+		const cache = path.join(f.directory, "cache");
+		await fs.mkdir(path.join(cache, "licenses"), { recursive: true });
+		await fs.writeFile(
+			path.join(cache, "OLLAMA-LICENSE.txt"),
+			f.contents["OLLAMA-LICENSE.txt"],
+		);
+		const notice = "Apache License v2.0 with LLVM Exceptions (synthetic)";
+		await fs.writeFile(path.join(cache, "licenses/LLVM-LICENSE.txt"), notice);
+		const lock = {
+			...f.lock,
+			runtime: {
+				...f.lock.runtime,
+				size: archiveData.length,
+				sha256: sha(archiveData),
+				excludedPaths: ["lib/ollama/cuda_v12", "lib/ollama/cuda_v13", "lib/ollama/vulkan"],
+			},
+			runtimeLicenses: [
+				{
+					file: "licenses/LLVM-LICENSE.txt",
+					covers: "libc++.dll",
+					url: "https://invalid.example/not-called",
+					size: Buffer.byteLength(notice),
+					sha256: sha(notice),
+				},
+			],
+		};
+		const destination = path.join(f.directory, "prepared-cpu");
+		const result = await prepareOllamaBundle({
+			root: destination,
+			lock,
+			modelsFrom: path.join(f.root, "models"),
+			runtimeFrom: archive,
+			cache,
+		});
+		const files = result.files.map((entry: { file: string }) => entry.file);
+		expect(files).toContain("runtime/lib/ollama/libc++.dll");
+		expect(files).toContain("licenses/LLVM-LICENSE.txt");
+		expect(files.some((file: string) => /cuda_v1[23]|vulkan/.test(file))).toBe(false);
+		expect(await fs.readFile(path.join(destination, "NOTICE.txt"), "utf8")).toContain(
+			"lib/ollama/cuda_v12, lib/ollama/cuda_v13, lib/ollama/vulkan",
+		);
+		// A receipt that lists an excluded backend again is refused, even with matching bytes.
+		const manifest = JSON.parse(
+			await fs.readFile(path.join(destination, "manifest.json"), "utf8"),
+		);
+		const gpu = "runtime/lib/ollama/vulkan/ggml-vulkan.dll";
+		await fs.mkdir(path.dirname(path.join(destination, gpu)), { recursive: true });
+		await fs.writeFile(path.join(destination, gpu), "restored GPU backend");
+		manifest.files.push({ file: gpu, size: 20, sha256: sha("restored GPU backend") });
+		await fs.writeFile(path.join(destination, "manifest.json"), JSON.stringify(manifest));
+		await expect(verifyOllamaBundle(destination, lock)).rejects.toThrow("Excluded GPU");
 	});
 	it("fails before replacing an existing complete bundle if a reused local model is corrupt", async () => {
 		const f = await fixture();

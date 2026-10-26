@@ -21,6 +21,10 @@ function validateModelName(model: string) {
 		throw new Error("Only installed local models are allowed");
 }
 
+/** The bundled qwen3:1.7b and other installed Qwen3 tags such as qwen3:4b. */
+const thinksByDefault = (model: string | undefined) =>
+	model === BUNDLED_OLLAMA_MODEL || /^qwen3:/i.test(model ?? "");
+
 /** Direct loopback HTTP bypasses proxies. Redirects and remote endpoints are never followed. */
 export async function localRequest(
 	route: "/api/chat" | "/api/show" | "/api/tags",
@@ -31,12 +35,9 @@ export async function localRequest(
 ): Promise<unknown> {
 	signal?.throwIfAborted();
 	const requestedModel = modelName ?? (payload as { model?: string } | undefined)?.model;
-	// The lightweight story model should spend its output budget on the result.
+	// Qwen3 models think by default; on a CPU that costs minutes and output budget the JSON needs.
 	const requestPayload =
-		route === "/api/chat" &&
-		requestedModel === BUNDLED_OLLAMA_MODEL &&
-		payload &&
-		!("think" in payload)
+		route === "/api/chat" && thinksByDefault(requestedModel) && payload && !("think" in payload)
 			? { ...payload, think: false }
 			: payload;
 	const body = requestPayload ? JSON.stringify(requestPayload) : "";

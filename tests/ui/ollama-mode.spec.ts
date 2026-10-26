@@ -27,6 +27,11 @@ async function setup(
 				sessionStorage.setItem(`test-setting:${key}`, JSON.stringify(value));
 				return true;
 			};
+			if (bundled)
+				window.electronAPI.getAutoEditLocalAiEdition = async () => ({
+					required: true,
+					model: "qwen3:1.7b",
+				});
 			window.electronAPI.inspectAutoEditLocalModel = async (model) => {
 				document.documentElement.dataset.modelChecked = model;
 				return missing
@@ -159,6 +164,8 @@ test("the complete client reports its bundled model without installation command
 }) => {
 	await setup(page, false, false, undefined, true);
 	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+	// Before any check, the client already offers no Ollama installation or model download.
+	await expect(page.getByText("Install Ollama on Windows", { exact: true })).toHaveCount(0);
 	await page.getByRole("button", { name: "Check local model", exact: true }).click();
 	await expect(
 		page.getByText(
@@ -169,6 +176,29 @@ test("the complete client reports its bundled model without installation command
 	await expect(
 		page.getByRole("button", { name: "Start Ollama editing", exact: true }),
 	).toBeEnabled();
+});
+
+test("the complete client uses only its bundled model and explains damaged files without install steps", async ({
+	page,
+}) => {
+	await setup(page, true, false, "qwen3:4b", true);
+	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+	const model = page.getByRole("textbox", { name: "Included local model", exact: true });
+	await expect(model).toHaveValue("qwen3:1.7b");
+	await expect(model).toHaveAttribute("readonly", "");
+	await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-model-checked", "qwen3:1.7b");
+	await expect(page.getByRole("alert")).toHaveText(
+		"The included local AI files are missing or damaged. Close the app, extract the complete package again, then reopen it.",
+	);
+	await expect(page.getByText("Install Ollama on Windows", { exact: true })).toHaveCount(0);
+	await expect(page.locator("code").filter({ hasText: "ollama pull" })).toHaveCount(0);
+	// The developer's saved 4B choice is left for non-client builds.
+	expect(
+		await page.evaluate(() =>
+			sessionStorage.getItem("test-setting:recordly.autoEdit.ollamaModel"),
+		),
+	).toBe(JSON.stringify("qwen3:4b"));
 });
 
 test("the lightweight model default preserves an explicitly saved 4B selection", async ({

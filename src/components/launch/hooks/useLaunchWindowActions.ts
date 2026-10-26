@@ -21,6 +21,9 @@ export function useLaunchWindowActions() {
 	const openVideoFile = useCallback(async (onMediaReady?: (path: string) => void) => {
 		const result = await window.electronAPI.openVideoFilePicker({ includeProjects: true });
 		if (result.canceled) return;
+		// The setup panel shows this; a failed pick must not look like nothing happened.
+		if (!result.success)
+			throw new Error(result.error || result.message || "Could not open the selected file");
 		if (result.success && result.kind === "project") {
 			await window.electronAPI.switchToEditor();
 			return;

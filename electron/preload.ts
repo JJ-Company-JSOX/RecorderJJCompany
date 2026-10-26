@@ -217,6 +217,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		return () => ipcRenderer.removeListener("auto-edit-vision-progress", listener);
 	},
 	inspectAutoEditLocalModel: (model: string) => ipcRenderer.invoke("auto-edit-model-info", model),
+	getAutoEditLocalAiEdition: () => ipcRenderer.invoke("auto-edit-local-ai-edition"),
 	analyzeAutoEdit: (videoPath: string) => ipcRenderer.invoke("auto-edit-analyze", videoPath),
 	cancelAutoEditAnalysis: () => ipcRenderer.invoke("auto-edit-cancel"),
 	reviewAutoEditLocally: (plan: EditPlan, model: string) =>

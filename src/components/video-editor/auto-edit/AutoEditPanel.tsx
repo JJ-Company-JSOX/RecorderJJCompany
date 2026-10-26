@@ -134,6 +134,19 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const speed = speedMessages[language];
 	const [provider, setProvider] = useState<AiProvider>(savedAiProvider);
 	const [ollamaModel, setOllamaModel] = useState<OllamaModel | null>(null);
+	const [clientEdition, setClientEdition] = useState(false);
+	useEffect(() => {
+		let active = true;
+		void window.electronAPI
+			.getAutoEditLocalAiEdition?.()
+			.then((edition) => {
+				if (active) setClientEdition(!!edition?.required);
+			})
+			.catch(() => undefined);
+		return () => {
+			active = false;
+		};
+	}, []);
 	const aiMode = aiModeCopy(language);
 	const [editMode, setEditMode] = useState<EditMode>(() =>
 		savedAiProvider() === "ollama" ? "fast" : savedEditMode(),
@@ -798,8 +811,13 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					draftScenes,
 					Math.max(0, textBudget - briefCharacters),
 				);
+				// Nothing usable: either no speech lies in the kept footage, or the brief leaves no room.
 				if (!evidence.cues.length)
-					throw Error(storyUi.tooMuchText.replace("{max}", String(textBudget)));
+					throw Error(
+						evidence.totalCues
+							? storyUi.tooMuchText.replace("{max}", String(textBudget))
+							: storyUi.audioErrors["no-speech"],
+					);
 			}
 			// A click is compared before/after its exact time (an AI zoom starts 350 ms before it);
 			// other moments are read just after they begin.
@@ -1115,6 +1133,13 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
 	// Moments already avoid real speech, so a narrated recording only gets lines in its pauses.
 	const voiceActions = narrationPlan(state).suggestions.length;
+	// A story cuts its own scenes from the clips and does not need the tutorial's narration
+	// moments, which a video whose original speech fills the timeline does not have.
+	const canOpenVoice = canNarrate && (voiceActions > 0 || provider === "ollama");
+	const openVoice = () => {
+		if (!voiceActions && provider === "ollama") setStoryMode(true);
+		setVoiceOpen(true);
+	};
 	const translateText = async () => {
 		const before = currentState.current.state;
 		const lines = before.autoCaptions
@@ -1270,6 +1295,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								language={language}
 								provider={provider}
 								modelInfo={ollamaModel}
+								clientEdition={clientEdition}
 								disabled={!!busy}
 								onModel={setOllamaModel}
 								onProvider={(value) => {
@@ -1451,12 +1477,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								</span>
 							</label>
 						</div>
-						{canNarrate && voiceActions > 0 && (
+						{canOpenVoice && (
 							<Button
 								variant="secondary"
 								className="w-full"
 								disabled={!!busy}
-								onClick={() => setVoiceOpen(true)}
+								onClick={openVoice}
 							>
 								{w.voiceEntry}
 							</Button>
@@ -1661,8 +1687,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							<p className="text-sm">{ui.next}</p>
 						)}
 						<div className="flex flex-wrap gap-2">
-							{!undone && canNarrate && voiceActions > 0 && (
-								<Button onClick={() => setVoiceOpen(true)}>{w.voiceNext}</Button>
+							{!undone && canOpenVoice && (
+								<Button onClick={openVoice}>{w.voiceNext}</Button>
 							)}
 							{lines.length > 0 && (
 								<Button variant="secondary" onClick={openTextEdit}>
@@ -1842,8 +1868,11 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 										language={language}
 										disabled={!!busy}
 										visionAvailable={
-											!!ollamaModel?.capabilities?.includes("vision")
+											ollamaModel
+												? !!ollamaModel.capabilities?.includes("vision")
+												: null
 										}
+										clientEdition={clientEdition}
 									/>
 								)}
 							</>
@@ -2344,8 +2373,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								{ui.noChanges}
 							</p>
 						)}
-						{canNarrate && voiceActions > 0 && (
-							<Button className="w-full" onClick={() => setVoiceOpen(true)}>
+						{canOpenVoice && (
+							<Button className="w-full" onClick={openVoice}>
 								{w.voiceEntry}
 							</Button>
 						)}

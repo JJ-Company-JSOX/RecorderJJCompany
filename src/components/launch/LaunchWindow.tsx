@@ -1,4 +1,8 @@
-import { discardStoryIntent, stageStoryIntent } from "../video-editor/auto-edit/storyIntent";
+import {
+	discardStoryIntent,
+	refreshStoryIntent,
+	stageStoryIntent,
+} from "../video-editor/auto-edit/storyIntent";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowClockwiseIcon, DotsThreeVerticalIcon } from "@/components/ui/icons";
 import { toast } from "@/components/ui/toast";
@@ -71,6 +75,14 @@ function LaunchWindowContent() {
 			recordingIntent.current = stageStoryIntent(storyPrompt);
 		previouslyRecording.current = recording;
 	}, [recording, storyPrompt]);
+	useEffect(() => {
+		if (!recording) return;
+		const timer = setInterval(() => refreshStoryIntent(recordingIntent.current), 60_000);
+		return () => {
+			clearInterval(timer);
+			refreshStoryIntent(recordingIntent.current);
+		};
+	}, [recording]);
 	const cancelRecordingWithIntent = useCallback(() => {
 		discardStoryIntent(recordingIntent.current);
 		recordingIntent.current = null;

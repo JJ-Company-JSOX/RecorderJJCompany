@@ -10,7 +10,11 @@ import { BUNDLED_MODEL_ID } from "../../../src/components/video-editor/auto-edit
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
 import type { SpeechTranscript } from "../../../src/components/video-editor/auto-edit/speechTypes";
 import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bundled";
-import { configureBundledOllama, stopBundledOllama } from "../autoEdit/bundledOllama";
+import {
+	BUNDLED_OLLAMA_MODEL,
+	configureBundledOllama,
+	stopBundledOllama,
+} from "../autoEdit/bundledOllama";
 import { analyzeLocalMedia } from "../autoEdit/media";
 import {
 	describeNarrationFrames,
@@ -52,21 +56,28 @@ export type AutoEditHandlerOptions = {
 };
 
 export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
+	let bundledOllamaRequired = false;
 	if (process.platform === "win32" && process.arch === "x64") {
 		const resources = app.isPackaged
 			? process.resourcesPath
 			: path.join(app.getAppPath(), "vendor");
+		bundledOllamaRequired =
+			app.isPackaged && existsSync(path.join(resources, "offline-ollama-required.txt"));
 		configureBundledOllama({
 			root: app.isPackaged
 				? path.join(resources, "offline-ollama")
 				: path.join(resources, "offline-ollama/win32-x64"),
 			workDir: path.join(app.getPath("userData"), "ollama"),
-			required:
-				app.isPackaged && existsSync(path.join(resources, "offline-ollama-required.txt")),
+			required: bundledOllamaRequired,
 			enabled: true,
 		});
 		app.once("before-quit", stopBundledOllama);
 	}
+	// The complete client must not send customers to install Ollama or another model.
+	ipcMain.handle("auto-edit-local-ai-edition", () => ({
+		required: bundledOllamaRequired,
+		model: BUNDLED_OLLAMA_MODEL,
+	}));
 	const bundledRoot = () =>
 		app.isPackaged
 			? path.join(process.resourcesPath, "offline-ai")

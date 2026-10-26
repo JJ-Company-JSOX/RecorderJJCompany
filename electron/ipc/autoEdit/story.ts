@@ -74,7 +74,7 @@ export async function generateLocalStory(options: {
 	if (request.brief.analyzeVideo) {
 		if (!info.capabilities?.includes("vision"))
 			throw Error(
-				"This model cannot see video frames. Install and check a local vision model (for example qwen2.5vl:3b), or turn off video analysis and provide scene notes.",
+				"This model cannot see video frames. Turn off frame analysis; the story then uses your brief, scene notes and original speech text.",
 			);
 		if (!options.approvedPath) throw Error("Select an approved local recording first");
 		const size = await videoSize(options.ffprobePath, options.approvedPath, signal);

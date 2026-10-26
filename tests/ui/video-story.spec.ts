@@ -6,6 +6,8 @@ async function setup(
 	deferred = false,
 	options: {
 		originalCaptions?: boolean;
+		/** Original-speech subtitles over the whole video, so the tutorial has no quiet moments. */
+		coveredSpeech?: boolean;
 		repeat?: boolean;
 		speech?: "ok" | "deferred" | "no-audio" | "missing-model";
 	} = {},
@@ -143,7 +145,7 @@ async function setup(
 				const saved = sessionStorage.getItem("story-project");
 				return saved
 					? { success: true, path: "/story.recordly", project: JSON.parse(saved) }
-					: options.originalCaptions || options.repeat
+					: options.originalCaptions || options.coveredSpeech || options.repeat
 						? {
 								success: true,
 								path: "/story-input.recordly",
@@ -163,16 +165,31 @@ async function setup(
 												speed: 1,
 											}),
 										),
-										autoCaptions: options.originalCaptions
+										autoCaptions: options.coveredSpeech
 											? [
 													{
-														id: "original-speech",
-														startMs: 1000,
-														endMs: 2000,
-														text: "The product works offline.",
+														id: "speech-1",
+														startMs: 0,
+														endMs: 3000,
+														text: "I record my product demo here.",
+													},
+													{
+														id: "speech-2",
+														startMs: 3000,
+														endMs: 6000,
+														text: "Then I show how it works offline.",
 													},
 												]
-											: [],
+											: options.originalCaptions
+												? [
+														{
+															id: "original-speech",
+															startMs: 1000,
+															endMs: 2000,
+															text: "The product works offline.",
+														},
+													]
+												: [],
 									},
 								},
 							}
@@ -309,6 +326,18 @@ test("a brief-only story becomes editable titles, text subtitles and real audio 
 	await page.reload();
 	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
 	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(1);
+});
+test("a video whose original speech fills the timeline can still open the story workflow", async ({
+	page,
+}) => {
+	// The tutorial finds no quiet moment here; the story cuts its own scenes from the clips.
+	await setup(page, false, false, { coveredSpeech: true });
+	await expect(page.locator("[data-story-brief]")).toBeVisible();
+	await brief(page);
+	await page.getByRole("button", { name: "Draft video story", exact: true }).click();
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
 });
 test("vision model sends explicit frame-analysis intent, cancellation rejects late story output", async ({
 	page,

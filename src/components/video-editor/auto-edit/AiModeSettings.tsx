@@ -34,6 +34,9 @@ const copy = {
 		copied: "Copied",
 		copyFailed: "Copy failed; select and copy the command above.",
 		missing: "Start Ollama and install the named local model, then check again.",
+		clientModel: "Included local model",
+		clientMissing:
+			"The included local AI files are missing or damaged. Close the app, extract the complete package again, then reopen it.",
 		language:
 			"Only local models are accepted. Model choice is remembered on this computer; availability is checked again when you reopen the editor.",
 		start: "Start Ollama editing",
@@ -58,6 +61,8 @@ const copy = {
 		copied: "已复制",
 		copyFailed: "复制失败，请选中上面的命令手动复制。",
 		missing: "请启动 Ollama，安装所填模型后重新检查。",
+		clientModel: "内置本地模型",
+		clientMissing: "内置 AI 文件缺失或损坏。请关闭 App，重新解压完整安装包后再打开。",
 		language: "仅接受本地模型。模型选择保存在这台电脑上，重新打开编辑器后需要再次检查可用性。",
 		start: "开始 Ollama 智能剪辑",
 		firstCheck: "请先检查已安装的 Ollama 模型。",
@@ -82,6 +87,9 @@ const copy = {
 		copied: "Disalin",
 		copyFailed: "Gagal menyalin; pilih dan salin arahan di atas.",
 		missing: "Mulakan Ollama dan pasang model bernama, kemudian semak semula.",
+		clientModel: "Model setempat terbina dalam",
+		clientMissing:
+			"Fail AI terbina dalam hilang atau rosak. Tutup aplikasi, ekstrak semula pakej lengkap, kemudian buka semula.",
 		language:
 			"Hanya model setempat. Pilihan disimpan pada komputer ini; semak semula apabila editor dibuka semula.",
 		start: "Mulakan suntingan Ollama",
@@ -99,7 +107,10 @@ export function AiModeSettings({
 	onProvider,
 	onModel,
 	modelInfo,
+	clientEdition = false,
 }: {
+	/** The complete client: its only local model is the bundled one, so nothing is installed. */
+	clientEdition?: boolean;
 	language: PlanLanguage;
 	provider: AiProvider;
 	disabled: boolean;
@@ -113,6 +124,7 @@ export function AiModeSettings({
 		return typeof value === "string" ? value : DEFAULT_OLLAMA_MODEL;
 	});
 	const info = modelInfo;
+	const modelName = clientEdition ? DEFAULT_OLLAMA_MODEL : model.trim();
 	const [checking, setChecking] = useState(false);
 	const [error, setError] = useState("");
 	const [copied, setCopied] = useState("");
@@ -135,14 +147,19 @@ export function AiModeSettings({
 		setError("");
 		onModel(null);
 		try {
-			const result = await window.electronAPI.inspectAutoEditLocalModel(model.trim());
+			const result = await window.electronAPI.inspectAutoEditLocalModel(modelName);
 			if (run !== request.current) return;
 			if (!result.success || !result.info) throw new Error(result.error || m.missing);
 			onModel(result.info);
-			saveAppSetting(MODEL_KEY, model.trim());
+			// A client keeps the developer's saved choice untouched; it can only use its own model.
+			if (!clientEdition) saveAppSetting(MODEL_KEY, modelName);
 		} catch (reason) {
 			if (run === request.current)
-				setError(`${m.missing} ${reason instanceof Error ? reason.message : ""}`);
+				setError(
+					clientEdition
+						? m.clientMissing
+						: `${m.missing} ${reason instanceof Error ? reason.message : ""}`,
+				);
 		} finally {
 			if (run === request.current) setChecking(false);
 		}
@@ -177,11 +194,12 @@ export function AiModeSettings({
 			{provider === "ollama" && (
 				<>
 					<label className="flex flex-col gap-2 text-sm">
-						{m.model}
+						{clientEdition ? m.clientModel : m.model}
 						<input
-							aria-label={m.model}
+							aria-label={clientEdition ? m.clientModel : m.model}
 							maxLength={120}
-							value={model}
+							value={clientEdition ? DEFAULT_OLLAMA_MODEL : model}
+							readOnly={clientEdition}
 							disabled={disabled || checking}
 							onChange={(event) => {
 								invalidate();
@@ -192,7 +210,7 @@ export function AiModeSettings({
 					</label>
 					<Button
 						variant="secondary"
-						disabled={disabled || checking || !model.trim()}
+						disabled={disabled || checking || !modelName}
 						onClick={() => void check()}
 					>
 						{checking ? m.checking : m.check}
@@ -217,7 +235,7 @@ export function AiModeSettings({
 					<p className="text-xs text-muted-foreground">
 						{m.language} {m.metadata}
 					</p>
-					{info?.runtime !== "bundled" && (
+					{!clientEdition && info?.runtime !== "bundled" && (
 						<details className="space-y-2 text-sm">
 							<summary className="cursor-pointer">{m.install}</summary>
 							<p className="py-2 text-xs text-muted-foreground">{m.instructions}</p>

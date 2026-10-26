@@ -8,13 +8,35 @@ vi.mock("@/lib/appSettings", () => ({
 		return true;
 	},
 }));
-import { consumeStoryIntent, discardStoryIntent, stageStoryIntent } from "./storyIntent";
+import {
+	consumeStoryIntent,
+	discardStoryIntent,
+	refreshStoryIntent,
+	stageStoryIntent,
+} from "./storyIntent";
 const now = 100000000;
 beforeEach(() => {
 	storage.value = null;
 	storage.writable = true;
 });
 describe("launcher creative request handoff", () => {
+	it("keeps a brief typed before a recording longer than 30 minutes", () => {
+		const id = stageStoryIntent("Introduce the product", undefined, now);
+		for (let minute = 1; minute <= 45; minute++) refreshStoryIntent(id, now + minute * 60_000);
+		expect(consumeStoryIntent("C:/rec/long.mp4", now + 46 * 60_000)?.brief.topic).toBe(
+			"Introduce the product",
+		);
+	});
+	it("does not bring back a request that was consumed or replaced", () => {
+		const id = stageStoryIntent("First recording", undefined, now);
+		expect(consumeStoryIntent("C:/rec/a.mp4", now + 1000)).not.toBeNull();
+		refreshStoryIntent(id, now + 2000);
+		expect(storage.value).toBeNull();
+		const old = stageStoryIntent("Old request", undefined, now);
+		stageStoryIntent("Newer import", "C:/rec/b.mp4", now + 10);
+		refreshStoryIntent(old, now + 20);
+		expect((storage.value as { prompt: string }).prompt).toBe("Newer import");
+	});
 	it("moves a confirmed media request into a new story workspace exactly once", () => {
 		const id = stageStoryIntent(
 			" Introduce my offline product to first-time customers. ",

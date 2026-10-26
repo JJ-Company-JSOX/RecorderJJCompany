@@ -283,6 +283,8 @@ interface Window {
 			info?: import("./ipc/autoEdit/reviewer").LocalModelInfo;
 			error?: string;
 		}>;
+		/** `required`: the complete client, whose only local model is the bundled `model`. */
+		getAutoEditLocalAiEdition?: () => Promise<{ required: boolean; model: string }>;
 		analyzeAutoEdit: (videoPath: string) => Promise<{
 			success: boolean;
 			evidence?: import("../src/components/video-editor/auto-edit/plan").MediaEvidence;

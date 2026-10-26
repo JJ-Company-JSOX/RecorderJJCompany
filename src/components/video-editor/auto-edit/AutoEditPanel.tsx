@@ -267,6 +267,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const resultAnchor = useRef<HTMLDivElement>(null);
 	const progressAnchor = useRef<HTMLDivElement>(null);
 	const errorAnchor = useRef<HTMLDivElement>(null);
+	const modelSettingsAnchor = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		if (error) errorAnchor.current?.scrollIntoView({ block: "nearest" });
 	}, [error]);
@@ -1264,22 +1265,24 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								{ui.actionHelp}
 							</p>
 						)}
-						<AiModeSettings
-							language={language}
-							provider={provider}
-							modelInfo={ollamaModel}
-							disabled={!!busy}
-							onModel={setOllamaModel}
-							onProvider={(value) => {
-								generation.current++;
-								setProvider(value);
-								saveAiProvider(value);
-								setOllamaModel(null);
-								setEditMode("fast");
-								saveAppSetting(EDIT_MODE_SETTING, "fast");
-								setError("");
-							}}
-						/>
+						<div ref={modelSettingsAnchor}>
+							<AiModeSettings
+								language={language}
+								provider={provider}
+								modelInfo={ollamaModel}
+								disabled={!!busy}
+								onModel={setOllamaModel}
+								onProvider={(value) => {
+									generation.current++;
+									setProvider(value);
+									saveAiProvider(value);
+									setOllamaModel(null);
+									setEditMode("fast");
+									saveAppSetting(EDIT_MODE_SETTING, "fast");
+									setError("");
+								}}
+							/>
+						</div>
 						<label className="flex flex-col gap-2 text-sm">
 							<span>{speed.mode}</span>
 							<select
@@ -1345,10 +1348,24 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									)}
 								<Button
 									variant="secondary"
-									disabled={!!busy || statusChecking}
-									onClick={() => setStatusRevision((revision) => revision + 1)}
+									disabled={
+										!!busy ||
+										(statusChecking && !(provider === "ollama" && !ollamaModel))
+									}
+									onClick={() => {
+										if (provider === "ollama" && !ollamaModel) {
+											modelSettingsAnchor.current?.scrollIntoView({
+												block: "start",
+											});
+											modelSettingsAnchor.current
+												?.querySelector<HTMLInputElement>("input")
+												?.focus({ preventScroll: true });
+										} else setStatusRevision((revision) => revision + 1);
+									}}
 								>
-									{setup.recheck}
+									{provider === "ollama" && !ollamaModel
+										? storyUi.checkModel
+										: setup.recheck}
 								</Button>
 								{!noVideo && (
 									<>

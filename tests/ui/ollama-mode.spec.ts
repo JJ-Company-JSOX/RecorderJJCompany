@@ -163,6 +163,38 @@ test("checked Ollama reviews the real plan through the existing timeline and res
 	await expect(page.locator("html")).not.toHaveAttribute("data-model-checked");
 });
 
+test("Ollama readiness directs the scrolled editor to its actual model check", async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 800 });
+	await setup(page);
+	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+	const input = page.getByRole("textbox", { name: "Installed Ollama model", exact: true });
+	const readiness = page.locator("[data-auto-edit-readiness]");
+	const navigate = readiness.getByRole("button", {
+		name: "Check or change Ollama model",
+		exact: true,
+	});
+	await navigate.scrollIntoViewIfNeeded();
+	await expect(navigate).toBeInViewport();
+	await expect(input).not.toBeInViewport();
+	await expect(page.locator("html")).not.toHaveAttribute("data-model-checked");
+	await navigate.click();
+	await expect(input).toBeFocused();
+	await expect(input).toBeInViewport();
+	// Navigation does not load or check any model. The selected name is checked explicitly.
+	await expect(page.locator("html")).not.toHaveAttribute("data-model-checked");
+	await input.fill("qwen3:1.7b");
+	await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	await expect(page.locator("html")).toHaveAttribute("data-model-checked", "qwen3:1.7b");
+	await expect(page.getByText(/Local model ready: qwen3:1.7b/)).toBeVisible();
+	const start = page.getByRole("button", { name: "Start Ollama editing", exact: true });
+	await expect(start).toBeEnabled();
+	await expect(readiness).toHaveCount(0);
+	await input.fill("other-local:latest");
+	await expect(start).toBeDisabled();
+	await expect(readiness).toBeVisible();
+	await expect(page.locator("html")).not.toHaveAttribute("data-bundled-started");
+});
+
 test("cancelled Ollama review cannot apply its late result", async ({ page }) => {
 	await setup(page, false, true);
 	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");

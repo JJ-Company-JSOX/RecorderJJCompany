@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, expect, it, vi } from "vitest";
+type Handler = (...args: unknown[]) => Promise<unknown>;
 const fixture = vi.hoisted(() => ({
-	handlers: new Map<string, (...args: any[]) => Promise<any>>(),
+	handlers: new Map<string, Handler>(),
 	quit: [] as (() => void)[],
 	status: vi.fn(),
 	bundled: vi.fn(),
@@ -12,8 +13,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock("electron", () => ({
 	app: { once: (_name: string, callback: () => void) => fixture.quit.push(callback) },
 	ipcMain: {
-		handle: (name: string, handler: (...args: any[]) => Promise<any>) =>
-			fixture.handlers.set(name, handler),
+		handle: (name: string, handler: Handler) => fixture.handlers.set(name, handler),
 	},
 }));
 vi.mock("../captions/bundledSpeech", () => ({
@@ -112,7 +112,9 @@ it("locks per sender, cancels only that sender and rejects a late successful res
 	let signal!: AbortSignal;
 	fixture.bundled.mockImplementationOnce((input) => {
 		signal = input.signal;
-		return new Promise((resolve) => (complete = resolve));
+		return new Promise((resolve) => {
+			complete = resolve;
+		});
 	});
 	const pending = invoke(e);
 	await vi.waitFor(() => expect(fixture.bundled).toHaveBeenCalled());
@@ -142,7 +144,9 @@ it.each([
 	let signal!: AbortSignal;
 	fixture.bundled.mockImplementationOnce((input) => {
 		signal = input.signal;
-		return new Promise((resolve) => (finish = resolve));
+		return new Promise((resolve) => {
+			finish = resolve;
+		});
 	});
 	const pending = invoke(e);
 	await vi.waitFor(() => expect(fixture.bundled).toHaveBeenCalled());

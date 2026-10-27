@@ -12,6 +12,8 @@ async function setup(
 		speech?: "ok" | "deferred" | "no-audio" | "missing-model";
 		/** Use the default built-in AI instead of choosing and checking an Ollama model. */
 		builtin?: boolean;
+		/** Stay on the start screen instead of opening the story task. */
+		start?: boolean;
 	} = {},
 ) {
 	await installDesktopBridge(page, "filmstrip.mp4", { signedIn: false });
@@ -258,6 +260,7 @@ async function setup(
 		await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
 		await page.getByRole("button", { name: "Check local model", exact: true }).click();
 	}
+	if (options.start) return;
 	await page
 		.getByRole("button", { name: "Add AI voice-over and subtitles", exact: true })
 		.click();
@@ -754,3 +757,62 @@ for (const speech of ["no-audio", "missing-model"] as const)
 			"Show your product clearly.",
 		);
 	});
+
+test("one click writes the story from the topic, records it, adds subtitles and titles, and undoes in one step", async ({
+	page,
+}) => {
+	await setup(page, false, false, { builtin: true, start: true });
+	const card = page.locator("[data-one-click-story]");
+	// Folded to one row at first, so the editing button stays in view on small screens.
+	await expect(card).toHaveAttribute("aria-expanded", "false");
+	await card.click();
+	await card.getByLabel("Video topic", { exact: true }).fill("Introduce JSOX Recorder");
+	// Topic only by default; looking at the video too is one tick away.
+	await expect(
+		card.getByLabel("Also look at the video (more accurate, takes a few minutes longer)", {
+			exact: true,
+		}),
+	).not.toBeChecked();
+	await card
+		.getByRole("button", { name: "Generate script, voice-over and subtitles", exact: true })
+		.click();
+	await expect(
+		page.getByText("Done! The script, voice-over and subtitles are on the timeline.", {
+			exact: true,
+		}),
+	).toBeVisible();
+	const sent = JSON.parse((await page.locator("html").getAttribute("data-story-request"))!);
+	expect(sent).toMatchObject({
+		bundled: true,
+		language: "en",
+		request: { brief: { topic: "Introduce JSOX Recorder", analyzeVideo: false } },
+	});
+	// No review step in between: the written line is recorded straight away.
+	await expect(page.locator("html")).toHaveAttribute(
+		"data-story-tts",
+		JSON.stringify({
+			cues: [{ id: "story-1", text: "Show your product clearly." }],
+			language: "en",
+		}),
+	);
+	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(1);
+	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(1);
+	// The lines stay editable below for changing the script afterwards.
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
+	await card.getByRole("button", { name: "Undo", exact: true }).click();
+	await expect(page.locator('[data-variant="audio"]')).toHaveCount(0);
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
+	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
+	// The voice-over section keeps the same one click for running it again.
+	await expect(page.getByLabel("Topic / product", { exact: true })).toHaveValue(
+		"Introduce JSOX Recorder",
+	);
+	await card
+		.getByRole("button", { name: "Generate script, voice-over and subtitles", exact: true })
+		.click();
+	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
+	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(1);
+});

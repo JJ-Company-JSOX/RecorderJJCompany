@@ -137,6 +137,49 @@ export async function inspectLocalModel(
 	}
 }
 
+/**
+ * Ollama turns this schema into a grammar, so even a small model can only answer with the
+ * candidates' own ids, each inside its original range, and with no more edits than candidates.
+ * With plain JSON mode a small model sometimes replied in another shape, which failed the run.
+ */
+export function reviewSchema(candidates: { id: string; startMs: number; endMs: number }[]) {
+	const ranges = candidates
+		.map((c) => ({ id: c.id, min: Math.ceil(c.startMs), max: Math.floor(c.endMs) }))
+		.filter((c) => c.min < c.max);
+	const time = (c: (typeof ranges)[number]) => ({
+		type: "integer",
+		minimum: c.min,
+		maximum: c.max,
+	});
+	return {
+		type: "object",
+		additionalProperties: false,
+		properties: {
+			edits: {
+				type: "array",
+				maxItems: ranges.length,
+				...(ranges.length
+					? {
+							items: {
+								anyOf: ranges.map((c) => ({
+									type: "object",
+									additionalProperties: false,
+									properties: {
+										id: { const: c.id },
+										startMs: time(c),
+										endMs: time(c),
+									},
+									required: ["id", "startMs", "endMs"],
+								})),
+							},
+						}
+					: {}),
+			},
+		},
+		required: ["edits"],
+	};
+}
+
 /** Uses only an existing user-operated model. Never downloads weights. */
 export class LocalPlanReviewer implements PlanReviewer {
 	async review(plan: EditPlan, model: string, signal?: AbortSignal): Promise<EditPlan> {
@@ -151,7 +194,7 @@ export class LocalPlanReviewer implements PlanReviewer {
 			{
 				model,
 				stream: false,
-				format: "json",
+				format: reviewSchema(candidates),
 				keep_alive: 0,
 				options: { temperature: 0, num_ctx: 4096, num_predict: 2048 },
 				messages: [

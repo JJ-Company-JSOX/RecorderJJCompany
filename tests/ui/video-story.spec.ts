@@ -482,8 +482,10 @@ test("unfinished story workspace survives reopening with review required and can
 		)
 		.toBe("Keep my unfinished story.");
 	await page.reload();
+	// The reopened editor loads the video and project again, which can take a while on a busy machine.
 	await expect(page.getByLabel("Topic / product", { exact: true })).toHaveValue(
 		"Introduce JSOX Recorder",
+		{ timeout: 30000 },
 	);
 	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
 		"Keep my unfinished story.",

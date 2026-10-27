@@ -239,7 +239,8 @@ export async function generateBundledStory(options: {
 				observeFrame(language),
 				`Sampled frame for ${scene.id}, slot ${index + 1} of ${request.scenes.length}.`,
 				observationSchema,
-				{ maxTokens: 160 },
+				// 240 Chinese characters can take about 160 tokens; the schema ends a shorter reply.
+				{ maxTokens: 256 },
 			);
 			signal.throwIfAborted();
 			let observation = "";

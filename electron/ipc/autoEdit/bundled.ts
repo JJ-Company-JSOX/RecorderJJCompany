@@ -231,14 +231,14 @@ export function llamaServerArgs(
 const mimeOf = (image: Buffer) =>
 	image[0] === 0x89 && image[1] === 0x50 ? "image/png" : "image/jpeg";
 
-type Reply = { choices?: { message?: { content?: string } }[] };
+type Reply = { choices?: { message?: { content?: string }; finish_reason?: string }[] };
 
 /**
  * The requests made to a running llama-server. Every reply is constrained by a JSON schema;
  * the caller parses it.
  */
 export function bundledClient(port: number, token: string, signal: AbortSignal) {
-	const chat = async (body: object, timeout: number, missing: string) => {
+	const chat = async (body: object, timeout: number, missing: string, cutOff?: string) => {
 		const raw = (await request(
 			port,
 			token,
@@ -247,7 +247,10 @@ export function bundledClient(port: number, token: string, signal: AbortSignal) 
 			signal,
 			timeout,
 		)) as Reply;
-		const content = raw.choices?.[0]?.message?.content;
+		const choice = raw.choices?.[0];
+		// "length": the reply ran into max_tokens or the end of the context, so its JSON is cut off.
+		if (cutOff && choice?.finish_reason === "length") throw Error(cutOff);
+		const content = choice?.message?.content;
 		if (typeof content !== "string") throw Error(missing);
 		return content;
 	};
@@ -333,6 +336,7 @@ export function bundledClient(port: number, token: string, signal: AbortSignal) 
 				},
 				600_000,
 				"Missing offline story reply",
+				"The story is too long for the built-in AI. Shorten the brief, turn off subtitle context or set a shorter narration target, then draft again.",
 			);
 		},
 		/** Auto-edit caption and focus for one frame. Coordinates are integers on a 0-1000 scale. */

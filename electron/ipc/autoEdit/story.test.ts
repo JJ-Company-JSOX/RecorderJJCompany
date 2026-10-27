@@ -238,6 +238,8 @@ it("the built-in AI describes each sampled frame, then writes one entry per slot
 	);
 	expect(model.look).toHaveBeenCalledTimes(1);
 	expect((model.look.mock.calls[0] as unknown[])[0]).toEqual([Buffer.from("sample-image")]);
+	// Room for a full 240-character Chinese observation, so it is not cut off and dropped.
+	expect((model.look.mock.calls[0] as unknown[])[4]).toEqual({ maxTokens: 256 });
 	expect(onProgress).toHaveBeenCalledWith(1, 1);
 	const [instruction, question, schema] = model.compose.mock.calls[0] as unknown as [
 		string,

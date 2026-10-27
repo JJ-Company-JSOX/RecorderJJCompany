@@ -11,6 +11,7 @@ import { registerPermissionHandlers } from "./register/permissions";
 import { registerProjectHandlers } from "./register/project";
 import { registerRecordingHandlers } from "./register/recording";
 import { registerSettingsHandlers } from "./register/settings";
+import { registerSocialHandlers } from "./register/social";
 import { registerSourceHandlers } from "./register/sources";
 import {
 	selectedSource,
@@ -79,4 +80,5 @@ export function registerIpcHandlers(
 	registerCloudShareHandlers();
 	registerProjectHandlers();
 	registerSettingsHandlers();
+	registerSocialHandlers();
 }

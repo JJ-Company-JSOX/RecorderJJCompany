@@ -762,6 +762,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	openExternalUrl: (url: string) => {
 		return ipcRenderer.invoke("open-external-url", url);
 	},
+	getSocialStatus: () => ipcRenderer.invoke("social-status"),
+	connectSocial: (platform: string) => ipcRenderer.invoke("social-connect", platform),
+	cancelSocialConnect: () => ipcRenderer.invoke("social-cancel-connect"),
+	removeSocial: (platform: string, id: string) =>
+		ipcRenderer.invoke("social-remove", platform, id),
+	getSocialAccountOptions: (platform: string, id: string) =>
+		ipcRenderer.invoke("social-account-options", platform, id),
+	pickSocialVideo: () => ipcRenderer.invoke("social-pick-video"),
+	checkSocialVideo: (videoPath: string) => ipcRenderer.invoke("social-check-video", videoPath),
+	publishSocialPost: (request: unknown) => ipcRenderer.invoke("social-publish", request),
+	cancelSocialPublish: () => ipcRenderer.invoke("social-cancel-publish"),
+	onSocialPublishProgress: (callback: (account: string) => void) => {
+		const listener = (_: Electron.IpcRendererEvent, account: string) => callback(account);
+		ipcRenderer.on("social-publish-progress", listener);
+		return () => ipcRenderer.removeListener("social-publish-progress", listener);
+	},
 	getAccessibilityPermissionStatus: () => {
 		return ipcRenderer.invoke("get-accessibility-permission-status");
 	},

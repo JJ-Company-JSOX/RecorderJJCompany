@@ -6,8 +6,14 @@ async function setup(
 	deferred = false,
 	options: {
 		originalCaptions?: boolean;
+		/** Original-speech subtitles over the whole video, so the tutorial has no quiet moments. */
+		coveredSpeech?: boolean;
 		repeat?: boolean;
 		speech?: "ok" | "deferred" | "no-audio" | "missing-model";
+		/** Use the default built-in AI instead of choosing and checking an Ollama model. */
+		builtin?: boolean;
+		/** Stay on the start screen instead of opening the story task. */
+		start?: boolean;
 	} = {},
 ) {
 	await installDesktopBridge(page, "filmstrip.mp4", { signedIn: false });
@@ -24,6 +30,34 @@ async function setup(
 					capabilities: vision ? ["completion", "vision"] : ["completion"],
 				},
 			});
+			if (options.builtin)
+				window.electronAPI.getBundledAiStatus = async () => ({
+					available: true,
+					modelName: "Bundled fixture",
+					modelBytes: 100,
+					freeMemoryBytes: 8e9,
+					requiredMemoryBytes: 3e9,
+				});
+			window.electronAPI.draftVideoStoryBundled = async (request, language) => {
+				document.documentElement.dataset.storyRequest = JSON.stringify({
+					request,
+					language,
+					bundled: true,
+				});
+				return {
+					success: true,
+					draft: {
+						cues: request.scenes.map((s) => ({
+							id: s.id,
+							startMs: s.startMs,
+							endMs: s.endMs,
+							stage: "Hook",
+							title: "Create offline",
+							text: "Show your product clearly.",
+						})),
+					},
+				};
+			};
 			window.electronAPI.draftVideoStory = async (request, model, language) => {
 				document.documentElement.dataset.storyRequest = JSON.stringify({
 					request,
@@ -143,7 +177,7 @@ async function setup(
 				const saved = sessionStorage.getItem("story-project");
 				return saved
 					? { success: true, path: "/story.recordly", project: JSON.parse(saved) }
-					: options.originalCaptions || options.repeat
+					: options.originalCaptions || options.coveredSpeech || options.repeat
 						? {
 								success: true,
 								path: "/story-input.recordly",
@@ -163,16 +197,31 @@ async function setup(
 												speed: 1,
 											}),
 										),
-										autoCaptions: options.originalCaptions
+										autoCaptions: options.coveredSpeech
 											? [
 													{
-														id: "original-speech",
-														startMs: 1000,
-														endMs: 2000,
-														text: "The product works offline.",
+														id: "speech-1",
+														startMs: 0,
+														endMs: 3000,
+														text: "I record my product demo here.",
+													},
+													{
+														id: "speech-2",
+														startMs: 3000,
+														endMs: 6000,
+														text: "Then I show how it works offline.",
 													},
 												]
-											: [],
+											: options.originalCaptions
+												? [
+														{
+															id: "original-speech",
+															startMs: 1000,
+															endMs: 2000,
+															text: "The product works offline.",
+														},
+													]
+												: [],
 									},
 								},
 							}
@@ -207,8 +256,11 @@ async function setup(
 			timeout: 20000,
 		},
 	);
-	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
-	await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	if (!options.builtin) {
+		await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+		await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	}
+	if (options.start) return;
 	await page
 		.getByRole("button", { name: "Add AI voice-over and subtitles", exact: true })
 		.click();
@@ -310,6 +362,42 @@ test("a brief-only story becomes editable titles, text subtitles and real audio 
 	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
 	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(1);
 });
+test("the default built-in AI writes the story, with frame analysis and no Ollama or model check", async ({
+	page,
+}) => {
+	await setup(page, false, false, { builtin: true });
+	await expect(
+		page.getByRole("button", { name: "Check or change Ollama model", exact: true }),
+	).toHaveCount(0);
+	await brief(page);
+	// The built-in AI has its own vision model, so frames need no extra model or warning.
+	await page.getByLabel("Analyze sampled video frames", { exact: true }).check();
+	await expect(page.locator("[data-story-brief]")).not.toContainText("only understands text");
+	const draft = page.getByRole("button", { name: "Draft video story", exact: true });
+	await expect(draft).toBeEnabled();
+	await draft.click();
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
+	const sent = JSON.parse((await page.locator("html").getAttribute("data-story-request"))!);
+	expect(sent).toMatchObject({
+		bundled: true,
+		language: "en",
+		request: { brief: { topic: "Introduce JSOX Recorder", analyzeVideo: true } },
+	});
+});
+test("a video whose original speech fills the timeline can still open the story workflow", async ({
+	page,
+}) => {
+	// The tutorial finds no quiet moment here; the story cuts its own scenes from the clips.
+	await setup(page, false, false, { coveredSpeech: true });
+	await expect(page.locator("[data-story-brief]")).toBeVisible();
+	await brief(page);
+	await page.getByRole("button", { name: "Draft video story", exact: true }).click();
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
+});
 test("vision model sends explicit frame-analysis intent, cancellation rejects late story output", async ({
 	page,
 }) => {
@@ -373,7 +461,7 @@ test("changed briefs and invalid scene timing cannot add stale story audio or te
 test("unfinished story workspace survives reopening with review required and can then generate English audio", async ({
 	page,
 }) => {
-	await setup(page);
+	await setup(page, false, false, { builtin: true });
 	await page.getByLabel("Analyze sampled video frames", { exact: true }).uncheck();
 	await brief(page);
 	await page.getByRole("button", { name: "Draft video story", exact: true }).click();
@@ -397,8 +485,10 @@ test("unfinished story workspace survives reopening with review required and can
 		)
 		.toBe("Keep my unfinished story.");
 	await page.reload();
+	// The reopened editor loads the video and project again, which can take a while on a busy machine.
 	await expect(page.getByLabel("Topic / product", { exact: true })).toHaveValue(
 		"Introduce JSOX Recorder",
+		{ timeout: 30000 },
 	);
 	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
 		"Keep my unfinished story.",
@@ -424,14 +514,10 @@ test("unfinished story workspace survives reopening with review required and can
 		}),
 	);
 
-	await page.getByRole("button", { name: "Check or change Ollama model", exact: true }).click();
+	// Reopened on the built-in AI, the story can be drafted again with no model check.
 	await expect(
-		page.getByRole("button", { name: "Check local model", exact: true }),
-	).toBeVisible();
-	await page.getByRole("button", { name: "Check local model", exact: true }).click();
-	await page
-		.getByRole("button", { name: "Add AI voice-over and subtitles", exact: true })
-		.click();
+		page.getByRole("button", { name: "Check or change Ollama model", exact: true }),
+	).toHaveCount(0);
 	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
 		"Keep my unfinished story.",
 	);
@@ -671,3 +757,62 @@ for (const speech of ["no-audio", "missing-model"] as const)
 			"Show your product clearly.",
 		);
 	});
+
+test("one click writes the story from the topic, records it, adds subtitles and titles, and undoes in one step", async ({
+	page,
+}) => {
+	await setup(page, false, false, { builtin: true, start: true });
+	const card = page.locator("[data-one-click-story]");
+	// Folded to one row at first, so the editing button stays in view on small screens.
+	await expect(card).toHaveAttribute("aria-expanded", "false");
+	await card.click();
+	await card.getByLabel("Video topic", { exact: true }).fill("Introduce JSOX Recorder");
+	// Topic only by default; looking at the video too is one tick away.
+	await expect(
+		card.getByLabel("Also look at the video (more accurate, takes a few minutes longer)", {
+			exact: true,
+		}),
+	).not.toBeChecked();
+	await card
+		.getByRole("button", { name: "Generate script, voice-over and subtitles", exact: true })
+		.click();
+	await expect(
+		page.getByText("Done! The script, voice-over and subtitles are on the timeline.", {
+			exact: true,
+		}),
+	).toBeVisible();
+	const sent = JSON.parse((await page.locator("html").getAttribute("data-story-request"))!);
+	expect(sent).toMatchObject({
+		bundled: true,
+		language: "en",
+		request: { brief: { topic: "Introduce JSOX Recorder", analyzeVideo: false } },
+	});
+	// No review step in between: the written line is recorded straight away.
+	await expect(page.locator("html")).toHaveAttribute(
+		"data-story-tts",
+		JSON.stringify({
+			cues: [{ id: "story-1", text: "Show your product clearly." }],
+			language: "en",
+		}),
+	);
+	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(1);
+	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(1);
+	// The lines stay editable below for changing the script afterwards.
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
+	await card.getByRole("button", { name: "Undo", exact: true }).click();
+	await expect(page.locator('[data-variant="audio"]')).toHaveCount(0);
+	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);
+	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(0);
+	// The voice-over section keeps the same one click for running it again.
+	await expect(page.getByLabel("Topic / product", { exact: true })).toHaveValue(
+		"Introduce JSOX Recorder",
+	);
+	await card
+		.getByRole("button", { name: "Generate script, voice-over and subtitles", exact: true })
+		.click();
+	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
+	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(1);
+});

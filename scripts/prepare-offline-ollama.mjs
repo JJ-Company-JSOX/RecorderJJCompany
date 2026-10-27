@@ -29,6 +29,13 @@ export function safeRelative(file) {
 		file.split("/").every((part) => part && part !== "." && part !== "..")
 	);
 }
+/**
+ * The installed app accepts only these bundle paths (validRelative in
+ * electron/ipc/autoEdit/bundledOllama.ts). Checking them here keeps the build and the
+ * packaged smoke from passing a bundle the app would then refuse to start.
+ */
+export const BUNDLE_PATH =
+	/^(?:runtime\/[a-zA-Z0-9_.+/-]+|models\/blobs\/sha256-[a-f0-9]{64}|models\/manifests\/registry\.ollama\.ai\/library\/qwen3\/1\.7b|(?:licenses\/)?[a-zA-Z0-9_.-]+\.(?:txt|md))$/;
 export function parseModelManifest(bytes, expectedPrefix) {
 	if (bytes.length > 1000000) throw Error("Model manifest is oversized");
 	const sha256 = digest(bytes);
@@ -110,6 +117,8 @@ export async function verifyOllamaBundle(root, lock) {
 	for (const entry of manifest.files) {
 		if (
 			!safeRelative(entry.file) ||
+			entry.file.length >= 512 ||
+			!BUNDLE_PATH.test(entry.file) ||
 			names.has(entry.file) ||
 			!Number.isSafeInteger(entry.size) ||
 			entry.size <= 0 ||
@@ -125,8 +134,17 @@ export async function verifyOllamaBundle(root, lock) {
 		"OLLAMA-LICENSE.txt",
 		"MODEL-LICENSE.txt",
 		"NOTICE.txt",
+		...(lock.runtimeLicenses ?? []).map((entry) => entry.file),
 	])
 		if (!names.has(file)) throw Error(`Required bundled Ollama asset missing: ${file}`);
+	for (const entry of lock.runtimeLicenses ?? [])
+		if (manifest.files.find((item) => item.file === entry.file)?.sha256 !== entry.sha256)
+			throw Error(`Runtime library license does not match its pin: ${entry.file}`);
+	const excluded = (lock.runtime.excludedPaths ?? []).map((file) => `runtime/${file}/`);
+	const shipped = manifest.files.find((item) =>
+		excluded.some((prefix) => item.file.startsWith(prefix)),
+	);
+	if (shipped) throw Error(`Excluded GPU runtime file is bundled: ${shipped.file}`);
 	const listed = await listFiles(root);
 	if (listed.some((file) => file !== "manifest.json" && !names.has(file)))
 		throw Error("Unlisted asset in Ollama bundle");
@@ -297,6 +315,7 @@ export async function prepareOllamaBundle({ root, lock, modelsFrom, runtimeFrom,
 			"OLLAMA-LICENSE.txt",
 			"MODEL-LICENSE.txt",
 			"NOTICE.txt",
+			"licenses",
 		]);
 		if ((await fs.readdir(root)).some((name) => !known.has(name)))
 			throw Error("Refusing to replace an output directory containing unrelated files");
@@ -308,6 +327,12 @@ export async function prepareOllamaBundle({ root, lock, modelsFrom, runtimeFrom,
 	} else await download(lock.runtime, runtimeArchive);
 	const licenseFile = path.join(cache, "OLLAMA-LICENSE.txt");
 	await download(lock.license, licenseFile);
+	const runtimeLicenses = lock.runtimeLicenses ?? [];
+	for (const entry of runtimeLicenses) {
+		if (!safeRelative(entry.file) || !BUNDLE_PATH.test(entry.file))
+			throw Error(`Invalid runtime license path: ${entry.file}`);
+		await download(entry, path.join(cache, entry.file));
+	}
 	let modelBytes;
 	if (modelsFrom) {
 		const localManifest = path.join(
@@ -322,6 +347,13 @@ export async function prepareOllamaBundle({ root, lock, modelsFrom, runtimeFrom,
 	await fs.mkdir(stage, { recursive: true });
 	try {
 		await extractRuntime(runtimeArchive, path.join(stage, "runtime"));
+		// The whole archive matched its pin above; only then drop the GPU backends the CPU client never loads.
+		for (const excluded of lock.runtime.excludedPaths ?? []) {
+			if (!safeRelative(excluded)) throw Error(`Invalid excluded runtime path: ${excluded}`);
+			await fs.rm(path.join(stage, "runtime", excluded), { recursive: true, force: true });
+		}
+		for (const entry of runtimeLicenses)
+			await copyVerified(path.join(cache, entry.file), path.join(stage, entry.file), entry);
 		await fs.mkdir(path.dirname(path.join(stage, MODEL_MANIFEST)), { recursive: true });
 		await fs.writeFile(path.join(stage, MODEL_MANIFEST), modelBytes);
 		for (const entry of model.descriptors) {
@@ -359,7 +391,7 @@ export async function prepareOllamaBundle({ root, lock, modelsFrom, runtimeFrom,
 		await fs.copyFile(licenseFile, path.join(stage, "OLLAMA-LICENSE.txt"));
 		await fs.writeFile(
 			path.join(stage, "NOTICE.txt"),
-			`JSOX Recorder bundled local story model\nOllama ${lock.runtimeVersion}, MIT, https://github.com/ollama/ollama\nOfficial runtime archive SHA-256: ${lock.runtime.sha256}\nModel: ${lock.model.name}\nSource: ${lock.model.modelSource}\nComplete model manifest SHA-256: ${model.sha256}\nModel: Apache-2.0; registry license text accompanies this bundle.\nAcquisition: ${modelsFrom ? "exported from an existing local content-addressed Ollama model store" : "official Ollama registry over HTTPS"}.\nThe installer contains the complete runtime and model, and performs no customer model download or global Ollama installation.\nAll files from the official runtime ZIP are preserved, including its libraries and notices.\nModel provenance: ${lock.model.manifestPinProvenance}\n`,
+			`JSOX Recorder bundled local story model\nOllama ${lock.runtimeVersion}, MIT, https://github.com/ollama/ollama\nOfficial runtime archive SHA-256: ${lock.runtime.sha256}\nModel: ${lock.model.name}\nSource: ${lock.model.modelSource}\nComplete model manifest SHA-256: ${model.sha256}\nModel: Apache-2.0; registry license text accompanies this bundle.\nAcquisition: ${modelsFrom ? "exported from an existing local content-addressed Ollama model store" : "official Ollama registry over HTTPS"}.\nThe package contains the CPU runtime and the model, and performs no customer model download or global Ollama installation.\nRuntime files are copied unmodified from the official ZIP, except these GPU backends, which are removed: ${(lock.runtime.excludedPaths ?? []).join(", ") || "none"}.\nRuntime library notices: llama.cpp, its vendored code, cpp-httplib and Go in runtime/lib/ollama; ${runtimeLicenses.map((entry) => `${entry.file} for ${entry.covers}`).join("; ") || "no additional notices"}.\nModel provenance: ${lock.model.manifestPinProvenance}\n`,
 		);
 		const files = [];
 		for (const file of await listFiles(stage)) {
@@ -413,7 +445,7 @@ async function main() {
 	}
 	if (args.includes("--help")) {
 		console.log(
-			"Build machine only: node scripts/prepare-offline-ollama.mjs [--models-from <existing .ollama/models>] [--runtime-from <pinned official zip>] [--root <bundle directory>]\n--verify --root <directory> performs no network/process work. Customers install the completed offline client package; they never run this tool. Default preparation downloads the fixed official runtime and the selected model snapshot on the BUILD MACHINE. Existing valid staged bundles are reused. Full runtime ZIP is ~1.59 GB; model is ~1.4 GB. No small CPU-only ZIP has been verified.",
+			"Build machine only: node scripts/prepare-offline-ollama.mjs [--models-from <existing .ollama/models>] [--runtime-from <pinned official zip>] [--root <bundle directory>]\n--verify --root <directory> performs no network/process work. Customers install the completed offline client package; they never run this tool. Default preparation downloads the fixed official runtime and the selected model snapshot on the BUILD MACHINE. Existing valid staged bundles are reused. The full official runtime ZIP (~1.59 GB) is downloaded and verified; its GPU backends are then left out, so the bundled CPU runtime is ~0.1 GB. Model is ~1.4 GB.",
 		);
 		return;
 	}

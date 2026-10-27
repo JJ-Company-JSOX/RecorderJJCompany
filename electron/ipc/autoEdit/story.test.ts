@@ -18,7 +18,7 @@ vi.mock("./frameGrab", () => ({
 	grabFrame: fixture.grab,
 	fitSize: () => ({ width: 320, height: 180 }),
 }));
-import { generateLocalStory, parseStoryDraft } from "./story";
+import { generateBundledStory, generateLocalStory, parseStoryDraft } from "./story";
 const request = (): StoryRequest => ({
 	brief: {
 		...emptyStoryBrief(),
@@ -201,4 +201,102 @@ it("allows a silent narration slot only where the actual speech character budget
 	expect(() => parseStoryDraft(request(), { cues: [{ ...cue, text: "" }] })).toThrow(
 		"Invalid story cue",
 	);
+});
+
+const bundledModel = () => ({
+	look: vi.fn(async () =>
+		JSON.stringify({ observation: "The JSOX editor timeline with an Export button." }),
+	),
+	compose: vi.fn(async () =>
+		JSON.stringify({
+			"story-1": { stage: "Hook", title: "Edit offline", text: "Tell your story offline." },
+		}),
+	),
+});
+const runBundled = (
+	r = request(),
+	model = bundledModel(),
+	signal = new AbortController().signal,
+	onProgress = vi.fn(),
+) =>
+	generateBundledStory({
+		request: r,
+		language: "en",
+		signal,
+		model,
+		ffmpegPath: "ffmpeg",
+		ffprobePath: "ffprobe",
+		approvedPath: "APPROVED.mp4",
+		onProgress,
+	});
+it("the built-in AI describes each sampled frame, then writes one entry per slot from text, without Ollama", async () => {
+	const model = bundledModel();
+	const onProgress = vi.fn();
+	const draft = await runBundled(request(), model, new AbortController().signal, onProgress);
+	expect(fixture.grab).toHaveBeenCalledWith(
+		expect.objectContaining({ videoPath: "APPROVED.mp4", timeMs: 12345, format: "png" }),
+	);
+	expect(model.look).toHaveBeenCalledTimes(1);
+	expect((model.look.mock.calls[0] as unknown[])[0]).toEqual([Buffer.from("sample-image")]);
+	// Room for a full 240-character Chinese observation, so it is not cut off and dropped.
+	expect((model.look.mock.calls[0] as unknown[])[4]).toEqual({ maxTokens: 256 });
+	expect(onProgress).toHaveBeenCalledWith(1, 1);
+	const [instruction, question, schema] = model.compose.mock.calls[0] as unknown as [
+		string,
+		string,
+		{ required: string[]; properties: Record<string, { properties: { text: object } }> },
+	];
+	expect(instruction).toContain("exactly one entry per slot id");
+	const payload = JSON.parse(question);
+	expect(payload.brief).toMatchObject({ topic: "Show my editor", facts: "Works offline" });
+	expect(payload.screenObservations).toEqual([
+		{ id: "story-1", observation: "The JSOX editor timeline with an Export button." },
+	]);
+	expect(question).not.toContain("sample-image");
+	expect(schema.required).toEqual(["story-1"]);
+	expect(schema.properties["story-1"].properties.text).toEqual({
+		type: "string",
+		minLength: 1,
+		maxLength: 165,
+	});
+	expect(draft.cues).toEqual([
+		{
+			id: "story-1",
+			startMs: 0,
+			endMs: 10000,
+			stage: "Hook",
+			title: "Edit offline",
+			text: "Tell your story offline.",
+		},
+	]);
+	expect(fixture.inspect).not.toHaveBeenCalled();
+	expect(fixture.request).not.toHaveBeenCalled();
+});
+it("the built-in AI writes a brief-only story without decoding media when frames are off", async () => {
+	const r = request();
+	r.brief.analyzeVideo = false;
+	const model = bundledModel();
+	await runBundled(r, model);
+	expect(fixture.size).not.toHaveBeenCalled();
+	expect(fixture.grab).not.toHaveBeenCalled();
+	expect(model.look).not.toHaveBeenCalled();
+	const payload = JSON.parse((model.compose.mock.calls[0] as unknown as string[])[1]);
+	expect(payload).not.toHaveProperty("screenObservations");
+	expect(payload.evidence).toBe("User brief and notes only; video was not analyzed");
+});
+it("the built-in AI rejects a reply that drops a slot or is not JSON", async () => {
+	const dropped = bundledModel();
+	dropped.compose.mockResolvedValueOnce(JSON.stringify({}));
+	await expect(runBundled(request(), dropped)).rejects.toThrow("Invalid story cue");
+	const broken = bundledModel();
+	broken.compose.mockResolvedValueOnce('{"story-1": {"stage": "Ho');
+	await expect(runBundled(request(), broken)).rejects.toThrow("incomplete story");
+});
+it("the built-in AI starts no model work after cancellation", async () => {
+	const controller = new AbortController();
+	controller.abort();
+	const model = bundledModel();
+	await expect(runBundled(request(), model, controller.signal)).rejects.toThrow();
+	expect(model.look).not.toHaveBeenCalled();
+	expect(model.compose).not.toHaveBeenCalled();
 });

@@ -1,0 +1,5 @@
+This is the complete Windows client. All AI it uses (story writing, speech recognition,
+voice and screen reading) is included and runs on this computer.
+It never downloads models or installs another AI program.
+Update it by replacing the whole package with a newer complete package; projects and
+source media are kept.

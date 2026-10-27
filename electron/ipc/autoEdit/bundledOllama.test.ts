@@ -16,11 +16,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BundledOllamaManager, verifyBundledOllama } from "./bundledOllama";
+import officialRuntime from "./fixtures/ollama-v0.40.11-windows-amd64-files.json";
 
 const roots: string[] = [];
 const managers: BundledOllamaManager[] = [];
 const digest = (data: string) => createHash("sha256").update(data).digest("hex");
-async function fixture() {
+async function fixture(runtimeFiles: string[] = []) {
 	const directory = await mkdtemp(path.join(os.tmpdir(), "recordly-ollama-unit-"));
 	roots.push(directory);
 	const root = path.join(directory, "offline-ollama");
@@ -41,6 +42,9 @@ async function fixture() {
 		"models/manifests/registry.ollama.ai/library/qwen3/1.7b": registry,
 		[`models/blobs/sha256-${digest(blob)}`]: blob,
 		"OLLAMA-LICENSE.txt": "MIT synthetic fixture",
+		...Object.fromEntries(
+			runtimeFiles.map((file) => [`runtime/${file}`, `Synthetic copy of ${file}`]),
+		),
 	};
 	for (const [name, value] of Object.entries(content)) {
 		await mkdir(path.dirname(path.join(root, name)), { recursive: true });
@@ -75,6 +79,7 @@ async function harness(
 		idleTimeoutMs?: number;
 	} = {},
 ) {
+	const verify = vi.fn(verifyBundledOllama);
 	const files = await fixture();
 	const children: ChildProcess[] = [];
 	const launch = vi.fn(() => {
@@ -87,6 +92,7 @@ async function harness(
 		{ root: files.root, workDir: files.workDir, enabled: true, required: true },
 		{
 			launch: launch as unknown as typeof spawn,
+			verify,
 			port,
 			probe: options.probe ?? (async () => true),
 			platform: options.platform ?? "linux",
@@ -95,7 +101,7 @@ async function harness(
 		},
 	);
 	managers.push(manager);
-	return { ...files, manager, launch, port, children };
+	return { ...files, manager, launch, port, children, verify };
 }
 afterEach(async () => {
 	for (const manager of managers.splice(0)) manager.stop();
@@ -109,6 +115,13 @@ describe("bundled Ollama assets (real small files, no model inference)", () => {
 		expect(await verifyBundledOllama(root)).toEqual(manifest);
 		await writeFile(path.join(root, "runtime/ollama.exe"), "changed");
 		await expect(verifyBundledOllama(root)).rejects.toThrow(/missing or corrupt/);
+	});
+	it("accepts every file name of the pinned official Windows runtime, including libc++.dll", async () => {
+		const { root, manifest } = await fixture(officialRuntime.files);
+		expect(manifest.files.map((entry) => entry.file)).toContain(
+			"runtime/lib/ollama/libc++.dll",
+		);
+		expect(await verifyBundledOllama(root)).toEqual(manifest);
 	});
 	it("rejects traversal and extra executable/library files", async () => {
 		const { root, manifest } = await fixture();
@@ -285,6 +298,40 @@ describe("private Ollama lifecycle (spawn and readiness mocked)", () => {
 		second!.release();
 		await vi.advanceTimersByTimeAsync(25);
 		expect(h.children[0].kill).toHaveBeenCalledTimes(1);
+	});
+	it("a caller arriving during startup waits for readiness instead of using a server that is not answering yet", async () => {
+		let reportReady!: (value: boolean) => void;
+		const startup = new Promise<boolean>((resolve) => {
+			reportReady = resolve;
+		});
+		const h = await harness({ probe: async () => startup });
+		const first = h.manager.acquire("qwen3:1.7b");
+		await vi.waitFor(() => expect(h.launch).toHaveBeenCalledTimes(1));
+		let secondSettled = false;
+		const second = h.manager.acquire("qwen3:1.7b").finally(() => {
+			secondSettled = true;
+		});
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		expect(secondSettled).toBe(false);
+		reportReady(true);
+		const [a, b] = await Promise.all([first, second]);
+		expect(h.launch).toHaveBeenCalledTimes(1);
+		a!.release();
+		b!.release();
+	});
+	it("hashes an unchanged bundle once per app run, and again after an installed file changes", async () => {
+		const h = await harness();
+		const lease = await h.manager.acquire("qwen3:1.7b");
+		lease!.release();
+		await vi.waitFor(() => expect(h.children[0].kill).toHaveBeenCalledTimes(1));
+		const again = await h.manager.acquire("qwen3:1.7b");
+		again!.release();
+		await vi.waitFor(() => expect(h.children[1].kill).toHaveBeenCalledTimes(1));
+		expect(h.launch).toHaveBeenCalledTimes(2);
+		expect(h.verify).toHaveBeenCalledTimes(1);
+		await writeFile(path.join(h.root, "runtime", "ollama.exe"), "changed installed bytes");
+		await expect(h.manager.acquire("qwen3:1.7b")).rejects.toThrow(/missing or corrupt/);
+		expect(h.verify).toHaveBeenCalledTimes(2);
 	});
 	it("rechecks installed assets before starting a replacement process", async () => {
 		const h = await harness();

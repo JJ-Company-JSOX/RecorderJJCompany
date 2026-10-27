@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
-import { inspectLocalModel, LocalPlanReviewer } from "./reviewer";
+import { inspectLocalModel, LocalPlanReviewer, reviewSchema } from "./reviewer";
 
 const mock = vi.hoisted(() => ({
 	requests: [] as { hostname: string; port: number; path: string; body: string }[],
@@ -151,6 +151,19 @@ describe("local-only model adapter (mock service, no inference claim)", () => {
 		expect(mock.leases.every((model) => model === "qwen3:1.7b")).toBe(true);
 		expect(mock.releases).toBe(mock.leases.length);
 	});
+	it("turns off Qwen3 thinking for an installed 4B too, and leaves other models unchanged", async () => {
+		mock.installedName = "qwen3:4b";
+		await new LocalPlanReviewer().review(plan(), "qwen3:4b");
+		expect(
+			JSON.parse(mock.requests.find((request) => request.path === "/api/chat")!.body),
+		).toMatchObject({ think: false });
+		mock.requests.length = 0;
+		mock.installedName = "local:latest";
+		await new LocalPlanReviewer().review(plan(), "local");
+		expect(
+			JSON.parse(mock.requests.find((request) => request.path === "/api/chat")!.body),
+		).not.toHaveProperty("think");
+	});
 	it("releases private-runtime leases when model metadata validation fails", async () => {
 		mock.bundledPort = 34123;
 		mock.installedName = "qwen3:1.7b";
@@ -200,6 +213,34 @@ describe("local-only model adapter (mock service, no inference claim)", () => {
 	it("refuses AI expansion of the rule's evidence range", async () => {
 		mock.expanded = true;
 		await expect(new LocalPlanReviewer().review(plan(), "local")).rejects.toThrow("expanded");
+	});
+	it("constrains the reply to the candidates' own ids and ranges instead of plain JSON mode", async () => {
+		await new LocalPlanReviewer().review(plan(), "local");
+		const { format } = JSON.parse(mock.requests.find((r) => r.path === "/api/chat")!.body);
+		const time = { type: "integer", minimum: 1000, maximum: 2000 };
+		expect(format).toEqual({
+			type: "object",
+			additionalProperties: false,
+			properties: {
+				edits: {
+					type: "array",
+					maxItems: 1,
+					items: {
+						anyOf: [
+							{
+								type: "object",
+								additionalProperties: false,
+								properties: { id: { const: "rule-1" }, startMs: time, endMs: time },
+								required: ["id", "startMs", "endMs"],
+							},
+						],
+					},
+				},
+			},
+			required: ["edits"],
+		});
+		// No candidates: the only valid reply is an empty list.
+		expect(reviewSchema([]).properties.edits).toEqual({ type: "array", maxItems: 0 });
 	});
 	it("bounds context and output, asks Ollama to unload, and passes the cancellation signal", async () => {
 		const controller = new AbortController();

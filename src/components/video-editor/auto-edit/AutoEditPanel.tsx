@@ -33,11 +33,13 @@ import { BUNDLED_MODEL_ID, type BundledAiStatus } from "./bundledTypes";
 import { guideMessages } from "./guideMessages";
 import { interfaceMessages } from "./interfaceMessages";
 import { messages, type PlanLanguage } from "./messages";
+import type { NarrationCue, NarrationDraft } from "./narration";
 import { narrationBaselineFor } from "./narrationBaseline";
 import { narrationCaptions } from "./narrationCaptions";
 import { narrationMessages } from "./narrationMessages";
 import { narrationMoments, scheduleNarration } from "./narrationMoments";
 import { OfflineToolsPanel } from "./OfflineToolsPanel";
+import { OneClickStory, type OneClickStage } from "./OneClickStory";
 import {
 	baselineFor,
 	buildEditPlan,
@@ -68,6 +70,8 @@ import { wizardMessages } from "./wizardMessages";
 type RecognitionLanguage = "auto" | "zh" | "en" | "ms";
 const RECOGNITION_LANGUAGE_SETTING = "recordly.autoEdit.recognitionLanguage";
 const EDIT_MODE_SETTING = "recordly.autoEdit.mode";
+/** Whether the one-click voice-over card was left open on this computer. */
+const ONE_CLICK_SETTING = "recordly.autoEdit.oneClickOpen";
 type EditMode = "fast" | "speech" | "full";
 type AnalysisStage = "media" | "transcribe" | "understand" | "vision";
 function savedEditMode(): EditMode {
@@ -134,6 +138,23 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const speed = speedMessages[language];
 	const [provider, setProvider] = useState<AiProvider>(savedAiProvider);
 	const [ollamaModel, setOllamaModel] = useState<OllamaModel | null>(null);
+	// The complete client offers only the built-in AI: no Ollama mode, model check or install steps.
+	const [completeClient, setCompleteClient] = useState(false);
+	useEffect(() => {
+		let active = true;
+		void window.electronAPI
+			.getAutoEditEdition?.()
+			.then((edition) => {
+				if (!active || !edition?.completeClient) return;
+				setCompleteClient(true);
+				setProvider("builtin");
+				setOllamaModel(null);
+			})
+			.catch(() => undefined);
+		return () => {
+			active = false;
+		};
+	}, []);
 	const aiMode = aiModeCopy(language);
 	const [editMode, setEditMode] = useState<EditMode>(() =>
 		savedAiProvider() === "ollama" ? "fast" : savedEditMode(),
@@ -253,12 +274,20 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		afterBaseline: string | null;
 	} | null>(null);
 	const [undone, setUndone] = useState(false);
+	const [oneClick, setOneClick] = useState<OneClickStage>("idle");
+	const [oneClickOpen, setOneClickOpen] = useState(
+		() => loadAppSetting<unknown>(ONE_CLICK_SETTING) === true,
+	);
+	// What the timeline was before a one-click run, offered back while nothing changed since.
+	const [storyUndo, setStoryUndo] = useState<{
+		before: EditState;
+		afterBaseline: string | null;
+	} | null>(null);
+	const linesAnchor = useRef<HTMLOListElement>(null);
 	const [voiceOpen, setVoiceOpen] = useState(!!storyWorkspace?.storyMode);
 	useEffect(() => {
-		if (storyWorkspace?.storyMode) {
-			setVoiceOpen(true);
-			setProvider("ollama");
-		}
+		// The built-in AI writes stories too, so a brief no longer switches to Ollama mode.
+		if (storyWorkspace?.storyMode) setVoiceOpen(true);
 	}, [storyWorkspace?.storyMode]);
 	const [textOpen, setTextOpen] = useState(false);
 	const [textDeleted, setTextDeleted] = useState<string[]>([]);
@@ -279,6 +308,11 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	}, [applied, plan]);
 	useEffect(() => {
 		setUndoState((current) =>
+			current && current.afterBaseline === null
+				? { ...current, afterBaseline: baselineFor(state, source) }
+				: current,
+		);
+		setStoryUndo((current) =>
 			current && current.afterBaseline === null
 				? { ...current, afterBaseline: baselineFor(state, source) }
 				: current,
@@ -390,12 +424,13 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	// The Kokoro Chinese voice also says English words, so on-screen English labels can stay.
 	const mixedLanguage = !!ttsStatus?.mixedLanguage;
 	// Mirrors the main-process check: each bundled voice can only read its own script.
-	const speaks = (text: string) =>
-		narrationLanguage === "zh"
+	const speaksIn = (voice: PlanLanguage, text: string) =>
+		voice === "zh"
 			? mixedLanguage
 				? /\p{Script=Han}|[A-Za-z]/u.test(text)
 				: /\p{Script=Han}/u.test(text)
 			: /[A-Za-z]/.test(text) && !/\p{Script=Han}/u.test(text);
+	const speaks = (text: string) => speaksIn(narrationLanguage, text);
 	// Emptied lines are skipped; every remaining line must suit the chosen voice.
 	const narrationLines = (narrationDraft?.cues ?? [])
 		.map((c) => (narrationEdits[c.id] ?? c.text).trim())
@@ -408,11 +443,17 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const voiceInstalled = !!ttsStatus?.voices?.[narrationLanguage];
 	// Voices for the draft's language, or for the language the next draft will use.
 	const voiceLanguage = narrationDraft ? narrationLanguage : language;
+	/** The voice remembered for a language, or its default voice. */
+	const voiceFor = (voice: PlanLanguage) => {
+		const options = (ttsStatus?.voiceList ?? []).filter((v) => v.language === voice);
+		return (
+			options.find((v) => v.id === voiceChoice[voice]) ??
+			options.find((v) => v.default) ??
+			options[0]
+		);
+	};
 	const voiceOptions = (ttsStatus?.voiceList ?? []).filter((v) => v.language === voiceLanguage);
-	const selectedVoice =
-		voiceOptions.find((v) => v.id === voiceChoice[voiceLanguage]) ??
-		voiceOptions.find((v) => v.default) ??
-		voiceOptions[0];
+	const selectedVoice = voiceFor(voiceLanguage);
 	const chooseVoice = (id: number) => {
 		const next = { ...voiceChoice, [voiceLanguage]: id };
 		setVoiceChoice(next);
@@ -677,56 +718,72 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			if (run === generation.current) setBusy(null);
 		}
 	};
-	const narrationAudioSnapshot = () =>
+	const audioSnapshotFor = (
+		voice: PlanLanguage,
+		voiceId: number | null,
+		cues: NarrationCue[],
+		edits: Record<string, string>,
+	) =>
 		JSON.stringify([
-			narrationLanguage,
-			selectedVoice?.id ?? null,
-			(narrationDraft?.cues ?? []).map((cue) => ({
+			voice,
+			voiceId,
+			cues.map((cue) => ({
 				id: cue.id,
 				startMs: cue.startMs,
 				endMs: cue.endMs,
-				text: (narrationEdits[cue.id] ?? cue.text).trim(),
+				text: (edits[cue.id] ?? cue.text).trim(),
 			})),
 		]);
+	const narrationAudioSnapshot = () =>
+		audioSnapshotFor(
+			narrationLanguage,
+			selectedVoice?.id ?? null,
+			narrationDraft?.cues ?? [],
+			narrationEdits,
+		);
 	const voiceOutdated =
 		state.audioRegions.some((region) => region.id.startsWith("narration-")) &&
 		!!narrationDraft &&
 		audioSnapshot !== narrationAudioSnapshot();
-	const narrateBundled = async (refreshSpeech = false) => {
+	/**
+	 * Drafts the narration, or the story when `forceStory` (one click) or the story task is set.
+	 * Resolves with the draft, or null when it could not start, failed or was cancelled.
+	 */
+	const narrateBundled = async (
+		refreshSpeech = false,
+		forceStory = false,
+	): Promise<{ draft: NarrationDraft; language: PlanLanguage; baseline: string } | null> => {
+		const story = forceStory || storyMode;
 		if (provider === "ollama" && !ollamaModel) {
 			setError(aiMode.firstCheck);
-			return;
+			return null;
 		}
-		if (storyMode && provider === "ollama" && !storyBrief.topic.trim()) {
+		if (story && !storyBrief.topic.trim()) {
 			setError(storyUi.required);
-			return;
+			return null;
 		}
-		if (
-			storyMode &&
-			provider === "ollama" &&
-			!isStorySpeechTarget(storyBrief.targetSpeechSeconds)
-		) {
+		if (story && !isStorySpeechTarget(storyBrief.targetSpeechSeconds)) {
 			setError(storyUi.invalidTarget);
-			return;
+			return null;
 		}
-		if (storyMode && provider === "ollama" && briefCharacters > textBudget) {
+		if (story && briefCharacters > textBudget) {
 			setError(storyUi.tooMuchText.replace("{max}", String(textBudget)));
-			return;
+			return null;
 		}
 		if (
-			storyMode &&
-			provider === "ollama" &&
+			story &&
 			storyBrief.includeTranscript &&
 			!storyBrief.autoTranscribe &&
 			!storyTranscript.cues.length
 		) {
 			setError(storyUi.noTranscript);
-			return;
+			return null;
 		}
 		const draftScenes = currentStoryScenes;
-		const useStory = storyMode && provider === "ollama";
+		const useStory = story;
 		const voicePlan = narrationPlan(currentState.current.state);
-		if (!(useStory ? draftScenes.length : voicePlan.suggestions.length)) return;
+		if (!(useStory ? draftScenes.length : voicePlan.suggestions.length)) return null;
+		if (!forceStory) setOneClick("idle");
 		const run = ++generation.current;
 		setBusy("narrate");
 		taskTiming.start(
@@ -778,7 +835,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							if (run === generation.current) setStoryAudioStage(stage);
 						},
 					});
-					if (run !== generation.current) return;
+					if (run !== generation.current) return null;
 					if (!audio.success) {
 						setStoryAudioIssue(audio.reason);
 						throw Error(storyUi.audioErrors[audio.reason] ?? audio.message);
@@ -798,8 +855,13 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					draftScenes,
 					Math.max(0, textBudget - briefCharacters),
 				);
+				// Nothing usable: either no speech lies in the kept footage, or the brief leaves no room.
 				if (!evidence.cues.length)
-					throw Error(storyUi.tooMuchText.replace("{max}", String(textBudget)));
+					throw Error(
+						evidence.totalCues
+							? storyUi.tooMuchText.replace("{max}", String(textBudget))
+							: storyUi.audioErrors["no-speech"],
+					);
 			}
 			// A click is compared before/after its exact time (an AI zoom starts 350 ms before it);
 			// other moments are read just after they begin.
@@ -815,39 +877,35 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					...(action ? { action } : {}),
 				};
 			});
-			const result =
-				useStory && ollamaModel
+			const storyRequest = {
+				brief: storyBrief,
+				scenes: draftScenes,
+				videoPath: source,
+				style: narrationStyle,
+				...(storyBrief.includeTranscript ? { transcript: evidence.cues } : {}),
+			};
+			const result = useStory
+				? provider === "ollama" && ollamaModel
 					? await window.electronAPI.draftVideoStory(
-							{
-								brief: storyBrief,
-								scenes: draftScenes,
-								videoPath: source,
-								style: narrationStyle,
-								...(storyBrief.includeTranscript
-									? { transcript: evidence.cues }
-									: {}),
-							},
+							storyRequest,
 							ollamaModel.name,
 							draftLanguage,
 						)
-					: provider === "ollama" && ollamaModel
-						? await window.electronAPI.narrateAutoEditLocally(
-								voicePlan,
-								ollamaModel.name,
-								draftLanguage,
-								narrationStyle,
-							)
-						: await window.electronAPI.narrateAutoEditBundled(
-								voicePlan,
-								draftLanguage,
-								{
-									videoPath: source,
-									frames,
-									style: narrationStyle,
-									timelineEndMs: Math.max(1, ...clipRegions.map((c) => c.endMs)),
-								},
-							);
-			if (run !== generation.current) return;
+					: await window.electronAPI.draftVideoStoryBundled(storyRequest, draftLanguage)
+				: provider === "ollama" && ollamaModel
+					? await window.electronAPI.narrateAutoEditLocally(
+							voicePlan,
+							ollamaModel.name,
+							draftLanguage,
+							narrationStyle,
+						)
+					: await window.electronAPI.narrateAutoEditBundled(voicePlan, draftLanguage, {
+							videoPath: source,
+							frames,
+							style: narrationStyle,
+							timelineEndMs: Math.max(1, ...clipRegions.map((c) => c.endMs)),
+						});
+			if (run !== generation.current) return null;
 			if (!result.success || !result.draft) throw new Error(result.error);
 			if (
 				narrationBaselineFor(currentState.current.state, currentState.current.source) !==
@@ -863,6 +921,11 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			setTitleEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.title ?? ""])));
 			setTextAdded(false);
 			setNarrationEdits(Object.fromEntries(result.draft.cues.map((c) => [c.id, c.text])));
+			return {
+				draft: result.draft,
+				language: draftLanguage,
+				baseline: narrationBaselineFor(draftState, source),
+			};
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -874,7 +937,31 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				setBusy(null);
 			}
 		}
+		return null;
 	};
+	/** Each scene title as text at the top of its scene, replacing earlier story titles. */
+	const withStoryTitles = (
+		s: EditState,
+		cues: NarrationCue[],
+		titles: Record<string, string>,
+	): EditState["annotationRegions"] => [
+		...s.annotationRegions.filter((a) => !a.id.startsWith("story-title-")),
+		...cues
+			.filter((c) => titles[c.id]?.trim())
+			.map((c) => ({
+				id: `story-title-${c.id}`,
+				startMs: c.startMs,
+				endMs: c.endMs,
+				type: "text" as const,
+				content: titles[c.id].trim(),
+				textContent: titles[c.id].trim(),
+				zIndex: Math.max(0, ...s.annotationRegions.map((a) => a.zIndex)) + 1,
+				trackIndex: Math.max(-1, ...s.annotationRegions.map((a) => a.trackIndex ?? 0)) + 1,
+				position: { x: 10, y: 8 },
+				size: { width: 80, height: 12 },
+				style: { ...DEFAULT_ANNOTATION_STYLE },
+			})),
+	];
 	const addStoryText = (titles: boolean) => {
 		if (!narrationDraft || !narrationApproved) return;
 		try {
@@ -891,36 +978,11 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			if (titles) {
 				onApply({
 					...latest.state,
-					annotationRegions: [
-						...latest.state.annotationRegions.filter(
-							(a) => !a.id.startsWith("story-title-"),
-						),
-						...narrationDraft.cues
-							.filter((c) => titleEdits[c.id]?.trim())
-							.map((c) => ({
-								id: `story-title-${c.id}`,
-								startMs: c.startMs,
-								endMs: c.endMs,
-								type: "text" as const,
-								content: titleEdits[c.id].trim(),
-								textContent: titleEdits[c.id].trim(),
-								zIndex:
-									Math.max(
-										0,
-										...latest.state.annotationRegions.map((a) => a.zIndex),
-									) + 1,
-								trackIndex:
-									Math.max(
-										-1,
-										...latest.state.annotationRegions.map(
-											(a) => a.trackIndex ?? 0,
-										),
-									) + 1,
-								position: { x: 10, y: 8 },
-								size: { width: 80, height: 12 },
-								style: { ...DEFAULT_ANNOTATION_STYLE },
-							})),
-					],
+					annotationRegions: withStoryTitles(
+						latest.state,
+						narrationDraft.cues,
+						titleEdits,
+					),
 				});
 			} else {
 				const base = {
@@ -952,8 +1014,22 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			setError(e instanceof Error ? e.message : m.error);
 		}
 	};
-	const synthesizeNarration = async () => {
-		if (!narrationDraft || !narrationApproved) return;
+	/**
+	 * Records the voice-over for a draft and places it with its subtitles. For one click the
+	 * scene titles go in the same change, so a single undo removes all of it.
+	 */
+	const speakNarration = async (input: {
+		draft: NarrationDraft;
+		edits: Record<string, string>;
+		language: PlanLanguage;
+		voiceId: number | undefined;
+		baseline: string | null;
+		story: boolean;
+		briefChanged: boolean;
+		titles?: Record<string, string>;
+		undoable?: boolean;
+	}): Promise<boolean> => {
+		const { draft, edits, language: voice, voiceId } = input;
 		const run = ++generation.current;
 		setBusy("synthesize");
 		setError("");
@@ -961,51 +1037,42 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			const { state: latestState } = currentState.current;
 			// Lines were placed on the timeline as it was when drafted.
 			if (
-				storyDraft &&
-				!validStoryTiming(narrationDraft.cues, currentState.current.state.clipRegions)
+				input.story &&
+				!validStoryTiming(draft.cues, currentState.current.state.clipRegions)
 			)
 				throw Error(storyUi.timing);
-			if (storyDraft && JSON.stringify(storyBrief) !== draftBrief)
-				throw Error(storyUi.briefChanged);
-			if (narrationBaselineFor(latestState, source) !== narrationBaseline)
-				throw Error(n.stale);
-			const cues = narrationDraft.cues
-				.map((cue) => ({ id: cue.id, text: (narrationEdits[cue.id] ?? cue.text).trim() }))
+			if (input.briefChanged) throw Error(storyUi.briefChanged);
+			if (narrationBaselineFor(latestState, source) !== input.baseline) throw Error(n.stale);
+			const cues = draft.cues
+				.map((cue) => ({ id: cue.id, text: (edits[cue.id] ?? cue.text).trim() }))
 				.filter((cue) => cue.text);
 			const currentClips = new Map(
 				cues.flatMap((cue) => {
-					const found = audioCache.current.get(cue, narrationLanguage, selectedVoice?.id);
+					const found = audioCache.current.get(cue, voice, voiceId);
 					return found ? [[cue.id, found] as const] : [];
 				}),
 			);
-			const missing = cues.filter(
-				(cue) => !audioCache.current.get(cue, narrationLanguage, selectedVoice?.id),
-			);
+			const missing = cues.filter((cue) => !audioCache.current.get(cue, voice, voiceId));
 			taskTiming.start(
 				JSON.stringify([
 					"speech",
-					narrationLanguage,
-					selectedVoice?.id,
+					voice,
+					voiceId,
 					workloadBucket(missing.reduce((sum, cue) => sum + cue.text.length, 0)),
 				]),
 			);
 			if (missing.length) {
 				const synthesized = await window.electronAPI.synthesizeAutoEditNarration(
 					missing,
-					narrationLanguage,
-					selectedVoice?.id,
+					voice,
+					voiceId,
 				);
-				if (run !== generation.current) return;
+				if (run !== generation.current) return false;
 				if (!synthesized.success || !synthesized.clips) throw new Error(synthesized.error);
 				for (const clip of synthesized.clips) currentClips.set(clip.id, clip);
-				audioCache.current.remember(
-					missing,
-					synthesized.clips,
-					narrationLanguage,
-					selectedVoice?.id,
-				);
+				audioCache.current.remember(missing, synthesized.clips, voice, voiceId);
 			}
-			if (run !== generation.current) return;
+			if (run !== generation.current) return false;
 			const result = {
 				clips: cues.flatMap((cue) => {
 					const clip = currentClips.get(cue.id);
@@ -1014,16 +1081,16 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			};
 			if (
 				narrationBaselineFor(currentState.current.state, currentState.current.source) !==
-				narrationBaseline
+				input.baseline
 			)
 				throw Error(n.stale);
 			const base = withoutNarration(currentState.current.state);
 			const trackIndex = Math.max(-1, ...base.audioRegions.map((r) => r.trackIndex ?? 0)) + 1;
 			// Each line waits for the previous one and none runs past the end of the video.
-			const { placed, dropped } = storyDraft
+			const { placed, dropped } = input.story
 				? (() => {
 						try {
-							return placeStoryAudio(result.clips!, narrationDraft.cues);
+							return placeStoryAudio(result.clips, draft.cues);
 						} catch (e) {
 							throw Error(
 								`${storyUi.tooLong} ${e instanceof Error ? e.message : ""}`,
@@ -1032,7 +1099,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					})()
 				: scheduleNarration(
 						result.clips.flatMap((clip) => {
-							const cue = narrationDraft.cues.find((c) => c.id === clip.id);
+							const cue = draft.cues.find((c) => c.id === clip.id);
 							return cue ? [{ ...clip, startMs: cue.startMs }] : [];
 						}),
 						Math.max(0, ...base.clipRegions.map((c) => c.endMs)),
@@ -1056,10 +1123,16 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					placed.flatMap((clip) => (clip.chunks ? [[clip.id, clip.chunks]] : [])),
 				),
 			);
+			// Recorded with the change itself, so the editor's applied state is what it compares to.
+			if (input.undoable)
+				setStoryUndo({ before: currentState.current.state, afterBaseline: null });
 			onApply({
 				...base,
 				audioRegions: [...base.audioRegions, ...regions],
 				autoCaptions: [...base.autoCaptions, ...captions.cues],
+				...(input.titles
+					? { annotationRegions: withStoryTitles(base, draft.cues, input.titles) }
+					: {}),
 			});
 			taskTiming.finish(true);
 			setNarrationBaseline(narrationBaselineFor(base, source));
@@ -1071,7 +1144,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			});
 			setNarrationApproved(false);
 			setNarrationAudioReady(true);
-			setAudioSnapshot(narrationAudioSnapshot());
+			setAudioSnapshot(audioSnapshotFor(voice, voiceId ?? null, draft.cues, edits));
+			return true;
 		} catch (e) {
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
@@ -1081,6 +1155,125 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				setBusy(null);
 			}
 		}
+		return false;
+	};
+	const synthesizeNarration = async () => {
+		if (!narrationDraft || !narrationApproved) return;
+		setOneClick("idle");
+		await speakNarration({
+			draft: narrationDraft,
+			edits: narrationEdits,
+			language: narrationLanguage,
+			voiceId: selectedVoice?.id,
+			baseline: narrationBaseline,
+			story: storyDraft,
+			briefChanged: storyDraft && JSON.stringify(storyBrief) !== draftBrief,
+		});
+	};
+	/** One click: the story from the topic, its voice-over, then its subtitles and titles. */
+	const runOneClick = async () => {
+		setError("");
+		setStoryUndo(null);
+		setOneClick("script");
+		const drafted = await narrateBundled(false, true);
+		if (!drafted) {
+			setOneClick("idle");
+			return;
+		}
+		// The voice-over section opens with the written lines while they are recorded.
+		setStoryMode(true);
+		const lines = drafted.draft.cues.map((c) => c.text.trim()).filter(Boolean);
+		if (!lines.length || !lines.every((line) => speaksIn(drafted.language, line))) {
+			setError(
+				!lines.length
+					? n.empty
+					: mixedLanguage && drafted.language === "zh"
+						? n.wrongLanguageMixed
+						: w.voiceWrongLanguage[drafted.language],
+			);
+			setOneClick("idle");
+			return;
+		}
+		setOneClick("voice");
+		const spoken = await speakNarration({
+			draft: drafted.draft,
+			edits: Object.fromEntries(drafted.draft.cues.map((c) => [c.id, c.text])),
+			language: drafted.language,
+			voiceId: voiceFor(drafted.language)?.id,
+			baseline: drafted.baseline,
+			story: true,
+			briefChanged: false,
+			titles: Object.fromEntries(drafted.draft.cues.map((c) => [c.id, c.title ?? ""])),
+			undoable: true,
+		});
+		if (!spoken) {
+			setOneClick("idle");
+			return;
+		}
+		setTextAdded(true);
+		setOneClick("done");
+	};
+	const cancelOneClick = () => {
+		generation.current++;
+		speechAbort.current?.abort();
+		taskTiming.finish(false);
+		void window.electronAPI.cancelAutoEditAnalysis?.();
+		setBusy(null);
+		setOneClick("idle");
+	};
+	const canUndoStory = !!storyUndo && storyUndo.afterBaseline === baselineFor(state, source);
+	const undoStory = () => {
+		if (!storyUndo || !canUndoStory) return;
+		onApply(storyUndo.before);
+		setStoryUndo(null);
+		setOneClick("idle");
+		setNarrationAudioReady(false);
+		setTextAdded(false);
+	};
+	const editStory = () => {
+		setStoryMode(true);
+		setVoiceOpen(true);
+		requestAnimationFrame(() => {
+			linesAnchor.current?.scrollIntoView({ block: "start" });
+			linesAnchor.current?.querySelector("textarea")?.focus({ preventScroll: true });
+		});
+	};
+	// Why one click cannot start yet; an empty topic is explained when the button is pressed.
+	const oneClickBlocker =
+		(noVideo
+			? setup.noVideo
+			: provider === "ollama"
+				? ollamaModel
+					? null
+					: aiMode.firstCheck
+				: statusChecking
+					? ui.checking
+					: bundledStatus?.available
+						? null
+						: m.offlineMissing) ??
+		(ttsStatus && !ttsStatus.voices?.[language] ? w.voiceMissing[language] : null);
+	const oneClickProps = {
+		language,
+		stage: oneClick,
+		busy: !!busy,
+		open: oneClickOpen,
+		onOpen: (value: boolean) => {
+			setOneClickOpen(value);
+			saveAppSetting(ONE_CLICK_SETTING, value);
+		},
+		topic: storyBrief.topic,
+		onTopic: (topic: string) => setStoryBrief((v) => ({ ...v, topic })),
+		lookAtVideo: storyBrief.analyzeVideo,
+		onLookAtVideo: (analyzeVideo: boolean) => setStoryBrief((v) => ({ ...v, analyzeVideo })),
+		onLanguage: setLanguage,
+		frames: progress,
+		blocker: oneClickBlocker,
+		generateLabel: n.generateAudio,
+		canUndo: canUndoStory,
+		onStart: () => void runOneClick(),
+		onCancel: cancelOneClick,
+		onUndo: undoStory,
+		onEdit: editStory,
 	};
 	const stepIndex = voiceOpen
 		? 3
@@ -1115,6 +1308,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		!!undoState && !undone && undoState.afterBaseline === baselineFor(state, source);
 	// Moments already avoid real speech, so a narrated recording only gets lines in its pauses.
 	const voiceActions = narrationPlan(state).suggestions.length;
+	// A story cuts its own scenes from the clips and does not need the tutorial's narration
+	// moments, which a video whose original speech fills the timeline does not have.
+	const openVoice = () => {
+		if (!voiceActions) setStoryMode(true);
+		setVoiceOpen(true);
+	};
 	const translateText = async () => {
 		const before = currentState.current.state;
 		const lines = before.autoCaptions
@@ -1234,6 +1433,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				data-auto-edit-scroll
 				className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4"
 			>
+				{showStart && <OneClickStory {...oneClickProps} />}
 				{showStart && (
 					<section className="space-y-4" aria-label={m.offlineTitle}>
 						<div>
@@ -1265,24 +1465,26 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								{ui.actionHelp}
 							</p>
 						)}
-						<div ref={modelSettingsAnchor}>
-							<AiModeSettings
-								language={language}
-								provider={provider}
-								modelInfo={ollamaModel}
-								disabled={!!busy}
-								onModel={setOllamaModel}
-								onProvider={(value) => {
-									generation.current++;
-									setProvider(value);
-									saveAiProvider(value);
-									setOllamaModel(null);
-									setEditMode("fast");
-									saveAppSetting(EDIT_MODE_SETTING, "fast");
-									setError("");
-								}}
-							/>
-						</div>
+						{!completeClient && (
+							<div ref={modelSettingsAnchor}>
+								<AiModeSettings
+									language={language}
+									provider={provider}
+									modelInfo={ollamaModel}
+									disabled={!!busy}
+									onModel={setOllamaModel}
+									onProvider={(value) => {
+										generation.current++;
+										setProvider(value);
+										saveAiProvider(value);
+										setOllamaModel(null);
+										setEditMode("fast");
+										saveAppSetting(EDIT_MODE_SETTING, "fast");
+										setError("");
+									}}
+								/>
+							</div>
+						)}
 						<label className="flex flex-col gap-2 text-sm">
 							<span>{speed.mode}</span>
 							<select
@@ -1451,12 +1653,12 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								</span>
 							</label>
 						</div>
-						{canNarrate && voiceActions > 0 && (
+						{canNarrate && (
 							<Button
 								variant="secondary"
 								className="w-full"
 								disabled={!!busy}
-								onClick={() => setVoiceOpen(true)}
+								onClick={openVoice}
 							>
 								{w.voiceEntry}
 							</Button>
@@ -1661,8 +1863,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							<p className="text-sm">{ui.next}</p>
 						)}
 						<div className="flex flex-wrap gap-2">
-							{!undone && canNarrate && voiceActions > 0 && (
-								<Button onClick={() => setVoiceOpen(true)}>{w.voiceNext}</Button>
+							{!undone && canNarrate && (
+								<Button onClick={openVoice}>{w.voiceNext}</Button>
 							)}
 							{lines.length > 0 && (
 								<Button variant="secondary" onClick={openTextEdit}>
@@ -1813,42 +2015,51 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								</Button>
 							)}
 							<p className="text-sm text-muted-foreground">{w.voiceIntro}</p>
+							{provider !== "ollama" && bundledStatus && !bundledStatus.available && (
+								<p className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-sm">
+									{m.offlineMissing}
+								</p>
+							)}
 							{ttsStatus && !ttsStatus.voices?.[language] && (
 								<p className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-sm">
 									{w.voiceMissing[language]}
 								</p>
 							)}
 						</div>
-						{provider === "ollama" && (
-							<>
-								<label className="flex flex-col gap-2 text-sm">
-									{storyUi.mode}
-									<select
-										disabled={!!busy}
-										value={storyMode ? "story" : "tutorial"}
-										onChange={(e) => setStoryMode(e.target.value === "story")}
-										className="rounded-lg border bg-background p-2"
-									>
-										<option value="tutorial">{storyUi.tutorial}</option>
-										<option value="story">{storyUi.story}</option>
-									</select>
-								</label>
-								{storyMode && (
-									<StoryBriefEditor
-										value={storyBrief}
-										transcriptInfo={storyTranscript}
-										onOpenCaptions={onOpenCaptions}
-										onChange={setStoryBrief}
-										language={language}
-										disabled={!!busy}
-										visionAvailable={
-											!!ollamaModel?.capabilities?.includes("vision")
-										}
-									/>
-								)}
-							</>
+						{storyMode && (
+							<OneClickStory {...oneClickProps} compact open onOpen={undefined} />
 						)}
-						{voiceActions === 0 && !(provider === "ollama" && storyMode) ? (
+						<label className="flex flex-col gap-2 text-sm">
+							{storyUi.mode}
+							<select
+								disabled={!!busy}
+								value={storyMode ? "story" : "tutorial"}
+								onChange={(e) => setStoryMode(e.target.value === "story")}
+								className="rounded-lg border bg-background p-2"
+							>
+								<option value="tutorial">{storyUi.tutorial}</option>
+								<option value="story">{storyUi.story}</option>
+							</select>
+						</label>
+						{storyMode && (
+							<StoryBriefEditor
+								value={storyBrief}
+								transcriptInfo={storyTranscript}
+								onOpenCaptions={onOpenCaptions}
+								onChange={setStoryBrief}
+								language={language}
+								disabled={!!busy}
+								// The built-in AI has its own vision model; an Ollama model is known once checked.
+								visionAvailable={
+									provider !== "ollama"
+										? true
+										: ollamaModel
+											? !!ollamaModel.capabilities?.includes("vision")
+											: null
+								}
+							/>
+						)}
+						{voiceActions === 0 && !storyMode ? (
 							<p className="rounded-lg border p-3 text-sm">{w.voiceNothing}</p>
 						) : (
 							<div className="space-y-3">
@@ -1867,7 +2078,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 										{(["concise", "tutorial", "detailed"] as const).map(
 											(style) => (
 												<option key={style} value={style}>
-													{provider === "ollama" && storyMode
+													{storyMode
 														? storyUi.styles[style]
 														: n.styles[style]}
 												</option>
@@ -1918,9 +2129,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									>
 										{busy === "narrate"
 											? progress.total && progress.completed < progress.total
-												? `${provider === "ollama" && storyMode ? storyUi.frames : n.looking} ${progress.completed}/${progress.total}`
+												? `${storyMode ? storyUi.frames : n.looking} ${progress.completed}/${progress.total}`
 												: n.busy
-											: provider === "ollama" && storyMode
+											: storyMode
 												? storyBrief.autoTranscribe
 													? storyUi.analyzeAndDraft
 													: storyUi.draft
@@ -2053,7 +2264,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									<p className="text-sm">
 										{n.editHint} {n.blankHint}
 									</p>
-									<ol className="space-y-2">
+									<ol ref={linesAnchor} className="space-y-2">
 										{narrationDraft.cues.map((cue) => (
 											<li key={cue.id} className="flex items-start gap-2">
 												<Button
@@ -2344,8 +2555,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								{ui.noChanges}
 							</p>
 						)}
-						{canNarrate && voiceActions > 0 && (
-							<Button className="w-full" onClick={() => setVoiceOpen(true)}>
+						{canNarrate && (
+							<Button className="w-full" onClick={openVoice}>
 								{w.voiceEntry}
 							</Button>
 						)}

@@ -44,15 +44,16 @@ const packages = Object.entries(scripts)
 					!!resource.filter?.includes("tts-kokoro/**"),
 			),
 			ocr: resources.some((resource) => resource.from === "vendor/offline-ai/win32-x64/ocr"),
-			ollama: resources.some(
+			storyModel: resources.some(
 				(resource) =>
-					resource.from === "vendor/offline-ollama/win32-x64" &&
-					resource.to === "offline-ollama",
+					resource.from === "vendor/offline-ai/win32-x64" &&
+					!!resource.filter?.includes("*.gguf"),
 			),
-			ollamaRequired: resources.some(
+			ollama: resources.some((resource) => resource.from.includes("offline-ollama")),
+			clientMarker: resources.some(
 				(resource) =>
-					resource.from === "build/offline-ollama-required.txt" &&
-					resource.to === "offline-ollama-required.txt",
+					resource.from === "build/complete-client.txt" &&
+					resource.to === "complete-client.txt",
 			),
 		};
 	});
@@ -77,12 +78,29 @@ describe("Windows packaging gates", () => {
 				expect(edition.after, edition.name).toContain("npm run smoke:packaged-binaries");
 		}
 	});
-	it("ships the default model and runtime in every complete client edition and verifies before packaging", () => {
+	it("ships the built-in story model, and no separate Ollama, in every complete edition", () => {
 		for (const edition of packages.filter((entry) => entry.voice && entry.ocr)) {
-			expect(edition.ollama, edition.name).toBe(true);
-			expect(edition.ollamaRequired, edition.name).toBe(true);
-			expect(edition.before, edition.name).toContain("npm run verify:offline-ollama");
+			expect(edition.storyModel, edition.name).toBe(true);
+			expect(edition.ollama, edition.name).toBe(false);
+			expect(edition.before, edition.name).toContain("npm run verify:offline-ai");
 			expect(edition.after, edition.name).toContain("npm run smoke:packaged-binaries");
+		}
+		// The marker hides Ollama mode and keeps the ZIP away from the NSIS update feed.
+		expect(packages.find((entry) => entry.name === "package:win:client")?.clientMarker).toBe(
+			true,
+		);
+	});
+	it("packs every multi-GB complete edition as ZIP only, as electron-builder resolves it", async () => {
+		// electron-builder's own loader, so parent-config array merging is applied exactly as in a build.
+		const { getConfig } = await import("app-builder-lib/out/util/config/config");
+		const { Lazy } = await import("lazy-val");
+		const packageJson = new Lazy(async () =>
+			JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")),
+		);
+		for (const edition of packages.filter((entry) => entry.voice && entry.ocr)) {
+			const config = scripts[edition.name].match(/electron-builder --config (\S+)/)![1];
+			const resolved = await getConfig(root, config, null, packageJson);
+			expect(resolved.win?.target, edition.name).toBe("zip");
 		}
 	});
 	it("routes the normal Windows build through the complete client edition", () => {

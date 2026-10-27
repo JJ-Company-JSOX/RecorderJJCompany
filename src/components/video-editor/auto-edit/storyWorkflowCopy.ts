@@ -16,7 +16,7 @@ export const storyWorkflowCopy = {
 			"Narration goal: {wanted} s · Footage: {available} s · Script pacing budget: {budget} s. This does not trim or extend the video; final voice length depends on synthesis.",
 		cpuPreset: "Use lightweight CPU settings",
 		cpuInfo:
-			"For 16 GB RAM without a dedicated GPU: use speech plus text/notes first. Visual analysis is slower on CPU. Keep your installed text model; optionally install qwen3:1.7b yourself if needed. No video-generation model or paid API is used.",
+			"For 16 GB RAM without a dedicated GPU: use speech plus text/notes first. Visual analysis is slower on CPU. Everything runs on this computer with the included AI; nothing extra is installed, and no video-generation model or paid API is used.",
 		required:
 			"Enter a creative request or topic first. Product facts and scene notes can be added below.",
 		audioStages: {
@@ -62,7 +62,7 @@ export const storyWorkflowCopy = {
 			"旁白目标：{wanted} 秒 · 素材：{available} 秒 · 文案节奏预算：{budget} 秒。此设置不会剪短或延长视频；实际配音长度以合成为准。",
 		cpuPreset: "使用轻量 CPU 设置",
 		cpuInfo:
-			"适合 16GB 内存、无独立显卡：优先用原声文字和素材说明。CPU 看画面会较慢。可继续使用已有文字模型，仍慢时再自行安装 qwen3:1.7b。不使用视频生成模型或付费 API。",
+			"适合 16GB 内存、无独立显卡：优先用原声文字和素材说明。CPU 看画面会较慢。全部在这台电脑上用内置 AI 完成，不需要另外安装，也不使用视频生成模型或付费 API。",
 		required: "请先填写创作要求或主题，产品事实和素材说明可在下方补充。",
 		audioStages: {
 			"checking-model": "正在检查本地语音模型",
@@ -104,7 +104,7 @@ export const storyWorkflowCopy = {
 			"Sasaran: {wanted} s · Rakaman: {available} s · Bajet skrip: {budget} s. Ini tidak memotong atau memanjangkan video; tempoh suara mengikut sintesis.",
 		cpuPreset: "Gunakan tetapan CPU ringan",
 		cpuInfo:
-			"Untuk RAM16GB tanpa GPU khusus: utamakan teks suara dan nota. Analisis imej CPU lebih perlahan. Gunakan model teks terpasang; qwen3:1.7b boleh dipasang sendiri jika perlu. Tiada model penjana video atau API berbayar.",
+			"Untuk RAM16GB tanpa GPU khusus: utamakan teks suara dan nota. Analisis imej CPU lebih perlahan. Semuanya berjalan pada komputer ini dengan AI terbina dalam; tiada pemasangan tambahan, model penjana video atau API berbayar.",
 		required:
 			"Isi permintaan kreatif atau topik dahulu. Fakta produk dan nota boleh ditambah di bawah.",
 		audioStages: {

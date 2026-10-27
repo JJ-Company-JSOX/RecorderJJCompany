@@ -1,5 +1,7 @@
 # 默认 Qwen3 1.7B 与完整 Windows 客户端 — 2026-10-26
 
+> **2026-10-27 更新**：客户版不再打包 Ollama 和 qwen3:1.7b。故事稿改由 App 已内置的 Qwen3-VL-2B（llama.cpp）编写，客户看不到 Ollama 模式，安装包少约 3.6 GB。Ollama 仅保留为开发者可选的“Ollama 高级模式”。见 [故事稿改用内置 AI](feature-built-in-story-2026-10-27.md)。下文是 10-26 的原始设计记录。
+
 本轮把 Ollama 的默认文字模型改为 `qwen3:1.7b`，并把运行程序及模型接入现有 Windows 客户端打包流程。沿用现有录制、故事、配音、字幕与导出实现，没有付费 API、新的录制器或导出器。
 
 ## 顾客体验
@@ -17,7 +19,7 @@
 
 使用 ZIP／ZIP64 保留全部模型，避免假定一个普通 NSIS 自解压文件能承载多 GB 的完整资源。本轮没有制作该真实 ZIP，也没有实测最终大小。
 
-已核查的官方 Ollama v0.40.11 Windows archive 为 **1,586,356,606 bytes**（约 1.59 GB 下载），SHA-256 `bda4a493ba8a7c24d57263cd843cd68cee84f44aed4299eeed532acad7eda12a`；MIT LICENSE 为 1058 bytes，SHA-256 `5934ed2ce0d15154bcdb9c85203210abac0da4314af34081e36df4599f90b226`。为避免误删依赖，保留官方 archive 的全部库和声明，未宣称已经验证较小的 CPU 专用裁剪包。
+已核查的官方 Ollama v0.40.11 Windows archive 为 **1,586,356,606 bytes**（约 1.59 GB 下载），SHA-256 `bda4a493ba8a7c24d57263cd843cd68cee84f44aed4299eeed532acad7eda12a`；MIT LICENSE 为 1058 bytes，SHA-256 `5934ed2ce0d15154bcdb9c85203210abac0da4314af34081e36df4599f90b226`。解压后 2.23 GB，其中 2.15 GB 是 GPU 后端（`lib/ollama/cuda_v12` 1.17 GB、`cuda_v13` 0.94 GB、`vulkan` 0.04 GB），而且 archive 没有附带 NVIDIA CUDA 与 Microsoft VC++ 运行库的许可证文本。客户端只用 CPU，所以准备流程先校验完整 archive，再去掉这三个目录（锁文件 `runtime.excludedPaths`），CPU 运行程序约 0.1 GB。2026-10-26 审计补充：去掉 GPU 后端后的真实 CPU 推理尚未在 Windows 上验证。
 
 1.7B 模型在用户的实际 `ollama list` 中显示约 1.4 GB；它之外，完整客户端仍含原有视觉、语音识别和配音资产。因此最终 ZIP 会明显大于单个模型，构建和解压均需足够磁盘空间；这里不提供未测量的体积或安装时间保证。
 
@@ -58,7 +60,7 @@ Windows build/release workflow 改为在构建机准备这些资源并调用完�
 
 ## 许可证与尚未验证的来源
 
-Ollama 主程序 MIT、Qwen3 权重 Apache-2.0；准备流程保留实际模型 license 层、固定 Ollama LICENSE 及官方 archive 里的所有依赖声明。不能把全部二进制依赖都标为 MIT；原有 eSpeak NG、FFmpeg 等分发义务继续适用。
+Ollama 主程序 MIT、Qwen3 权重 Apache-2.0；准备流程保留实际模型 license 层、固定 Ollama LICENSE、CPU 运行程序自带的 llama.cpp／cpp-httplib／Go 声明，并按锁文件补入 LLVM（libc++、libunwind、libomp）与 mingw-w64 winpthreads 的许可证原文（`licenses/`）。不能把全部二进制依赖都标为 MIT；原有 eSpeak NG、FFmpeg 等分发义务继续适用。
 
 官方模型 registry 在本环境返回 HTTP 403。锁文件诚实记录用户实际已安装的 manifest ID 前缀 `8f68893c685c`，没有编造独立核查的完整 upstream SHA。准备时验证每个内容寻址 blob 的完整 SHA-256，并将完整 manifest digest 记入 bundle 收据。**公开分发前，须在可访问的构建机独立核对该模型的完整官方 manifest digest 并补全锁定值**；本轮的来源前缀不能冒充完整不可变上游 pin。
 
@@ -73,4 +75,4 @@ Ollama 主程序 MIT、Qwen3 权重 Apache-2.0；准备流程保留实际模型 
 
 日志：`/tmp/recordly-qwen-client-unit-final.log`、`/tmp/recordly-qwen-client-updater-final.log`、`/tmp/recordly-qwen-client-ui.log`、`/tmp/recordly-qwen-client-build-final.log`、`/tmp/recordly-qwen-client-format.log`、`/tmp/recordly-client-release-staging.log`、`/tmp/recordly-client-missing-assets-check.log`。测试跳过、原生 Windows、真实模型与下载路径的限制不计为通过。
 
-待做：在 Windows 构建机准备真实固定 runtime 与模型、补全独立模型 manifest pin、构建完整 ZIP；再在干净 Windows 16 GB／CPU 机器断网测试检查模型、写稿、配音、保存恢复、导出，以及取消／退出无孤儿进程。需要实测启动哈希扫描和内存峰值；目前每个私有服务器生命周期校验一次全部资产，空闲 60 秒后退出，下次使用会重新校验。没有在此环境生成可供顾客下载的新 Windows 成品。
+待做：在 Windows 构建机准备真实固定 runtime 与模型、补全独立模型 manifest pin、构建完整 ZIP；再在干净 Windows 16 GB／CPU 机器断网测试检查模型、写稿、配音、保存恢复、导出，以及取消／退出无孤儿进程。需要实测启动哈希扫描和内存峰值；现在每次运行 App 只在第一次启动私有服务器时完整哈希；文件的大小、修改时间或变更时间有任何变化才重新哈希。空闲 5 分钟后退出。没有在此环境生成可供顾客下载的新 Windows 成品。

@@ -29,13 +29,14 @@
   ],
   "win": {
     "signAndEditExecutable": false,
-    "artifactName": "Jsox-Recorder-Offline-AI-${version}-${arch}.${ext}"
+    "artifactName": "Jsox-Recorder-Offline-AI-${version}-${arch}.${ext}",
+    // The bundled models, speech, voice and OCR come to well over 2 GB, beyond NSIS.
+    // A string replaces the parent's NSIS target instead of being appended to it.
+    "target": "zip"
   },
   "nsis": { "shortcutName": "Jsox Recorder Offline AI" },
   "extraResources": [
     { "from": "build/offline-ai-preview.txt", "to": "offline-ai-preview.txt" },
-    { "from": "build/offline-ollama-required.txt", "to": "offline-ollama-required.txt" },
-    { "from": "vendor/offline-ollama/win32-x64", "to": "offline-ollama" },
     { "from": "LICENSE.md", "to": "LICENSE-AGPL-3.0.txt" },
     {
       "from": "vendor/offline-ai/win32-x64",

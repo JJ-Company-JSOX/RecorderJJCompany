@@ -283,6 +283,8 @@ interface Window {
 			info?: import("./ipc/autoEdit/reviewer").LocalModelInfo;
 			error?: string;
 		}>;
+		/** The complete client ZIP: only the built-in AI, no Ollama mode. */
+		getAutoEditEdition?: () => Promise<{ completeClient: boolean }>;
 		analyzeAutoEdit: (videoPath: string) => Promise<{
 			success: boolean;
 			evidence?: import("../src/components/video-editor/auto-edit/plan").MediaEvidence;
@@ -300,6 +302,15 @@ interface Window {
 		draftVideoStory: (
 			request: import("../src/components/video-editor/auto-edit/story").StoryRequest,
 			model: string,
+			language: "zh" | "en" | "ms",
+		) => Promise<{
+			success: boolean;
+			draft?: import("../src/components/video-editor/auto-edit/narration").NarrationDraft;
+			error?: string;
+		}>;
+		/** The same story written by the bundled offline AI (llama-server with Qwen3-VL). */
+		draftVideoStoryBundled: (
+			request: import("../src/components/video-editor/auto-edit/story").StoryRequest,
 			language: "zh" | "en" | "ms",
 		) => Promise<{
 			success: boolean;

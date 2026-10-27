@@ -174,7 +174,8 @@ export function normalizeStoryWorkspace(
 		facts: boundedText(rawBrief.facts, 2000),
 		ending: boundedText(rawBrief.ending, 2000),
 		notes: boundedText(rawBrief.notes, 2000),
-		analyzeVideo: typeof rawBrief.analyzeVideo === "boolean" ? rawBrief.analyzeVideo : true,
+		// A missing value takes today's default: frames are analyzed only when asked for.
+		analyzeVideo: rawBrief.analyzeVideo === true,
 	};
 	// Optional transcript consent is part of the brief, and is never enabled by an old project.
 	Object.assign(brief, {

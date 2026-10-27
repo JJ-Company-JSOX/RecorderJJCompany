@@ -38,8 +38,8 @@ export const storyCopy = {
 		video: "Analyze sampled video frames",
 		help: "Tell AI what this video is for. It plans a story across up to eight footage sections, with narration and on-screen titles. Review every claim before using it.",
 		privacy:
-			"Frame analysis uses a local vision model and up to eight small frames, not continuous video or recorded speech. Text-only models use your brief, scene notes and explicitly enabled subtitle context. Raw recorded audio is not sent to Ollama. Original audio is kept; mute or lower it on the timeline if you want to replace it.",
-		vision: "The selected model only understands text. Choose and check a vision model in AI mode, or turn off frame analysis. CPU frame analysis can be slow.",
+			"Frame analysis uses a local vision model and up to eight small frames, not continuous video or recorded speech. Text-only models use your brief, scene notes and explicitly enabled subtitle context. Raw recorded audio is never sent to the AI model. Original audio is kept; mute or lower it on the timeline if you want to replace it.",
+		vision: "The selected model only understands text, so it cannot analyze frames. Turn off frame analysis; the story then uses your brief, scene notes and original speech text. To analyze frames, choose and check a local vision model in AI mode. CPU frame analysis can be slow.",
 		turnOffFrames: "Turn off frame analysis",
 		frames: "Preparing video samples",
 		draft: "Draft video story",
@@ -83,8 +83,8 @@ export const storyCopy = {
 		video: "分析视频抽样画面",
 		help: "告诉 AI 视频的目的，它会按最多八段素材策划剧情、解说和画面标题。使用前请核对所有产品描述。",
 		privacy:
-			"画面分析仅用本地视觉模型读取最多八张小图，不是连续观看整段视频，也不识别原声。文字模型采用你的主题、素材说明和主动开启的字幕参考，不会把原始音频发送给 Ollama。原声保留；需要替换时，请在时间轴静音或降低原声音量。",
-		vision: "当前模型只理解文字。请到智能模式选择并检查视觉模型，或关闭画面分析。CPU 分析画面可能较慢。",
+			"画面分析仅用本地视觉模型读取最多八张小图，不是连续观看整段视频，也不识别原声。文字模型采用你的主题、素材说明和主动开启的字幕参考，不会把原始音频发送给 AI 模型。原声保留；需要替换时，请在时间轴静音或降低原声音量。",
+		vision: "当前模型只理解文字，不能分析画面。请关闭画面分析，写稿会使用你的要求、素材说明和原声文字；如需分析画面，请在智能模式里换用并检查支持画面的本地模型。CPU 分析画面可能较慢。",
 		turnOffFrames: "关闭画面分析",
 		frames: "正在准备画面样本",
 		draft: "生成视频故事稿",
@@ -133,8 +133,8 @@ export const storyCopy = {
 		video: "Analisis sampel bingkai video",
 		help: "Terangkan tujuan video. AI merancang cerita, naratif dan tajuk untuk sehingga lapan bahagian. Semak semua dakwaan.",
 		privacy:
-			"Model visual setempat melihat sehingga lapan imej kecil, bukan video berterusan atau suara rakaman. Model teks menggunakan taklimat, nota dan konteks sari kata yang diaktifkan; audio asal tidak dihantar kepada Ollama.",
-		vision: "Model dipilih hanya memahami teks. Pilih dan semak model visual dalam mod AI, atau matikan analisis imej. Analisis imej dengan CPU mungkin perlahan.",
+			"Model visual setempat melihat sehingga lapan imej kecil, bukan video berterusan atau suara rakaman. Model teks menggunakan taklimat, nota dan konteks sari kata yang diaktifkan; audio asal tidak dihantar kepada model AI.",
+		vision: "Model dipilih hanya memahami teks, jadi tidak boleh menganalisis imej. Matikan analisis imej; cerita akan menggunakan taklimat, nota dan teks suara asal. Untuk menganalisis imej, pilih dan semak model visual setempat dalam mod AI. Analisis imej dengan CPU mungkin perlahan.",
 		turnOffFrames: "Matikan analisis imej",
 		frames: "Menyediakan sampel video",
 		draft: "Draf cerita video",
@@ -164,7 +164,8 @@ export function StoryBriefEditor({
 	onChange: (value: StoryBrief) => void;
 	language: PlanLanguage;
 	disabled: boolean;
-	visionAvailable: boolean;
+	/** null until a model has been checked: nothing is known about it yet. */
+	visionAvailable: boolean | null;
 	transcriptInfo?: ReturnType<typeof buildStoryTranscript>;
 	onOpenCaptions?: () => void;
 }) {
@@ -293,7 +294,7 @@ export function StoryBriefEditor({
 				/ {storyTextBudget(value)}
 			</p>
 			<p className="text-xs text-muted-foreground">{c.privacy}</p>
-			{value.analyzeVideo && !visionAvailable && (
+			{value.analyzeVideo && visionAvailable === false && (
 				<div className="space-y-2 rounded-lg border border-amber-500/40 p-2 text-sm">
 					<p>{c.vision}</p>
 					<button

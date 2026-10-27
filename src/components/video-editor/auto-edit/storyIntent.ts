@@ -16,8 +16,10 @@ const sourceKey = (value: string) => {
 		? normalized.toLowerCase()
 		: normalized;
 };
-function currentIntent(now: number): StoryIntent | null {
-	const raw = loadAppSetting<Partial<StoryIntent>>(SETTING);
+function currentIntent(
+	now: number,
+	raw = loadAppSetting<Partial<StoryIntent>>(SETTING),
+): StoryIntent | null {
 	if (
 		!raw ||
 		raw.version !== 1 ||
@@ -57,6 +59,16 @@ export function stageStoryIntent(
 		...(sourcePath ? { sourcePath } : {}),
 	};
 	return saveAppSetting(SETTING, value) ? id : null;
+}
+/**
+ * A recording's request is staged when it starts; while it runs and when it stops, its age
+ * is restarted so a long recording does not let the brief expire before the editor opens.
+ */
+export function refreshStoryIntent(id: string | null, now = Date.now()) {
+	if (!id) return;
+	const raw = loadAppSetting<Partial<StoryIntent>>(SETTING);
+	if (raw?.id === id && currentIntent(now, { ...raw, createdAt: now } as StoryIntent))
+		saveAppSetting(SETTING, { ...raw, createdAt: now });
 }
 /** A canceled recording can discard only its own request, not a newer import request. */
 export function discardStoryIntent(id: string | null) {

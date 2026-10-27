@@ -15,21 +15,17 @@
   ],
   "win": {
     "artifactName": "Jsox-Recorder-Windows-${version}-${arch}.${ext}",
-    "target": [
-      "zip"
-    ]
+    // A string, not an array: electron-builder appends arrays from the parent config,
+    // which would add its NSIS target. NSIS cannot hold this multi-GB payload.
+    "target": "zip"
   },
   "nsis": {
     "shortcutName": "Jsox Recorder"
   },
   "extraResources": [
     {
-      "from": "build/offline-ollama-required.txt",
-      "to": "offline-ollama-required.txt"
-    },
-    {
-      "from": "vendor/offline-ollama/win32-x64",
-      "to": "offline-ollama"
+      "from": "build/complete-client.txt",
+      "to": "complete-client.txt"
     },
     {
       "from": "LICENSE.md",

@@ -52,6 +52,16 @@ const snapshot = (storyWorkspace = emptyStoryWorkspace()): EditorHistorySnapshot
 	selectedAudioId: null,
 });
 describe("persisted story workspace", () => {
+	it("keeps a saved frame-analysis choice and treats a missing one as off, like a new story", () => {
+		const saved = (analyzeVideo?: boolean) =>
+			normalizeStoryWorkspace({
+				...workspace(),
+				brief: { ...workspace().brief, analyzeVideo },
+			});
+		expect(saved(true)?.brief.analyzeVideo).toBe(true);
+		expect(saved(false)?.brief.analyzeVideo).toBe(false);
+		expect(saved(undefined)?.brief.analyzeVideo).toBe(false);
+	});
 	it("keeps the brief, language, edited draft, headings, timings and baseline through project serialization", () => {
 		const original = workspace();
 		const project = createProjectData(

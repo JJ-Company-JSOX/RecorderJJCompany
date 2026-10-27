@@ -217,7 +217,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		return () => ipcRenderer.removeListener("auto-edit-vision-progress", listener);
 	},
 	inspectAutoEditLocalModel: (model: string) => ipcRenderer.invoke("auto-edit-model-info", model),
-	getAutoEditLocalAiEdition: () => ipcRenderer.invoke("auto-edit-local-ai-edition"),
+	getAutoEditEdition: () => ipcRenderer.invoke("auto-edit-edition"),
 	analyzeAutoEdit: (videoPath: string) => ipcRenderer.invoke("auto-edit-analyze", videoPath),
 	cancelAutoEditAnalysis: () => ipcRenderer.invoke("auto-edit-cancel"),
 	reviewAutoEditLocally: (plan: EditPlan, model: string) =>
@@ -227,6 +227,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		model: string,
 		language: "zh" | "en" | "ms",
 	) => ipcRenderer.invoke("auto-edit-story-local", request, model, language),
+	draftVideoStoryBundled: (
+		request: import("../src/components/video-editor/auto-edit/story").StoryRequest,
+		language: "zh" | "en" | "ms",
+	) => ipcRenderer.invoke("auto-edit-story-bundled", request, language),
 	narrateAutoEditLocally: (
 		plan: EditPlan,
 		model: string,

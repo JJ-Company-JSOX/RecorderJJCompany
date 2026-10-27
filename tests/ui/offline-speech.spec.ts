@@ -482,7 +482,9 @@ test("the result screen summarizes changes and undoes the whole run in one click
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await panel.getByLabel("Plan language").selectOption("zh");
 	await page.screenshot({ path: "test-results/wizard-done-zh.png" });
-	await expect(panel.getByRole("button", { name: "下一步：加 AI 配音" })).toHaveCount(0);
+	// Speech fills this recording, so there is no tutorial moment, but the built-in AI can still
+	// write a story for it: the next step stays available and opens the story workflow.
+	await expect(panel.getByRole("button", { name: "下一步：加 AI 配音" })).toHaveCount(1);
 	await panel.getByRole("button", { name: "撤销这次修改" }).click();
 	await expect(page.locator('[data-variant="clip"]')).toHaveCount(1);
 	await expect(page.locator('[data-variant="caption"]')).toHaveCount(0);

@@ -134,13 +134,17 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const speed = speedMessages[language];
 	const [provider, setProvider] = useState<AiProvider>(savedAiProvider);
 	const [ollamaModel, setOllamaModel] = useState<OllamaModel | null>(null);
-	const [clientEdition, setClientEdition] = useState(false);
+	// The complete client offers only the built-in AI: no Ollama mode, model check or install steps.
+	const [completeClient, setCompleteClient] = useState(false);
 	useEffect(() => {
 		let active = true;
 		void window.electronAPI
-			.getAutoEditLocalAiEdition?.()
+			.getAutoEditEdition?.()
 			.then((edition) => {
-				if (active) setClientEdition(!!edition?.required);
+				if (!active || !edition?.completeClient) return;
+				setCompleteClient(true);
+				setProvider("builtin");
+				setOllamaModel(null);
 			})
 			.catch(() => undefined);
 		return () => {
@@ -268,10 +272,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const [undone, setUndone] = useState(false);
 	const [voiceOpen, setVoiceOpen] = useState(!!storyWorkspace?.storyMode);
 	useEffect(() => {
-		if (storyWorkspace?.storyMode) {
-			setVoiceOpen(true);
-			setProvider("ollama");
-		}
+		// The built-in AI writes stories too, so a brief no longer switches to Ollama mode.
+		if (storyWorkspace?.storyMode) setVoiceOpen(true);
 	}, [storyWorkspace?.storyMode]);
 	const [textOpen, setTextOpen] = useState(false);
 	const [textDeleted, setTextDeleted] = useState<string[]>([]);
@@ -710,25 +712,20 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			setError(aiMode.firstCheck);
 			return;
 		}
-		if (storyMode && provider === "ollama" && !storyBrief.topic.trim()) {
+		if (storyMode && !storyBrief.topic.trim()) {
 			setError(storyUi.required);
 			return;
 		}
-		if (
-			storyMode &&
-			provider === "ollama" &&
-			!isStorySpeechTarget(storyBrief.targetSpeechSeconds)
-		) {
+		if (storyMode && !isStorySpeechTarget(storyBrief.targetSpeechSeconds)) {
 			setError(storyUi.invalidTarget);
 			return;
 		}
-		if (storyMode && provider === "ollama" && briefCharacters > textBudget) {
+		if (storyMode && briefCharacters > textBudget) {
 			setError(storyUi.tooMuchText.replace("{max}", String(textBudget)));
 			return;
 		}
 		if (
 			storyMode &&
-			provider === "ollama" &&
 			storyBrief.includeTranscript &&
 			!storyBrief.autoTranscribe &&
 			!storyTranscript.cues.length
@@ -737,7 +734,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			return;
 		}
 		const draftScenes = currentStoryScenes;
-		const useStory = storyMode && provider === "ollama";
+		const useStory = storyMode;
 		const voicePlan = narrationPlan(currentState.current.state);
 		if (!(useStory ? draftScenes.length : voicePlan.suggestions.length)) return;
 		const run = ++generation.current;
@@ -833,38 +830,34 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					...(action ? { action } : {}),
 				};
 			});
-			const result =
-				useStory && ollamaModel
+			const storyRequest = {
+				brief: storyBrief,
+				scenes: draftScenes,
+				videoPath: source,
+				style: narrationStyle,
+				...(storyBrief.includeTranscript ? { transcript: evidence.cues } : {}),
+			};
+			const result = useStory
+				? provider === "ollama" && ollamaModel
 					? await window.electronAPI.draftVideoStory(
-							{
-								brief: storyBrief,
-								scenes: draftScenes,
-								videoPath: source,
-								style: narrationStyle,
-								...(storyBrief.includeTranscript
-									? { transcript: evidence.cues }
-									: {}),
-							},
+							storyRequest,
 							ollamaModel.name,
 							draftLanguage,
 						)
-					: provider === "ollama" && ollamaModel
-						? await window.electronAPI.narrateAutoEditLocally(
-								voicePlan,
-								ollamaModel.name,
-								draftLanguage,
-								narrationStyle,
-							)
-						: await window.electronAPI.narrateAutoEditBundled(
-								voicePlan,
-								draftLanguage,
-								{
-									videoPath: source,
-									frames,
-									style: narrationStyle,
-									timelineEndMs: Math.max(1, ...clipRegions.map((c) => c.endMs)),
-								},
-							);
+					: await window.electronAPI.draftVideoStoryBundled(storyRequest, draftLanguage)
+				: provider === "ollama" && ollamaModel
+					? await window.electronAPI.narrateAutoEditLocally(
+							voicePlan,
+							ollamaModel.name,
+							draftLanguage,
+							narrationStyle,
+						)
+					: await window.electronAPI.narrateAutoEditBundled(voicePlan, draftLanguage, {
+							videoPath: source,
+							frames,
+							style: narrationStyle,
+							timelineEndMs: Math.max(1, ...clipRegions.map((c) => c.endMs)),
+						});
 			if (run !== generation.current) return;
 			if (!result.success || !result.draft) throw new Error(result.error);
 			if (
@@ -1135,9 +1128,8 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const voiceActions = narrationPlan(state).suggestions.length;
 	// A story cuts its own scenes from the clips and does not need the tutorial's narration
 	// moments, which a video whose original speech fills the timeline does not have.
-	const canOpenVoice = canNarrate && (voiceActions > 0 || provider === "ollama");
 	const openVoice = () => {
-		if (!voiceActions && provider === "ollama") setStoryMode(true);
+		if (!voiceActions) setStoryMode(true);
 		setVoiceOpen(true);
 	};
 	const translateText = async () => {
@@ -1290,25 +1282,26 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								{ui.actionHelp}
 							</p>
 						)}
-						<div ref={modelSettingsAnchor}>
-							<AiModeSettings
-								language={language}
-								provider={provider}
-								modelInfo={ollamaModel}
-								clientEdition={clientEdition}
-								disabled={!!busy}
-								onModel={setOllamaModel}
-								onProvider={(value) => {
-									generation.current++;
-									setProvider(value);
-									saveAiProvider(value);
-									setOllamaModel(null);
-									setEditMode("fast");
-									saveAppSetting(EDIT_MODE_SETTING, "fast");
-									setError("");
-								}}
-							/>
-						</div>
+						{!completeClient && (
+							<div ref={modelSettingsAnchor}>
+								<AiModeSettings
+									language={language}
+									provider={provider}
+									modelInfo={ollamaModel}
+									disabled={!!busy}
+									onModel={setOllamaModel}
+									onProvider={(value) => {
+										generation.current++;
+										setProvider(value);
+										saveAiProvider(value);
+										setOllamaModel(null);
+										setEditMode("fast");
+										saveAppSetting(EDIT_MODE_SETTING, "fast");
+										setError("");
+									}}
+								/>
+							</div>
+						)}
 						<label className="flex flex-col gap-2 text-sm">
 							<span>{speed.mode}</span>
 							<select
@@ -1477,7 +1470,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								</span>
 							</label>
 						</div>
-						{canOpenVoice && (
+						{canNarrate && (
 							<Button
 								variant="secondary"
 								className="w-full"
@@ -1687,7 +1680,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 							<p className="text-sm">{ui.next}</p>
 						)}
 						<div className="flex flex-wrap gap-2">
-							{!undone && canOpenVoice && (
+							{!undone && canNarrate && (
 								<Button onClick={openVoice}>{w.voiceNext}</Button>
 							)}
 							{lines.length > 0 && (
@@ -1839,45 +1832,48 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								</Button>
 							)}
 							<p className="text-sm text-muted-foreground">{w.voiceIntro}</p>
+							{provider !== "ollama" && bundledStatus && !bundledStatus.available && (
+								<p className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-sm">
+									{m.offlineMissing}
+								</p>
+							)}
 							{ttsStatus && !ttsStatus.voices?.[language] && (
 								<p className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-sm">
 									{w.voiceMissing[language]}
 								</p>
 							)}
 						</div>
-						{provider === "ollama" && (
-							<>
-								<label className="flex flex-col gap-2 text-sm">
-									{storyUi.mode}
-									<select
-										disabled={!!busy}
-										value={storyMode ? "story" : "tutorial"}
-										onChange={(e) => setStoryMode(e.target.value === "story")}
-										className="rounded-lg border bg-background p-2"
-									>
-										<option value="tutorial">{storyUi.tutorial}</option>
-										<option value="story">{storyUi.story}</option>
-									</select>
-								</label>
-								{storyMode && (
-									<StoryBriefEditor
-										value={storyBrief}
-										transcriptInfo={storyTranscript}
-										onOpenCaptions={onOpenCaptions}
-										onChange={setStoryBrief}
-										language={language}
-										disabled={!!busy}
-										visionAvailable={
-											ollamaModel
-												? !!ollamaModel.capabilities?.includes("vision")
-												: null
-										}
-										clientEdition={clientEdition}
-									/>
-								)}
-							</>
+						<label className="flex flex-col gap-2 text-sm">
+							{storyUi.mode}
+							<select
+								disabled={!!busy}
+								value={storyMode ? "story" : "tutorial"}
+								onChange={(e) => setStoryMode(e.target.value === "story")}
+								className="rounded-lg border bg-background p-2"
+							>
+								<option value="tutorial">{storyUi.tutorial}</option>
+								<option value="story">{storyUi.story}</option>
+							</select>
+						</label>
+						{storyMode && (
+							<StoryBriefEditor
+								value={storyBrief}
+								transcriptInfo={storyTranscript}
+								onOpenCaptions={onOpenCaptions}
+								onChange={setStoryBrief}
+								language={language}
+								disabled={!!busy}
+								// The built-in AI has its own vision model; an Ollama model is known once checked.
+								visionAvailable={
+									provider !== "ollama"
+										? true
+										: ollamaModel
+											? !!ollamaModel.capabilities?.includes("vision")
+											: null
+								}
+							/>
 						)}
-						{voiceActions === 0 && !(provider === "ollama" && storyMode) ? (
+						{voiceActions === 0 && !storyMode ? (
 							<p className="rounded-lg border p-3 text-sm">{w.voiceNothing}</p>
 						) : (
 							<div className="space-y-3">
@@ -1896,7 +1892,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 										{(["concise", "tutorial", "detailed"] as const).map(
 											(style) => (
 												<option key={style} value={style}>
-													{provider === "ollama" && storyMode
+													{storyMode
 														? storyUi.styles[style]
 														: n.styles[style]}
 												</option>
@@ -1947,9 +1943,9 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 									>
 										{busy === "narrate"
 											? progress.total && progress.completed < progress.total
-												? `${provider === "ollama" && storyMode ? storyUi.frames : n.looking} ${progress.completed}/${progress.total}`
+												? `${storyMode ? storyUi.frames : n.looking} ${progress.completed}/${progress.total}`
 												: n.busy
-											: provider === "ollama" && storyMode
+											: storyMode
 												? storyBrief.autoTranscribe
 													? storyUi.analyzeAndDraft
 													: storyUi.draft
@@ -2373,7 +2369,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								{ui.noChanges}
 							</p>
 						)}
-						{canOpenVoice && (
+						{canNarrate && (
 							<Button className="w-full" onClick={openVoice}>
 								{w.voiceEntry}
 							</Button>

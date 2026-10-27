@@ -23,9 +23,12 @@ still apply. See [tools scope and limitations](docs/offline-tools.zh-CN.md).
 
 ## Offline AI edition
 
-Complete Windows client bundles additionally include the Ollama v0.40.11 portable
-runtime (Ollama's own code MIT) and Qwen3 1.7B text model weights (Apache-2.0).
-The pinned official runtime archive is verified in full, then its GPU backends
+Since 2026-10-27 the complete Windows client and the offline editions do **not**
+include Ollama or Qwen3 1.7B: stories are written by the bundled Qwen3-VL model
+below. The following applies only to a build that a developer prepares with
+`npm run prepare:offline-ollama` for the optional Ollama mode: the Ollama v0.40.11
+portable runtime (Ollama's own code MIT) and Qwen3 1.7B text model weights
+(Apache-2.0). The pinned official runtime archive is verified in full, then its GPU backends
 (`lib/ollama/cuda_v12`, `cuda_v13`, `vulkan`: NVIDIA CUDA libraries under the
 NVIDIA CUDA EULA and Microsoft VC++ runtime copies, for which the archive carries
 no license text) are left out; the client runs on the CPU. The remaining runtime

@@ -33,14 +33,14 @@
 		"verify:offline-tools": "node scripts/prepare-offline-sherpa.mjs --verify && node scripts/prepare-offline-silero.mjs --verify && node scripts/build-offline-rnnoise.mjs --verify && node scripts/prepare-offline-scene.mjs --verify",
 		"package:win:tools": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-tools && electron-builder --config electron-builder.tools.json5 --win --x64 --dir --publish never",
 		"build:win:tools": "npm run build:app && npm run package:win:tools",
-		"package:win:speech": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-tts && npm run verify:offline-ocr && npm run verify:offline-ollama && electron-builder --config electron-builder.speech.json5 --win --x64 --publish never && npm run smoke:packaged-binaries",
+		"package:win:speech": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-tts && npm run verify:offline-ocr && electron-builder --config electron-builder.speech.json5 --win --x64 --publish never && npm run smoke:packaged-binaries",
 		"build:win:speech": "npm run build:app && npm run package:win:speech",
-		"package:win:speech-ui": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-tts && npm run verify:offline-ocr && npm run verify:offline-ollama && electron-builder --config electron-builder.speech-ui.json5 --win --x64 --publish never && npm run smoke:packaged-binaries",
+		"package:win:speech-ui": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-tts && npm run verify:offline-ocr && electron-builder --config electron-builder.speech-ui.json5 --win --x64 --publish never && npm run smoke:packaged-binaries",
 		"build:win:speech-ui": "npm run build:app && npm run package:win:speech-ui",
 		"smoke:offline-speech": "node scripts/smoke-offline-speech.mjs",
 		"smoke:offline-tools": "node scripts/smoke-offline-tools.mjs",
 		"verify:offline-ai": "node scripts/prepare-offline-ai.mjs --verify",
-		"package:win:offline": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-voice && npm run verify:offline-tts && npm run verify:offline-ocr && npm run verify:offline-ollama && electron-builder --config electron-builder.offline.json5 --win --x64 --publish never && npm run smoke:packaged-binaries",
+		"package:win:offline": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-voice && npm run verify:offline-tts && npm run verify:offline-ocr && electron-builder --config electron-builder.offline.json5 --win --x64 --publish never && npm run smoke:packaged-binaries",
 		"build:win:offline": "npm run build:app && npm run package:win:offline",
 		"package:win:test": "npm run prepare:win:test && electron-builder --config electron-builder.test.json5 --win --x64 --dir --publish never && npm run smoke:packaged-binaries",
 		"build:win:test": "npm run build:app && npm run package:win:test",
@@ -76,7 +76,7 @@
 		"prepare:offline-ollama": "node scripts/prepare-offline-ollama.mjs",
 		"verify:offline-ollama": "node scripts/prepare-offline-ollama.mjs --verify",
 		"build:win:client": "npm run build:app && npm run package:win:client",
-		"package:win:client": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-voice && npm run verify:offline-tts && npm run verify:offline-ocr && npm run verify:offline-ollama && electron-builder --config electron-builder.client.json5 --win --x64 --publish never && npm run smoke:packaged-binaries"
+		"package:win:client": "npm run prepare:win:test && npm run verify:offline-ai && npm run verify:offline-speech && npm run verify:offline-voice && npm run verify:offline-tts && npm run verify:offline-ocr && electron-builder --config electron-builder.client.json5 --win --x64 --publish never && npm run smoke:packaged-binaries"
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^2.116.0",

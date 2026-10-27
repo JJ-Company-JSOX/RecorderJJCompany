@@ -41,7 +41,7 @@ beforeEach(() => {
 	fixture.existsSync.mockImplementation((file: string) =>
 		file.endsWith("offline-ai-preview.txt")
 			? fixture.marker
-			: file.endsWith("offline-ollama-required.txt")
+			: file.endsWith("complete-client.txt")
 				? fixture.clientMarker
 				: false,
 	);

@@ -5,7 +5,13 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { bundledClient, llamaServerArgs, llamaThreads, verifyBundledAi } from "./bundled";
+import {
+	bundledClient,
+	llamaServerArgs,
+	llamaThreads,
+	STORY_CONTEXT_TOKENS,
+	verifyBundledAi,
+} from "./bundled";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -77,6 +83,13 @@ it("starts llama-server with per-image token bounds, room for two images, and sc
 	expect(llamaThreads(4)).toEqual({ threads: 2, batch: 3 });
 	expect(llamaThreads(8)).toEqual({ threads: 4, batch: 6 });
 	expect(llamaThreads(64)).toEqual({ threads: 8, batch: 8 });
+});
+
+it("gives a story session a larger context without changing the default", () => {
+	const story = llamaServerArgs("/root", 4321, "token", 14, STORY_CONTEXT_TOKENS);
+	expect(story[story.indexOf("--ctx-size") + 1]).toBe("8192");
+	const normal = llamaServerArgs("/root", 4321, "token", 14);
+	expect(normal[normal.indexOf("--ctx-size") + 1]).toBe("6144");
 });
 
 /** A stand-in llama-server: records each request and answers with a fixed JSON reply. */
@@ -184,6 +197,30 @@ it("asks auto edit for integer 0-1000 focus and a caption only, with a short rep
 		const messages = body.messages as { content: unknown }[];
 		expect(messages[0].content).not.toContain("rationale");
 		expect((messages[1].content as object[]).length).toBe(2);
+	} finally {
+		await server.close();
+	}
+});
+
+it("writes a story with the slot schema, the given reply budget and a little sampling freedom", async () => {
+	const reply = '{"story-1":{"stage":"Hook","title":"Offline","text":"Edit offline."}}';
+	const server = await fakeServer(reply);
+	try {
+		const client = bundledClient(server.port, "secret", new AbortController().signal);
+		const schema = { type: "object", required: ["story-1"] };
+		expect(await client.compose("story rules", '{"brief":{}}', schema, 1200)).toBe(reply);
+		expect(server.requests[0].body).toEqual({
+			temperature: 0.4,
+			max_tokens: 1200,
+			response_format: { type: "json_object", schema },
+			messages: [
+				{ role: "system", content: "story rules" },
+				{ role: "user", content: '{"brief":{}}' },
+			],
+		});
+		await expect(client.compose("x".repeat(24_001), "", schema, 768)).rejects.toThrow(
+			"too large",
+		);
 	} finally {
 		await server.close();
 	}

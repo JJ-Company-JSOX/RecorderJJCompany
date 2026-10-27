@@ -10,6 +10,8 @@ async function setup(
 		coveredSpeech?: boolean;
 		repeat?: boolean;
 		speech?: "ok" | "deferred" | "no-audio" | "missing-model";
+		/** Use the default built-in AI instead of choosing and checking an Ollama model. */
+		builtin?: boolean;
 	} = {},
 ) {
 	await installDesktopBridge(page, "filmstrip.mp4", { signedIn: false });
@@ -26,6 +28,34 @@ async function setup(
 					capabilities: vision ? ["completion", "vision"] : ["completion"],
 				},
 			});
+			if (options.builtin)
+				window.electronAPI.getBundledAiStatus = async () => ({
+					available: true,
+					modelName: "Bundled fixture",
+					modelBytes: 100,
+					freeMemoryBytes: 8e9,
+					requiredMemoryBytes: 3e9,
+				});
+			window.electronAPI.draftVideoStoryBundled = async (request, language) => {
+				document.documentElement.dataset.storyRequest = JSON.stringify({
+					request,
+					language,
+					bundled: true,
+				});
+				return {
+					success: true,
+					draft: {
+						cues: request.scenes.map((s) => ({
+							id: s.id,
+							startMs: s.startMs,
+							endMs: s.endMs,
+							stage: "Hook",
+							title: "Create offline",
+							text: "Show your product clearly.",
+						})),
+					},
+				};
+			};
 			window.electronAPI.draftVideoStory = async (request, model, language) => {
 				document.documentElement.dataset.storyRequest = JSON.stringify({
 					request,
@@ -224,8 +254,10 @@ async function setup(
 			timeout: 20000,
 		},
 	);
-	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
-	await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	if (!options.builtin) {
+		await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+		await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	}
 	await page
 		.getByRole("button", { name: "Add AI voice-over and subtitles", exact: true })
 		.click();
@@ -327,6 +359,30 @@ test("a brief-only story becomes editable titles, text subtitles and real audio 
 	await expect(page.locator('[data-variant="audio"]')).toHaveCount(1);
 	await expect(page.locator('[data-variant="annotation"]')).toHaveCount(1);
 });
+test("the default built-in AI writes the story, with frame analysis and no Ollama or model check", async ({
+	page,
+}) => {
+	await setup(page, false, false, { builtin: true });
+	await expect(
+		page.getByRole("button", { name: "Check or change Ollama model", exact: true }),
+	).toHaveCount(0);
+	await brief(page);
+	// The built-in AI has its own vision model, so frames need no extra model or warning.
+	await page.getByLabel("Analyze sampled video frames", { exact: true }).check();
+	await expect(page.locator("[data-story-brief]")).not.toContainText("only understands text");
+	const draft = page.getByRole("button", { name: "Draft video story", exact: true });
+	await expect(draft).toBeEnabled();
+	await draft.click();
+	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
+		"Show your product clearly.",
+	);
+	const sent = JSON.parse((await page.locator("html").getAttribute("data-story-request"))!);
+	expect(sent).toMatchObject({
+		bundled: true,
+		language: "en",
+		request: { brief: { topic: "Introduce JSOX Recorder", analyzeVideo: true } },
+	});
+});
 test("a video whose original speech fills the timeline can still open the story workflow", async ({
 	page,
 }) => {
@@ -402,7 +458,7 @@ test("changed briefs and invalid scene timing cannot add stale story audio or te
 test("unfinished story workspace survives reopening with review required and can then generate English audio", async ({
 	page,
 }) => {
-	await setup(page);
+	await setup(page, false, false, { builtin: true });
 	await page.getByLabel("Analyze sampled video frames", { exact: true }).uncheck();
 	await brief(page);
 	await page.getByRole("button", { name: "Draft video story", exact: true }).click();
@@ -453,14 +509,10 @@ test("unfinished story workspace survives reopening with review required and can
 		}),
 	);
 
-	await page.getByRole("button", { name: "Check or change Ollama model", exact: true }).click();
+	// Reopened on the built-in AI, the story can be drafted again with no model check.
 	await expect(
-		page.getByRole("button", { name: "Check local model", exact: true }),
-	).toBeVisible();
-	await page.getByRole("button", { name: "Check local model", exact: true }).click();
-	await page
-		.getByRole("button", { name: "Add AI voice-over and subtitles", exact: true })
-		.click();
+		page.getByRole("button", { name: "Check or change Ollama model", exact: true }),
+	).toHaveCount(0);
 	await expect(page.getByLabel("story-1", { exact: true })).toHaveValue(
 		"Keep my unfinished story.",
 	);

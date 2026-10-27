@@ -13,6 +13,12 @@ import type { BundledAiStatus } from "../../../src/components/video-editor/auto-
 const requiredMemoryBytes = 3 * 1024 ** 3;
 /** Two images (about 300-900 tokens each, see narrationFrames.ts) plus the prompt and reply. */
 const CONTEXT_TOKENS = 6144;
+/**
+ * A story request is text only (frames are described one at a time first): a brief of up to
+ * 4000 characters plus a reply of up to 3072 tokens. 2048 more tokens cost about 224 MiB of KV
+ * cache, inside the memory gate that was sized for two sharp images.
+ */
+export const STORY_CONTEXT_TOKENS = 8192;
 type Manifest = {
 	version: number;
 	modelName: string;
@@ -179,6 +185,7 @@ export function llamaServerArgs(
 	port: number,
 	token: string,
 	parallelism = os.availableParallelism(),
+	contextTokens = CONTEXT_TOKENS,
 ): string[] {
 	const { threads, batch } = llamaThreads(parallelism);
 	return [
@@ -193,7 +200,7 @@ export function llamaServerArgs(
 		"--api-key",
 		token,
 		"--ctx-size",
-		String(CONTEXT_TOKENS),
+		String(contextTokens),
 		"--threads",
 		String(threads),
 		"--threads-batch",
@@ -305,6 +312,29 @@ export function bundledClient(port: number, token: string, signal: AbortSignal) 
 				"Missing offline speech analysis reply",
 			);
 		},
+		/** Longer structured writing such as a video story; a story reply can take minutes on a CPU. */
+		async compose(
+			instruction: string,
+			question: string,
+			schema: object,
+			maxTokens: number,
+		): Promise<string> {
+			if (instruction.length + question.length > 24_000)
+				throw Error("Story request is too large for the offline AI");
+			return chat(
+				{
+					temperature: 0.4,
+					max_tokens: maxTokens,
+					response_format: { type: "json_object", schema },
+					messages: [
+						{ role: "system", content: instruction },
+						{ role: "user", content: question },
+					],
+				},
+				600_000,
+				"Missing offline story reply",
+			);
+		},
 		/** Auto-edit caption and focus for one frame. Coordinates are integers on a 0-1000 scale. */
 		describe(image: Buffer, instruction: string, question: string): Promise<string> {
 			return look(
@@ -339,7 +369,7 @@ export function bundledClient(port: number, token: string, signal: AbortSignal) 
 	};
 }
 
-async function createBundledSession(root: string, signal: AbortSignal) {
+async function createBundledSession(root: string, signal: AbortSignal, contextTokens?: number) {
 	signal.throwIfAborted();
 	if (os.freemem() < requiredMemoryBytes)
 		throw Error(
@@ -351,7 +381,7 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 	signal.throwIfAborted();
 	const child = spawn(
 		path.join(root, "runtime-static/llama-server.exe"),
-		llamaServerArgs(root, port, token),
+		llamaServerArgs(root, port, token, undefined, contextTokens),
 		{
 			windowsHide: true,
 			cwd: path.join(root, "runtime-static"),
@@ -403,11 +433,15 @@ async function createBundledSession(root: string, signal: AbortSignal) {
 }
 
 let active = false;
-export async function startBundledAi(root: string, signal: AbortSignal) {
+export async function startBundledAi(
+	root: string,
+	signal: AbortSignal,
+	options: { contextTokens?: number } = {},
+) {
 	if (active) throw Error("Offline AI is already analyzing another recording");
 	active = true;
 	try {
-		const session = await createBundledSession(root, signal);
+		const session = await createBundledSession(root, signal, options.contextTokens);
 		let closed = false;
 		return {
 			...session,

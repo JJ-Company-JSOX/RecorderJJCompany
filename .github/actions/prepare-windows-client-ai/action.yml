@@ -3,10 +3,10 @@ description: Download and verify pinned model assets on the build machine, never
 runs:
   using: composite
   steps:
-    - name: Prepare offline runtime, recognition, voice, OCR and story model
+    - name: Prepare offline runtime and story model, recognition, voice and OCR
       shell: pwsh
       run: |
-        $tasks = @('prepare:offline-ai', 'prepare:offline-speech', 'prepare:offline-voice', 'prepare:offline-tts', 'prepare:offline-ocr', 'prepare:offline-ollama')
+        $tasks = @('prepare:offline-ai', 'prepare:offline-speech', 'prepare:offline-voice', 'prepare:offline-tts', 'prepare:offline-ocr')
         foreach ($task in $tasks) {
           npm.cmd run $task
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

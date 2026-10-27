@@ -2,19 +2,20 @@ import {
 	isStoryRequest,
 	type StoryRequest,
 } from "../../../src/components/video-editor/auto-edit/story";
-import { generateLocalStory } from "../autoEdit/story";
+import { generateBundledStory, generateLocalStory } from "../autoEdit/story";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { app, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { BUNDLED_MODEL_ID } from "../../../src/components/video-editor/auto-edit/bundledTypes";
 import type { EditPlan } from "../../../src/components/video-editor/auto-edit/plan";
 import type { SpeechTranscript } from "../../../src/components/video-editor/auto-edit/speechTypes";
-import { bundledAiStatus, startBundledAi, stopBundledAi } from "../autoEdit/bundled";
 import {
-	BUNDLED_OLLAMA_MODEL,
-	configureBundledOllama,
-	stopBundledOllama,
-} from "../autoEdit/bundledOllama";
+	bundledAiStatus,
+	STORY_CONTEXT_TOKENS,
+	startBundledAi,
+	stopBundledAi,
+} from "../autoEdit/bundled";
+import { configureBundledOllama, stopBundledOllama } from "../autoEdit/bundledOllama";
 import { analyzeLocalMedia } from "../autoEdit/media";
 import {
 	describeNarrationFrames,
@@ -56,28 +57,25 @@ export type AutoEditHandlerOptions = {
 };
 
 export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
-	let bundledOllamaRequired = false;
 	if (process.platform === "win32" && process.arch === "x64") {
 		const resources = app.isPackaged
 			? process.resourcesPath
 			: path.join(app.getAppPath(), "vendor");
-		bundledOllamaRequired =
-			app.isPackaged && existsSync(path.join(resources, "offline-ollama-required.txt"));
 		configureBundledOllama({
 			root: app.isPackaged
 				? path.join(resources, "offline-ollama")
 				: path.join(resources, "offline-ollama/win32-x64"),
 			workDir: path.join(app.getPath("userData"), "ollama"),
-			required: bundledOllamaRequired,
+			required:
+				app.isPackaged && existsSync(path.join(resources, "offline-ollama-required.txt")),
 			enabled: true,
 		});
 		app.once("before-quit", stopBundledOllama);
 	}
-	// The complete client must not send customers to install Ollama or another model.
-	ipcMain.handle("auto-edit-local-ai-edition", () => ({
-		required: bundledOllamaRequired,
-		model: BUNDLED_OLLAMA_MODEL,
-	}));
+	// The complete client uses only its built-in AI and never sends customers to install Ollama.
+	const completeClient =
+		app.isPackaged && existsSync(path.join(process.resourcesPath, "complete-client.txt"));
+	ipcMain.handle("auto-edit-edition", () => ({ completeClient }));
 	const bundledRoot = () =>
 		app.isPackaged
 			? path.join(process.resourcesPath, "offline-ai")
@@ -402,6 +400,58 @@ export function registerAutoEditHandlers(options: AutoEditHandlerOptions = {}) {
 					success: false,
 					error: error instanceof Error ? error.message : "Story generation failed",
 				};
+			}
+		},
+	);
+	ipcMain.handle(
+		"auto-edit-story-bundled",
+		async (event, request: StoryRequest, language?: string) => {
+			if (running.has(event.sender.id))
+				return { success: false, error: "Analysis already running" };
+			const controller = new AbortController();
+			running.set(event.sender.id, controller);
+			const abort = () => controller.abort();
+			event.sender.once("destroyed", abort);
+			let session: Awaited<ReturnType<typeof startBundledAi>> | undefined;
+			try {
+				if (!isStoryRequest(request) || !isNarrationLanguage(language))
+					throw Error(
+						"Invalid story request: check scene timing, subtitle consent and text limits (2000 combined characters with video frames or 4000 without, up to 80 subtitle cues / 3000 subtitle characters).",
+					);
+				const normalized =
+					request.brief.analyzeVideo && normalizeVideoSourcePath(request.videoPath);
+				const approvedPath = normalized
+					? await resolveApprovedLocalMediaPath(normalized)
+					: undefined;
+				if (request.brief.analyzeVideo && !approvedPath)
+					throw Error("Select an approved local recording first");
+				session = await startBundledAi(bundledRoot(), controller.signal, {
+					contextTokens: STORY_CONTEXT_TOKENS,
+				});
+				const draft = await generateBundledStory({
+					request,
+					language,
+					signal: controller.signal,
+					model: session,
+					approvedPath: approvedPath || undefined,
+					ffmpegPath: getFfmpegBinaryPath(),
+					ffprobePath: getFfprobeBinaryPath(),
+					onProgress: (completed, total) => {
+						if (!event.sender.isDestroyed())
+							event.sender.send("auto-edit-vision-progress", { completed, total });
+					},
+				});
+				controller.signal.throwIfAborted();
+				return { success: true, draft };
+			} catch (error) {
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : "Story generation failed",
+				};
+			} finally {
+				await session?.close();
+				running.delete(event.sender.id);
+				event.sender.removeListener("destroyed", abort);
 			}
 		},
 	);

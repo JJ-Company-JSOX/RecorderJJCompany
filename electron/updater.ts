@@ -15,8 +15,9 @@ const DISMISSED_READY_REMINDER_DELAY_MS = 5 * 60 * 1000;
 // Generic installers retain their existing updater; neither offline edition can use that feed.
 const OFFLINE_AI_EDITION =
 	app.isPackaged &&
-	(fs.existsSync(path.join(process.resourcesPath, "offline-ai-preview.txt")) ||
-		fs.existsSync(path.join(process.resourcesPath, "offline-ollama-required.txt")));
+	["offline-ai-preview.txt", "complete-client.txt", "offline-ollama-required.txt"].some(
+		(marker) => fs.existsSync(path.join(process.resourcesPath, marker)),
+	);
 const AUTO_UPDATES_DISABLED =
 	process.env.RECORDLY_DISABLE_AUTO_UPDATES === "1" || OFFLINE_AI_EDITION;
 const UPDATE_FEED_URL_OVERRIDE = process.env.RECORDLY_UPDATE_FEED_URL?.trim() ?? "";

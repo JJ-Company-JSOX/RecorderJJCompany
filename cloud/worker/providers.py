@@ -38,6 +38,61 @@ def embed(value):
     return vector
 
 
+def _gemini_operation(operation_name):
+    if not re.fullmatch(r"models/[a-zA-Z0-9_.-]+/operations/[a-zA-Z0-9_-]+",operation_name):
+        raise ValueError("Invalid Veo operation name")
+    key=os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise ValueError("Gemini secret is not configured")
+    response=requests.get(f"https://generativelanguage.googleapis.com/v1beta/{operation_name}",headers={"x-goog-api-key":key},timeout=30,allow_redirects=False)
+    if response.status_code!=200:
+        raise RuntimeError("Veo operation request failed")
+    return response.json()
+
+
+def start_veo_generation(prompt, model, aspect_ratio="16:9"):
+    if not isinstance(prompt,str) or not prompt.strip() or len(prompt)>2000:
+        raise ValueError("Invalid video prompt")
+    if aspect_ratio not in {"16:9","9:16"}:
+        raise ValueError("Unsupported aspect ratio")
+    result=_gemini(model,"predictLongRunning",{"instances":[{"prompt":prompt}],"parameters":{"aspectRatio":aspect_ratio}})
+    name=result.get("name")
+    if not isinstance(name,str) or not re.fullmatch(r"models/[a-zA-Z0-9_.-]+/operations/[a-zA-Z0-9_-]+",name):
+        raise RuntimeError("Veo did not return a valid operation name")
+    return name
+
+
+def poll_veo_operation(operation_name):
+    result=_gemini_operation(operation_name)
+    if not result.get("done"):
+        return None
+    if result.get("error"):
+        raise RuntimeError(f"Veo generation failed: {result['error'].get('message','unknown error')}")
+    samples=result.get("response",{}).get("generateVideoResponse",{}).get("generatedSamples",[])
+    if not samples:
+        raise RuntimeError("Veo operation completed without video output")
+    uri=samples[0].get("video",{}).get("uri")
+    if not isinstance(uri,str) or not uri.startswith("https://generativelanguage.googleapis.com/"):
+        raise RuntimeError("Veo returned an unexpected video location")
+    return uri
+
+
+def download_veo_video(uri, target, max_bytes=500*1024*1024):
+    key=os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise ValueError("Gemini secret is not configured")
+    with requests.get(uri,headers={"x-goog-api-key":key},stream=True,timeout=(10,120),allow_redirects=False) as response:
+        if response.status_code!=200:
+            raise RuntimeError("Veo video download failed")
+        size=0
+        with target.open("wb") as file:
+            for chunk in response.iter_content(256*1024):
+                size+=len(chunk)
+                if size>min(500*1024*1024,max_bytes):
+                    raise ValueError("Veo video exceeds download limit")
+                file.write(chunk)
+
+
 def allowed_stock_url(url):
     parsed=urlparse(url)
     return parsed.scheme=="https" and not parsed.username and not parsed.password and (parsed.hostname in {"videos.pexels.com","player.vimeo.com","cdn.pixabay.com","videos.pixabay.com"} or (parsed.hostname or "").endswith(".pexels.com") or (parsed.hostname or "").endswith(".pixabay.com")) and parsed.port in {None,443}

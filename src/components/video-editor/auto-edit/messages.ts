@@ -95,6 +95,8 @@ export const messages = {
 		review: "Review locally",
 		reviewing: "Reviewing…",
 		aiInfo: "Sends only candidate IDs, types, times and rule reasons to Ollama on this computer (127.0.0.1:11434). No video, audio, paths or transcript text. No models are downloaded. AI can only shorten or remove suggestions; decisions reset afterwards.",
+		"ai-review-failed":
+			"Local AI review did not return a usable result. Kept the unreviewed rule-based suggestions below.",
 		error: "Operation failed; timeline unchanged.",
 		unavailable: "Local analysis requires the desktop app.",
 		reviewed: "Local AI reviewed this plan. Review every remaining item again.",
@@ -188,6 +190,7 @@ export const messages = {
 		review: "本地审阅",
 		reviewing: "审阅中…",
 		aiInfo: "只向本机 Ollama（127.0.0.1:11434）发送建议编号、类型、时间和规则原因，不发送视频、声音、路径或转录文字，不下载模型。AI 只能缩短或删除建议，审阅后需重新逐项选择。",
+		"ai-review-failed": "本地 AI 审阅未返回可用结果，已保留下方未经审阅的规则剪辑建议。",
 		error: "操作失败，时间线未改变。",
 		unavailable: "本地媒体分析需要桌面应用。",
 		reviewed: "本地 AI 已审阅，请重新审阅每一项。",
@@ -296,6 +299,8 @@ export const messages = {
 		review: "Semak setempat",
 		reviewing: "Sedang menyemak…",
 		aiInfo: "Hanya ID, jenis, masa dan sebab cadangan dihantar ke Ollama pada komputer ini (127.0.0.1:11434). Tiada video, audio, laluan atau teks transkrip. Tiada model dimuat turun. AI hanya boleh memendekkan atau membuang cadangan; keputusan perlu dibuat semula.",
+		"ai-review-failed":
+			"Semakan AI setempat tidak memberikan hasil yang boleh digunakan. Cadangan berasaskan peraturan yang belum disemak di bawah dikekalkan.",
 		error: "Operasi gagal; garis masa tidak berubah.",
 		unavailable: "Analisis setempat memerlukan aplikasi desktop.",
 		reviewed: "AI setempat telah menyemak pelan ini. Semak setiap item sekali lagi.",

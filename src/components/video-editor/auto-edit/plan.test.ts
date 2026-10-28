@@ -304,6 +304,22 @@ describe("AI review boundaries", () => {
 		expect(mergeLocalReview(p, []).suggestions).toEqual([]);
 		expect(next.baseline).toBe(baselineFor(state(), source));
 	});
+	it("tolerates the documented {edits:[...]} wrapper and a single renamed array field", () => {
+		const p = build();
+		const patch = { id: p.suggestions[0].id, startMs: 3500, endMs: 6500 };
+		expect(mergeLocalReview(p, { edits: [patch] }).suggestions[0]).toMatchObject({
+			startMs: 3500,
+			endMs: 6500,
+		});
+		expect(mergeLocalReview(p, { result: [patch] }).suggestions[0]).toMatchObject({
+			startMs: 3500,
+			endMs: 6500,
+		});
+	});
+	it.each([[null], [{}], [{ edits: null }], [{ a: [1], b: [2] }], ["not json"]])(
+		"rejects an unrecognizable AI response shape %#",
+		(value) => expect(() => mergeLocalReview(build(), value)).toThrow("Invalid AI review"),
+	);
 	it.each([
 		[{ id: "invented", startMs: 1, endMs: 2 }],
 		[{ id: "suggestion-1", startMs: 0, endMs: 6600 }],

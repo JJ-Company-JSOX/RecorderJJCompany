@@ -167,7 +167,7 @@ export class LocalPlanReviewer implements PlanReviewer {
 		signal?.throwIfAborted();
 		const reviewed = mergeLocalReview(
 			{ ...plan, suggestions: plan.suggestions.filter((s) => !s.blocked) },
-			JSON.parse(parsed.message.content).edits,
+			JSON.parse(parsed.message.content),
 		);
 		return {
 			...reviewed,

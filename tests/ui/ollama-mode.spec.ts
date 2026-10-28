@@ -213,6 +213,27 @@ test("checked Ollama reviews the real plan through the existing timeline and res
 	await expect(page.locator("html")).not.toHaveAttribute("data-model-checked");
 });
 
+test("a local AI review with no usable result keeps and applies the rule-based plan instead of discarding the whole operation", async ({
+	page,
+}) => {
+	await setup(page);
+	await page.evaluate(() => {
+		window.electronAPI.reviewAutoEditLocally = async () => ({
+			success: false,
+			error: "Invalid AI review",
+		});
+	});
+	await page.getByRole("combobox", { name: "AI mode", exact: true }).selectOption("ollama");
+	await page
+		.getByRole("textbox", { name: "Installed Ollama model", exact: true })
+		.fill("custom-local:latest");
+	await page.getByRole("button", { name: "Check local model", exact: true }).click();
+	await expect(page.getByText(/Local model ready: custom-local/)).toBeVisible();
+	await page.getByRole("button", { name: "Start Ollama editing", exact: true }).click();
+	await expect(page.getByText(/Operation failed/)).toHaveCount(0);
+	await expect(page.locator('[data-variant="clip"]')).toHaveCount(2);
+});
+
 test("Ollama readiness directs the scrolled editor to its actual model check", async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 800 });
 	await setup(page);

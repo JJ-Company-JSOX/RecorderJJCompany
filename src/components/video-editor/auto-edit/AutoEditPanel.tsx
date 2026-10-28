@@ -627,8 +627,10 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					ollamaModel.name,
 				);
 				if (run !== generation.current) return;
-				if (!reviewed.success || !reviewed.plan) throw new Error(reviewed.error || m.error);
-				next = reviewed.plan;
+				next =
+					reviewed.success && reviewed.plan
+						? reviewed.plan
+						: { ...next, warnings: [...next.warnings, "ai-review-failed"] };
 			}
 			if (withAi) {
 				setBusy("vision");

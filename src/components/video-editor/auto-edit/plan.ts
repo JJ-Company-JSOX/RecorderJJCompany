@@ -290,12 +290,26 @@ export function buildEditPlan(input: {
 	};
 }
 
+/**
+ * Small local models often drop the documented {"edits":[...]} wrapper or rename the field.
+ * Accept a bare array, the documented shape, or a single renamed array property; otherwise
+ * give up rather than guess among several candidate arrays.
+ */
+function extractAiEdits(raw: unknown): unknown[] | null {
+	if (Array.isArray(raw)) return raw;
+	if (!raw || typeof raw !== "object") return null;
+	const record = raw as Record<string, unknown>;
+	if (Array.isArray(record.edits)) return record.edits;
+	const arrays = Object.values(record).filter(Array.isArray);
+	return arrays.length === 1 ? arrays[0] : null;
+}
+
 /** AI is allowed only to remove or narrow rule candidates. It cannot invent edits or change text. */
 export function mergeLocalReview(plan: EditPlan, raw: unknown): EditPlan {
-	if (!Array.isArray(raw) || raw.length > plan.suggestions.length)
-		throw new Error("Invalid AI review");
+	const edits = extractAiEdits(raw);
+	if (!edits || edits.length > plan.suggestions.length) throw new Error("Invalid AI review");
 	const seen = new Set<string>();
-	const suggestions = raw.map((value: unknown) => {
+	const suggestions = edits.map((value: unknown) => {
 		if (!value || typeof value !== "object") throw new Error("Invalid AI review");
 		const patch = value as Record<string, unknown>;
 		const original = plan.suggestions.find((s) => s.id === patch.id);

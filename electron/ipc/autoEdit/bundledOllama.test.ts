@@ -214,6 +214,17 @@ describe("private Ollama lifecycle (spawn and readiness mocked)", () => {
 		expect(stop[0]).toMatch(/taskkill\.exe$/);
 		expect(stop[1]).toEqual(["/PID", "43210", "/T", "/F"]);
 	});
+	it("falls back to a direct kill when the Windows taskkill helper fails to spawn", async () => {
+		const h = await harness({ platform: "win32" });
+		const lease = await h.manager.acquire("qwen3:1.7b");
+		lease!.release();
+		h.manager.stop();
+		expect(h.children).toHaveLength(2);
+		const [ollama, killer] = h.children;
+		expect(ollama.kill).not.toHaveBeenCalled();
+		killer.emit("error", new Error("spawn taskkill.exe ENOENT"));
+		expect(ollama.kill).toHaveBeenCalledTimes(1);
+	});
 	it("creates writable runtime state outside a read-only installation directory", async () => {
 		const h = await harness({ platform: "win32" });
 		const before = await readdir(h.root);
@@ -262,6 +273,22 @@ describe("private Ollama lifecycle (spawn and readiness mocked)", () => {
 		controller.abort();
 		await cancelled;
 		await vi.waitFor(() => expect(h.children[0].kill).toHaveBeenCalledTimes(1));
+	});
+	it("stopping mid-startup discards a probe that later resolves ready", async () => {
+		let reportReady!: (value: boolean) => void;
+		const startup = new Promise<boolean>((resolve) => {
+			reportReady = resolve;
+		});
+		const h = await harness({ probe: async () => startup });
+		const request = h.manager.acquire("qwen3:1.7b");
+		await vi.waitFor(() => expect(h.launch).toHaveBeenCalledTimes(1));
+		h.manager.stop();
+		expect(h.children[0].kill).toHaveBeenCalledTimes(1);
+		const rejected = expect(request).rejects.toThrow();
+		reportReady(true);
+		await rejected;
+		await expect(h.manager.acquire("qwen3:1.7b")).rejects.toThrow(/shutting down/);
+		expect(h.launch).toHaveBeenCalledTimes(1);
 	});
 	it("times out startup, cleans the failed process and permits retry", async () => {
 		let available = false;

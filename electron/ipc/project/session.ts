@@ -101,22 +101,22 @@ export async function resolveLinkedWebcamPath(videoPath?: string | null): Promis
 	const candidateExtensions = Array.from(
 		new Set([extension, ".webm", ".mp4", ".mov", ".mkv", ".avi"].filter(Boolean)),
 	);
-
-	for (const candidateExtension of candidateExtensions) {
-		const candidatePath = path.join(
-			path.dirname(normalizedVideoPath),
-			`${baseName}-webcam${candidateExtension}`,
-		);
-
-		try {
-			await fs.access(candidatePath, fsConstants.F_OK);
-			return candidatePath;
-		} catch {
-			continue;
-		}
-	}
-
-	return null;
+	const candidatePaths = candidateExtensions.map((candidateExtension) =>
+		path.join(path.dirname(normalizedVideoPath), `${baseName}-webcam${candidateExtension}`),
+	);
+	// Each candidate is an independent stat call, often slow under Windows antivirus
+	// filesystem hooks; check them in parallel instead of one at a time. The first
+	// candidate in priority order that exists still wins, same as the sequential scan.
+	const exists = await Promise.all(
+		candidatePaths.map((candidatePath) =>
+			fs
+				.access(candidatePath, fsConstants.F_OK)
+				.then(() => true)
+				.catch(() => false),
+		),
+	);
+	const winnerIndex = exists.indexOf(true);
+	return winnerIndex === -1 ? null : candidatePaths[winnerIndex];
 }
 
 export async function resolveRecordingSession(

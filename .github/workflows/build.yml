@@ -32,6 +32,13 @@ jobs:
         run: |
           node -e "const fs=require('node:fs'); const ffmpeg=require('ffmpeg-static'); if (typeof ffmpeg !== 'string' || !fs.existsSync(ffmpeg)) { throw new Error('Bundled ffmpeg-static binary is missing: ' + ffmpeg); } console.log('Using bundled ffmpeg binary: ' + ffmpeg);"
 
+      - name: Install Electron binary
+        run: node node_modules/electron/install.js
+
+      - name: Verify Electron binary
+        run: |
+          node -e "const fs=require('node:fs'); const electronPath=require('electron'); if (typeof electronPath !== 'string' || !fs.existsSync(electronPath)) { throw new Error('Electron binary is missing: ' + electronPath); } console.log('Using Electron binary: ' + electronPath);"
+
       - name: Install app dependencies
         run: npx electron-builder install-app-deps
 

@@ -18,7 +18,7 @@ const PULL = `ollama pull ${DEFAULT_OLLAMA_MODEL}`;
 const copy = {
 	en: {
 		mode: "AI mode",
-		builtin: "Lightweight smart (default)",
+		builtin: "Auto cut (default)",
 		ollama: "Ollama advanced",
 		help: "Lightweight mode uses fast local editing by default. Ollama reviews edit candidates and drafts narration; it needs more memory and may take longer. Recording controls do not load these models.",
 		model: "Installed Ollama model",
@@ -43,7 +43,7 @@ const copy = {
 	},
 	zh: {
 		mode: "智能模式",
-		builtin: "轻量智能（默认）",
+		builtin: "自动剪辑（默认）",
 		ollama: "Ollama 高级模式",
 		help: "轻量模式默认使用快速本地剪辑。Ollama 可审阅剪辑建议、生成解说，需要更多内存，也可能更慢。录制控制面板不会加载这些模型。",
 		model: "已安装的 Ollama 模型",
@@ -66,7 +66,7 @@ const copy = {
 	},
 	ms: {
 		mode: "Mod AI",
-		builtin: "Pintar ringan (lalai)",
+		builtin: "Potong automatik (lalai)",
 		ollama: "Ollama lanjutan",
 		help: "Mod ringan menggunakan suntingan setempat pantas. Ollama menyemak cadangan dan menghasilkan narasi; ia memerlukan lebih memori dan mungkin lebih perlahan. Kawalan rakaman tidak memuatkan model ini.",
 		model: "Model Ollama terpasang",

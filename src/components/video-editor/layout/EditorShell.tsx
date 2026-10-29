@@ -374,7 +374,13 @@ export function EditorShell(props: Props) {
 					}}
 					accountLabel={auth.user?.email}
 					authToken={auth.accessToken}
-					handleImportMediaOrProject={openActions.handleImportMediaOrProject}
+					handleImportMediaOrProject={async () => {
+						const outcome = await openActions.handleImportMediaOrProject();
+						if (outcome === "media") {
+							ui.setIsPlaying(false);
+							selectEffectSection("ai");
+						}
+					}}
 					handleOpenProjectFromLibrary={openActions.handleOpenProjectFromLibrary}
 					nativeCaptureUnavailableModalOpen={ui.nativeCaptureUnavailableModalOpen}
 					setNativeCaptureUnavailableModalOpen={ui.setNativeCaptureUnavailableModalOpen}

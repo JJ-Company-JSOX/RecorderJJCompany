@@ -152,6 +152,7 @@ export function useProjectOpenActions({
 			project.setProjectBrowserOpen(false);
 			await refreshProjectLibrary();
 			toast.success("Media imported");
+			return "media" as const;
 		} catch (error) {
 			project.setError(
 				`Could not load file: ${error instanceof Error ? error.message : String(error)}`,

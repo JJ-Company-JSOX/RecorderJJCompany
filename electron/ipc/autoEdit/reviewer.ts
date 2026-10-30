@@ -31,12 +31,12 @@ export async function localRequest(
 ): Promise<unknown> {
 	signal?.throwIfAborted();
 	const requestedModel = modelName ?? (payload as { model?: string } | undefined)?.model;
-	// The lightweight story model should spend its output budget on the result.
+	// Every Qwen3 size defaults to a hidden "thinking" pass before answering. That burns a
+	// large, unpredictable amount of time and output budget on what is a bounded JSON task,
+	// so every Qwen3 model skips it and spends its whole budget on the actual result.
+	const isQwen3Family = /^qwen3(?:[:-]|$)/i.test(requestedModel ?? "");
 	const requestPayload =
-		route === "/api/chat" &&
-		requestedModel === BUNDLED_OLLAMA_MODEL &&
-		payload &&
-		!("think" in payload)
+		route === "/api/chat" && isQwen3Family && payload && !("think" in payload)
 			? { ...payload, think: false }
 			: payload;
 	const body = requestPayload ? JSON.stringify(requestPayload) : "";

@@ -166,6 +166,19 @@ describe("local-only model adapter (mock service, no inference claim)", () => {
 		expect(chatTimeout()).toBe(600_000);
 		setTimeoutSpy.mockRestore();
 	});
+	it("disables thinking for any Qwen3-family model, not just the bundled one", async () => {
+		mock.installedName = "qwen3:14b";
+		await new LocalPlanReviewer().review(plan(), "qwen3:14b");
+		expect(
+			JSON.parse(mock.requests.find((request) => request.path === "/api/chat")!.body),
+		).toMatchObject({ think: false });
+	});
+	it("leaves thinking untouched for a non-Qwen3 model", async () => {
+		mock.installedName = "llama3:8b";
+		await new LocalPlanReviewer().review(plan(), "llama3:8b");
+		const body = JSON.parse(mock.requests.find((request) => request.path === "/api/chat")!.body);
+		expect(body).not.toHaveProperty("think");
+	});
 	it("releases private-runtime leases when model metadata validation fails", async () => {
 		mock.bundledPort = 34123;
 		mock.installedName = "qwen3:1.7b";

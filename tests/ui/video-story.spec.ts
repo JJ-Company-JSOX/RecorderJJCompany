@@ -216,6 +216,8 @@ async function setup(
 }
 const brief = async (page: Page) => {
 	await page.getByLabel("Topic / product", { exact: true }).fill("Introduce JSOX Recorder");
+	const moreDetails = page.getByRole("button", { name: "More details (optional)", exact: true });
+	if (await moreDetails.isVisible()) await moreDetails.click();
 	await page.getByLabel("Audience", { exact: true }).fill("First-time customers");
 	await page
 		.getByLabel("Verified features and selling points", { exact: true })

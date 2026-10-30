@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { storyWorkflowCopy } from "./storyWorkflowCopy";
 import { storyTextBudget, storyBriefCharacterCount } from "./storyTranscript";
 import type { buildStoryTranscript } from "./storyTranscript";
@@ -35,6 +36,7 @@ export const storyCopy = {
 		facts: "Verified features and selling points",
 		ending: "What should viewers do at the end?",
 		notes: "Scene notes / footage context",
+		moreDetails: "More details (optional)",
 		video: "Analyze sampled video frames",
 		help: "Tell AI what this video is for. It plans a story across up to eight footage sections, with narration and on-screen titles. Review every claim before using it. Only the topic below is required — leave the rest blank and it will use sensible defaults, but it will never invent specific facts you have not given it.",
 		privacy:
@@ -80,6 +82,7 @@ export const storyCopy = {
 		facts: "已确认的功能与卖点",
 		ending: "希望观众最后做什么？",
 		notes: "各段素材说明／画面背景",
+		moreDetails: "更多细节（可选）",
 		video: "分析视频抽样画面",
 		help: "告诉 AI 视频的目的，它会按最多八段素材策划剧情、解说和画面标题。使用前请核对所有产品描述。只有下面的「主题」是必填的——其余留空也能生成，AI 会采用合理的默认处理方式，但绝不会编造你没有提供的具体功能或数据。",
 		privacy:
@@ -130,6 +133,7 @@ export const storyCopy = {
 		facts: "Ciri dan manfaat yang disahkan",
 		ending: "Tindakan penonton pada akhir",
 		notes: "Nota adegan / konteks rakaman",
+		moreDetails: "Butiran lanjut (pilihan)",
 		video: "Analisis sampel bingkai video",
 		help: "Terangkan tujuan video. AI merancang cerita, naratif dan tajuk untuk sehingga lapan bahagian. Semak semua dakwaan. Hanya topik di bawah diperlukan — ruang lain boleh dibiarkan kosong dan AI akan menggunakan andaian yang munasabah, tetapi tidak akan mencipta fakta khusus yang tidak anda berikan.",
 		privacy:
@@ -169,6 +173,9 @@ export function StoryBriefEditor({
 	onOpenCaptions?: () => void;
 }) {
 	const c = storyCopy[language];
+	const [showDetails, setShowDetails] = useState(
+		() => !!(value.audience || value.facts || value.ending || value.notes),
+	);
 	return (
 		<div className="space-y-3 rounded-xl border border-blue-400/30 p-3" data-story-brief>
 			<p className="text-sm">{c.help}</p>
@@ -191,20 +198,43 @@ export function StoryBriefEditor({
 				<p className="text-xs text-muted-foreground">{c.cpuInfo}</p>
 			</div>
 			<p className="text-xs text-muted-foreground">{c.saved}</p>
-			{(["topic", "audience", "facts", "ending", "notes"] as const).map((key) => (
-				<label key={key} className="flex flex-col gap-1 text-sm">
-					{c[key]}
-					<textarea
-						aria-label={c[key]}
-						disabled={disabled}
-						rows={key === "facts" || key === "notes" ? 3 : 2}
-						maxLength={2000}
-						value={value[key]}
-						onChange={(e) => onChange({ ...value, [key]: e.target.value })}
-						className="w-full rounded-lg border bg-background p-2"
-					/>
-				</label>
-			))}
+			<label className="flex flex-col gap-1 text-sm">
+				{c.topic}
+				<textarea
+					aria-label={c.topic}
+					disabled={disabled}
+					rows={2}
+					maxLength={2000}
+					value={value.topic}
+					onChange={(e) => onChange({ ...value, topic: e.target.value })}
+					className="w-full rounded-lg border bg-background p-2"
+				/>
+			</label>
+			{showDetails ? (
+				(["audience", "facts", "ending", "notes"] as const).map((key) => (
+					<label key={key} className="flex flex-col gap-1 text-sm">
+						{c[key]}
+						<textarea
+							aria-label={c[key]}
+							disabled={disabled}
+							rows={key === "facts" || key === "notes" ? 3 : 2}
+							maxLength={2000}
+							value={value[key]}
+							onChange={(e) => onChange({ ...value, [key]: e.target.value })}
+							className="w-full rounded-lg border bg-background p-2"
+						/>
+					</label>
+				))
+			) : (
+				<button
+					type="button"
+					disabled={disabled}
+					onClick={() => setShowDetails(true)}
+					className="self-start text-sm underline"
+				>
+					{c.moreDetails}
+				</button>
+			)}
 			<label className="flex flex-col gap-1 text-sm">
 				{c.target}
 				<input

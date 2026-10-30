@@ -80,9 +80,13 @@ export async function localRequest(
 					});
 				},
 			);
+			// The bundled model is small and fast; a user-chosen Ollama model can be far larger
+			// and much slower on CPU, so it gets a much longer backstop. Either way, the caller's
+			// own signal (a visible Cancel button) is the primary way to stop a slow request.
+			const chatTimeoutMs = requestedModel === BUNDLED_OLLAMA_MODEL ? 120_000 : 600_000;
 			const timer = setTimeout(
 				() => req.destroy(new Error("Local AI request timed out")),
-				route === "/api/chat" ? 120_000 : 8_000,
+				route === "/api/chat" ? chatTimeoutMs : 8_000,
 			);
 			req.on("close", () => clearTimeout(timer));
 			req.on("error", reject);

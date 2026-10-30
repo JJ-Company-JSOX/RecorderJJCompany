@@ -30,7 +30,7 @@ export const messages = {
 		modelLicense: "Model license",
 		modelSize: "Installed weights",
 		modelTerms:
-			"This model runs as a separate local service; it is not bundled with Recordly (AGPL-3.0). Compatibility and redistribution rights depend on this model's license and have not been certified. Low-spec performance depends on RAM, quantization and CPU/GPU; not benchmarked for your model. Review may time out after 120 seconds.",
+			"This model runs as a separate local service; it is not bundled with Recordly (AGPL-3.0). Compatibility and redistribution rights depend on this model's license and have not been certified. Low-spec performance depends on RAM, quantization and CPU/GPU; not benchmarked for your model. A larger model takes longer; review may time out after 10 minutes. Cancel is always available.",
 		modelConsent: "I have reviewed the displayed license and local processing limits.",
 		title: "Auto edit plan",
 		intro: "Create a local draft. Apply automatically or review first. Your recording is not uploaded.",
@@ -132,7 +132,7 @@ export const messages = {
 		modelLicense: "模型许可证",
 		modelSize: "本地权重体积",
 		modelTerms:
-			"模型作为独立本地服务运行，不随 Recordly（AGPL-3.0）捆绑。兼容性与再分发权取决于该模型许可证，尚未作法律认定。低配速度取决于内存、量化及 CPU/GPU，本模型尚无实测；审阅最长等待 120 秒。",
+			"模型作为独立本地服务运行，不随 Recordly（AGPL-3.0）捆绑。兼容性与再分发权取决于该模型许可证，尚未作法律认定。低配速度取决于内存、量化及 CPU/GPU，本模型尚无实测；模型越大耗时越长，审阅最长等待 10 分钟，随时可点取消。",
 		modelConsent: "我已阅读显示的许可证和本地处理限制。",
 		title: "自动剪辑方案",
 		intro: "本机生成剪辑草稿，可自动应用，也可先预览审阅。录屏不会上传。",
@@ -228,7 +228,7 @@ export const messages = {
 		modelLicense: "Lesen model",
 		modelSize: "Saiz pemberat tempatan",
 		modelTerms:
-			"Model berjalan sebagai perkhidmatan setempat berasingan dan tidak disertakan dengan Recordly (AGPL-3.0). Keserasian dan hak pengedaran bergantung pada lesen model dan belum disahkan. Prestasi komputer rendah spesifikasi bergantung pada RAM, pengkuantuman dan CPU/GPU; belum diuji untuk model ini. Had masa semakan ialah 120 saat.",
+			"Model berjalan sebagai perkhidmatan setempat berasingan dan tidak disertakan dengan Recordly (AGPL-3.0). Keserasian dan hak pengedaran bergantung pada lesen model dan belum disahkan. Prestasi komputer rendah spesifikasi bergantung pada RAM, pengkuantuman dan CPU/GPU; belum diuji untuk model ini. Model lebih besar mengambil masa lebih lama; semakan mungkin tamat masa selepas 10 minit. Batal sentiasa tersedia.",
 		modelConsent: "Saya telah membaca lesen dan had pemprosesan setempat yang dipaparkan.",
 		title: "Pelan suntingan automatik",
 		intro: "Jana draf setempat. Gunakan secara automatik atau semak dahulu. Rakaman tidak dimuat naik.",

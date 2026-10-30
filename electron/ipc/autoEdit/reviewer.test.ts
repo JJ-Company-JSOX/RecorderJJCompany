@@ -151,6 +151,21 @@ describe("local-only model adapter (mock service, no inference claim)", () => {
 		expect(mock.leases.every((model) => model === "qwen3:1.7b")).toBe(true);
 		expect(mock.releases).toBe(mock.leases.length);
 	});
+	it("gives a user-chosen Ollama model a much longer timeout backstop than the bundled one", async () => {
+		const setTimeoutSpy = vi.spyOn(global, "setTimeout");
+		const chatTimeout = () =>
+			setTimeoutSpy.mock.calls
+				.map((call) => call[1])
+				.find((delay) => delay === 120_000 || delay === 600_000);
+		mock.installedName = "qwen3:1.7b";
+		await new LocalPlanReviewer().review(plan(), "qwen3:1.7b");
+		expect(chatTimeout()).toBe(120_000);
+		setTimeoutSpy.mockClear();
+		mock.installedName = "local:latest";
+		await new LocalPlanReviewer().review(plan(), "local");
+		expect(chatTimeout()).toBe(600_000);
+		setTimeoutSpy.mockRestore();
+	});
 	it("releases private-runtime leases when model metadata validation fails", async () => {
 		mock.bundledPort = 34123;
 		mock.installedName = "qwen3:1.7b";

@@ -567,6 +567,23 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 		const run = ++generation.current;
 		setBusy("analysis");
 		setError("");
+		taskTiming.start(
+			JSON.stringify([
+				"analysis",
+				provider,
+				provider === "ollama" ? (ollamaModel?.name ?? null) : null,
+				withAi,
+				withSpeech,
+				workloadBucket(
+					Math.round(
+						state.clipRegions.reduce(
+							(sum, c) => sum + Math.max(0, c.endMs - c.startMs),
+							0,
+						) / 1000,
+					),
+				),
+			]),
+		);
 		setSilentFallback(fromSilentVideo);
 		setApplied(false);
 		setSpeechStage("media");
@@ -647,6 +664,7 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 				if (!frames.success || !frames.analysis) throw Error(frames.error || m.error);
 				next = addVisualSuggestions(next, state, source, frames.analysis);
 			}
+			taskTiming.finish(true);
 			if (keepFullFrame)
 				next = { ...next, suggestions: next.suggestions.filter((s) => s.kind !== "zoom") };
 			// Only offer what can actually be applied; anything that would touch existing work is left out.
@@ -676,7 +694,10 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 			if (run === generation.current)
 				setError(`${m.error} ${e instanceof Error ? e.message : ""}`);
 		} finally {
-			if (run === generation.current) setBusy(null);
+			if (run === generation.current) {
+				taskTiming.finish(false);
+				setBusy(null);
+			}
 		}
 	};
 	const narrationAudioSnapshot = () =>
@@ -1506,12 +1527,17 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 								(busy === "review" ? m.reviewing : m.busy)}
 							{busy === "vision" && ` (${progress.completed}/${progress.total})`}
 						</p>
-						<p className="text-xs text-muted-foreground">{ui.wait}</p>
+						{taskTiming.display ? (
+							<TaskWaitStatus timing={taskTiming.display} language={language} compact />
+						) : (
+							<p className="text-xs text-muted-foreground">{ui.wait}</p>
+						)}
 						<Button
 							variant="secondary"
 							onClick={() => {
 								generation.current++;
 								void window.electronAPI.cancelAutoEditAnalysis?.();
+								taskTiming.finish(false);
 								setBusy(null);
 							}}
 						>

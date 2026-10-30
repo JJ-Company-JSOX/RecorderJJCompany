@@ -69,13 +69,27 @@ export function useTaskTiming() {
 export function TaskWaitStatus({
 	timing,
 	language,
+	compact = false,
 }: {
 	timing: ReturnType<typeof useTaskTiming>["display"];
 	language: PlanLanguage;
+	/** A single status line with no card chrome, for tight spaces such as the main progress card. */
+	compact?: boolean;
 }) {
 	if (!timing) return null;
 	const c = copy[language];
 	const { elapsed, range } = timing;
+	const remaining = !range
+		? c.estimating
+		: elapsed >= range[1]
+			? c.longer
+			: `${c.remaining}: ${formatWait(Math.max(1000, range[0] - elapsed))} – ${formatWait(range[1] - elapsed)}`;
+	if (compact)
+		return (
+			<p data-task-wait role="status" className="text-xs text-muted-foreground">
+				{c.elapsed}: {formatWait(elapsed)} · {remaining}
+			</p>
+		);
 	return (
 		<div
 			data-task-wait
@@ -84,13 +98,7 @@ export function TaskWaitStatus({
 			<p className="font-medium">
 				{c.elapsed}: {formatWait(elapsed)}
 			</p>
-			<p role="status">
-				{!range
-					? c.estimating
-					: elapsed >= range[1]
-						? c.longer
-						: `${c.remaining}: ${formatWait(Math.max(1000, range[0] - elapsed))} – ${formatWait(range[1] - elapsed)}`}
-			</p>
+			<p role="status">{remaining}</p>
 			{range && <p className="text-xs text-muted-foreground">{c.hint}</p>}
 		</div>
 	);

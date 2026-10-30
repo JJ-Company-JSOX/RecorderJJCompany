@@ -21,6 +21,8 @@ function validateModelName(model: string) {
 		throw new Error("Only installed local models are allowed");
 }
 
+const LOCAL_MODEL_KEEP_ALIVE = "5m";
+
 /** Direct loopback HTTP bypasses proxies. Redirects and remote endpoints are never followed. */
 export async function localRequest(
 	route: "/api/chat" | "/api/show" | "/api/tags",
@@ -35,10 +37,20 @@ export async function localRequest(
 	// large, unpredictable amount of time and output budget on what is a bounded JSON task,
 	// so every Qwen3 model skips it and spends its whole budget on the actual result.
 	const isQwen3Family = /^qwen3(?:[:-]|$)/i.test(requestedModel ?? "");
-	const requestPayload =
+	const withThink =
 		route === "/api/chat" && isQwen3Family && payload && !("think" in payload)
 			? { ...payload, think: false }
 			: payload;
+	// The bundled model is small enough to reload on every call; a user-chosen one can be
+	// far larger, so it stays warm for the rest of this editing session instead of paying a
+	// full reload on the next AI action (unless a caller already set its own keep_alive).
+	const requestPayload =
+		route === "/api/chat" && withThink && !("keep_alive" in withThink)
+			? {
+					...withThink,
+					keep_alive: requestedModel === BUNDLED_OLLAMA_MODEL ? 0 : LOCAL_MODEL_KEEP_ALIVE,
+				}
+			: withThink;
 	const body = requestPayload ? JSON.stringify(requestPayload) : "";
 	if (Buffer.byteLength(body) > Math.min(3_000_000, maxBodyBytes))
 		throw new Error("Plan too large for local review");
@@ -155,7 +167,6 @@ export class LocalPlanReviewer implements PlanReviewer {
 				model,
 				stream: false,
 				format: "json",
-				keep_alive: 0,
 				options: { temperature: 0, num_ctx: 4096, num_predict: 2048 },
 				messages: [
 					{

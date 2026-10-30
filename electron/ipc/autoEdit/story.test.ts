@@ -67,7 +67,7 @@ it("actually samples approved source times and supplies frames, facts and bounde
 	const [route, body, , limit] = fixture.request.mock.calls[0];
 	expect(route).toBe("/api/chat");
 	expect(limit).toBe(3000000);
-	expect(body).toMatchObject({ keep_alive: 0, options: { num_ctx: 8192, num_predict: 3072 } });
+	expect(body).toMatchObject({ options: { num_ctx: 8192, num_predict: 3072 } });
 	expect(body.messages[1].images).toEqual([Buffer.from("sample-image").toString("base64")]);
 	expect(JSON.stringify(body)).not.toContain("PRIVATE_SOURCE");
 	expect(body.messages[0].content).toContain("not a mouse-click commentator");

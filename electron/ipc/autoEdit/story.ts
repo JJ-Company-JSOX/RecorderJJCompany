@@ -106,7 +106,6 @@ export async function generateLocalStory(options: {
 			model,
 			stream: false,
 			format: "json",
-			keep_alive: 0,
 			options: { temperature: 0.4, num_ctx: 8192, num_predict: 3072 },
 			messages: [
 				{ role: "system", content: storyPrompt(language) },

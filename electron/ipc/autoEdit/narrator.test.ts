@@ -100,12 +100,12 @@ describe("local-only narration draft (mock service, no inference claim)", () => 
 		expect(body).not.toContain("/local/user.mp4");
 		expect(body).not.toContain("baseline");
 	});
-	it("requests Chinese narration with bounded memory/output and unloading after the request", async () => {
+	it("requests Chinese narration with bounded memory/output, staying warm for this session", async () => {
 		const signal = new AbortController().signal;
 		await new LocalNarrationGenerator().generate(plan(), "local", signal, "zh", "detailed");
 		const body = JSON.parse(mock.requests.find((r) => r.path === "/api/chat")!.body);
 		expect(body).toMatchObject({
-			keep_alive: 0,
+			keep_alive: "5m",
 			options: { num_ctx: 4096, num_predict: 2048 },
 		});
 		expect(body.messages[0].content).toContain("in Chinese");

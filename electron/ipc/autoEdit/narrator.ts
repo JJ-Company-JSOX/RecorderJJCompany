@@ -96,7 +96,6 @@ export class LocalNarrationGenerator implements NarrationGenerator {
 				model,
 				stream: false,
 				format: "json",
-				keep_alive: 0,
 				options: { temperature: 0.3, num_ctx: 4096, num_predict: 2048 },
 				messages: [
 					{

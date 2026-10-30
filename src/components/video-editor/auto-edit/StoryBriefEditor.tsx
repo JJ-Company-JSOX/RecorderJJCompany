@@ -36,7 +36,7 @@ export const storyCopy = {
 		ending: "What should viewers do at the end?",
 		notes: "Scene notes / footage context",
 		video: "Analyze sampled video frames",
-		help: "Tell AI what this video is for. It plans a story across up to eight footage sections, with narration and on-screen titles. Review every claim before using it.",
+		help: "Tell AI what this video is for. It plans a story across up to eight footage sections, with narration and on-screen titles. Review every claim before using it. Only the topic below is required — leave the rest blank and it will use sensible defaults, but it will never invent specific facts you have not given it.",
 		privacy:
 			"Frame analysis uses a local vision model and up to eight small frames, not continuous video or recorded speech. Text-only models use your brief, scene notes and explicitly enabled subtitle context. Raw recorded audio is not sent to Ollama. Original audio is kept; mute or lower it on the timeline if you want to replace it.",
 		vision: "The selected model only understands text. Choose and check a vision model in AI mode, or turn off frame analysis. CPU frame analysis can be slow.",
@@ -81,7 +81,7 @@ export const storyCopy = {
 		ending: "希望观众最后做什么？",
 		notes: "各段素材说明／画面背景",
 		video: "分析视频抽样画面",
-		help: "告诉 AI 视频的目的，它会按最多八段素材策划剧情、解说和画面标题。使用前请核对所有产品描述。",
+		help: "告诉 AI 视频的目的，它会按最多八段素材策划剧情、解说和画面标题。使用前请核对所有产品描述。只有下面的「主题」是必填的——其余留空也能生成，AI 会采用合理的默认处理方式，但绝不会编造你没有提供的具体功能或数据。",
 		privacy:
 			"画面分析仅用本地视觉模型读取最多八张小图，不是连续观看整段视频，也不识别原声。文字模型采用你的主题、素材说明和主动开启的字幕参考，不会把原始音频发送给 Ollama。原声保留；需要替换时，请在时间轴静音或降低原声音量。",
 		vision: "当前模型只理解文字。请到智能模式选择并检查视觉模型，或关闭画面分析。CPU 分析画面可能较慢。",
@@ -131,7 +131,7 @@ export const storyCopy = {
 		ending: "Tindakan penonton pada akhir",
 		notes: "Nota adegan / konteks rakaman",
 		video: "Analisis sampel bingkai video",
-		help: "Terangkan tujuan video. AI merancang cerita, naratif dan tajuk untuk sehingga lapan bahagian. Semak semua dakwaan.",
+		help: "Terangkan tujuan video. AI merancang cerita, naratif dan tajuk untuk sehingga lapan bahagian. Semak semua dakwaan. Hanya topik di bawah diperlukan — ruang lain boleh dibiarkan kosong dan AI akan menggunakan andaian yang munasabah, tetapi tidak akan mencipta fakta khusus yang tidak anda berikan.",
 		privacy:
 			"Model visual setempat melihat sehingga lapan imej kecil, bukan video berterusan atau suara rakaman. Model teks menggunakan taklimat, nota dan konteks sari kata yang diaktifkan; audio asal tidak dihantar kepada Ollama.",
 		vision: "Model dipilih hanya memahami teks. Pilih dan semak model visual dalam mod AI, atau matikan analisis imej. Analisis imej dengan CPU mungkin perlahan.",

@@ -55,6 +55,12 @@ import { visionMessages } from "./visionMessages";
 import { TaskWaitStatus, useTaskTiming } from "./TaskWaitStatus";
 import { workloadBucket } from "./taskTiming";
 import {
+	estimateCharsPerSecond,
+	SPEECH_RATE_SETTING,
+	speechRateSample,
+	validSpeechRateSamples,
+} from "./speechRate";
+import {
 	storyScenes,
 	validStoryTiming,
 	placeStoryAudio,
@@ -180,7 +186,20 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 	const storyUi = storyCopy[language];
 	const storyDraft = draftBrief !== null;
 	const currentStoryScenes = useMemo(() => storyScenes(state.clipRegions), [state.clipRegions]);
-	const speechBudget = storySpeechBudget(storyBrief, currentStoryScenes, language);
+	const speechBudget = useMemo(
+		() =>
+			storySpeechBudget(
+				storyBrief,
+				currentStoryScenes,
+				language,
+				estimateCharsPerSecond(
+					validSpeechRateSamples(loadAppSetting(SPEECH_RATE_SETTING)),
+					language,
+					language === "zh" ? 3.5 : 11,
+				),
+			),
+		[storyBrief, currentStoryScenes, language],
+	);
 	const briefCharacters = storyBriefCharacterCount(storyBrief);
 	const textBudget = storyTextBudget(storyBrief);
 	const storyTranscript = useMemo(
@@ -1027,6 +1046,22 @@ export const AutoEditPanel = memo(function AutoEditPanel({
 					narrationLanguage,
 					selectedVoice?.id,
 				);
+				// Learns this computer's real spoken pace so future scripts are less likely to
+				// come out longer than the scene they are meant to fit.
+				const rateSamples = missing.flatMap((cue) => {
+					const clip = synthesized.clips!.find((c) => c.id === cue.id);
+					const sample =
+						clip && speechRateSample(narrationLanguage, cue.text.length, clip.durationMs);
+					return sample ? [sample] : [];
+				});
+				if (rateSamples.length)
+					saveAppSetting(
+						SPEECH_RATE_SETTING,
+						validSpeechRateSamples([
+							...validSpeechRateSamples(loadAppSetting(SPEECH_RATE_SETTING)),
+							...rateSamples,
+						]),
+					);
 			}
 			if (run !== generation.current) return;
 			const result = {

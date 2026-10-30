@@ -8,6 +8,7 @@ const fixture = vi.hoisted(() => ({
 	request: vi.fn(),
 	grab: vi.fn(),
 	size: vi.fn(),
+	speechRateSamples: null as unknown,
 }));
 vi.mock("./reviewer", () => ({
 	inspectLocalModel: fixture.inspect,
@@ -17,6 +18,9 @@ vi.mock("./frameGrab", () => ({
 	videoSize: fixture.size,
 	grabFrame: fixture.grab,
 	fitSize: () => ({ width: 320, height: 180 }),
+}));
+vi.mock("../../appSettingsStore", () => ({
+	readAppSetting: () => fixture.speechRateSamples,
 }));
 import { generateLocalStory, parseStoryDraft } from "./story";
 const request = (): StoryRequest => ({
@@ -39,6 +43,7 @@ const cue = {
 };
 beforeEach(() => {
 	vi.clearAllMocks();
+	fixture.speechRateSamples = null;
 	fixture.inspect.mockResolvedValue({ capabilities: ["vision"] });
 	fixture.size.mockResolvedValue({ width: 1920, height: 1080 });
 	fixture.grab.mockResolvedValue(Buffer.from("sample-image"));
@@ -72,6 +77,15 @@ it("actually samples approved source times and supplies frames, facts and bounde
 	expect(JSON.stringify(body)).not.toContain("PRIVATE_SOURCE");
 	expect(body.messages[0].content).toContain("not a mouse-click commentator");
 	expect(draft.cues[0]).toEqual({ ...cue, startMs: 0, endMs: 10000 });
+});
+it("narrows the script budget to this computer's own recently measured speaking pace", async () => {
+	fixture.speechRateSamples = [
+		{ key: "en", charsPerSecond: 5 },
+		{ key: "en", charsPerSecond: 5 },
+	];
+	await run();
+	const sent = JSON.parse(fixture.request.mock.calls[0][1].messages[1].content);
+	expect(sent.slots[0].maxChars).toBe(50);
 });
 it("refuses visual analysis on a text model without touching media", async () => {
 	fixture.inspect.mockResolvedValue({ capabilities: ["completion"] });

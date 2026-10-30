@@ -58,6 +58,7 @@ export function storySpeechBudget(
 	brief: Pick<StoryBrief, "targetSpeechSeconds">,
 	scenes: StoryScene[],
 	language: string,
+	charsPerSecond = language === "zh" ? 3.5 : 11,
 ) {
 	const footageSeconds = scenes.reduce(
 		(sum, s) => sum + Math.max(0, s.endMs - s.startMs) / 1000,
@@ -79,10 +80,7 @@ export function storySpeechBudget(
 				startMs: s.startMs,
 				endMs: s.endMs,
 				speechSeconds,
-				maxChars: Math.max(
-					0,
-					Math.min(450, Math.floor(speechSeconds * (language === "zh" ? 3.5 : 11))),
-				),
+				maxChars: Math.max(0, Math.min(450, Math.floor(speechSeconds * charsPerSecond))),
 			};
 		}),
 	};

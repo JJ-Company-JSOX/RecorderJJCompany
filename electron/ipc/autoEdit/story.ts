@@ -4,8 +4,23 @@ import {
 	storySpeechBudget,
 	type StoryRequest,
 } from "../../../src/components/video-editor/auto-edit/story";
+import {
+	estimateCharsPerSecond,
+	SPEECH_RATE_SETTING,
+	validSpeechRateSamples,
+} from "../../../src/components/video-editor/auto-edit/speechRate";
+import { readAppSetting } from "../../appSettingsStore";
 import { fitSize, grabFrame, videoSize } from "./frameGrab";
 import { inspectLocalModel, localRequest } from "./reviewer";
+
+/** This computer's own recent synthesized pace for the language, slow-biased against the default. */
+function speechRateFor(language: string): number {
+	return estimateCharsPerSecond(
+		validSpeechRateSamples(readAppSetting(SPEECH_RATE_SETTING)),
+		language,
+		language === "zh" ? 3.5 : 11,
+	);
+}
 
 export const storyPrompt = (
 	language: string,
@@ -17,7 +32,12 @@ export function parseStoryDraft(
 	raw: unknown,
 	language = "en",
 ): NarrationDraft {
-	const budget = storySpeechBudget(request.brief, request.scenes, language);
+	const budget = storySpeechBudget(
+		request.brief,
+		request.scenes,
+		language,
+		speechRateFor(language),
+	);
 	const cues = raw && typeof raw === "object" ? (raw as { cues?: unknown }).cues : null;
 	if (!Array.isArray(cues) || cues.length !== request.scenes.length)
 		throw Error("Story result is incomplete. Retry drafting the story.");
@@ -99,6 +119,7 @@ export async function generateLocalStory(options: {
 		request.brief,
 		request.scenes,
 		language,
+		speechRateFor(language),
 	);
 	const response = (await localRequest(
 		"/api/chat",
